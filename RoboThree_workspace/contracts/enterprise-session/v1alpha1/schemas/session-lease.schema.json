@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://robothree.local/contracts/enterprise-session/v1alpha1/schemas/session-lease.schema.json",
+  "title": "RoboThree Enterprise Session Lease",
+  "oneOf": [
+    { "$ref": "#/$defs/request" },
+    { "$ref": "#/$defs/result" }
+  ],
+  "$defs": {
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind", "schemaVersion", "verifiedIdentityHandle", "currentClientInstanceId",
+        "audience", "requiredPermissions", "deviceProof", "correlationId"
+      ],
+      "properties": {
+        "kind": { "const": "enterprise_session_lease_request" },
+        "schemaVersion": { "const": "enterprise-session.v1alpha1" },
+        "verifiedIdentityHandle": { "$ref": "common.schema.json#/$defs/verifiedIdentityHandle" },
+        "currentClientInstanceId": { "$ref": "common.schema.json#/$defs/uuid" },
+        "audience": { "$ref": "common.schema.json#/$defs/audience" },
+        "requiredPermissions": { "$ref": "common.schema.json#/$defs/requiredPermissions" },
+        "deviceProof": { "$ref": "common.schema.json#/$defs/deviceProof" },
+        "correlationId": { "$ref": "common.schema.json#/$defs/uuid" }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind", "schemaVersion", "claimsProfile", "tokenType", "accessToken", "expiresAt",
+        "sessionAssertion", "deviceTrustDecision", "compatibilityRevision", "sourceDecisionDigest"
+      ],
+      "properties": {
+        "kind": { "const": "enterprise_session_lease_result" },
+        "schemaVersion": { "const": "enterprise-session.v1alpha1" },
+        "claimsProfile": { "const": "eipc.session-token.v1" },
+        "tokenType": { "const": "Bearer" },
+        "accessToken": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 16384,
+          "pattern": "^[A-Za-z0-9._~-]+$"
+        },
+        "expiresAt": { "$ref": "common.schema.json#/$defs/timestamp" },
+        "sessionAssertion": {
+          "$ref": "https://robothree.local/contracts/enterprise-identity-composition/v1alpha1/schemas/authority-semantics.schema.json#/$defs/sessionAssertion"
+        },
+        "deviceTrustDecision": {
+          "$ref": "https://robothree.local/contracts/enterprise-identity-composition/v1alpha1/schemas/authority-semantics.schema.json#/$defs/deviceTrustDecision"
+        },
+        "compatibilityRevision": { "$ref": "common.schema.json#/$defs/revision" },
+        "sourceDecisionDigest": { "$ref": "common.schema.json#/$defs/digest" }
+      }
+    }
+  }
+}

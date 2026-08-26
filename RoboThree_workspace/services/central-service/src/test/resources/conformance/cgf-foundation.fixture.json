@@ -1,0 +1,7 @@
+{
+  "fixtureSchema": "robothree.enterprise.foundation-fixture.v1",
+  "fixtureOnly": true,
+  "service": "central-gateway",
+  "status": "ready",
+  "compatible": true
+}

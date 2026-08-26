@@ -1,0 +1,31 @@
+{
+  "name": "@robothree/document-worker",
+  "version": "0.0.0-ptx.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "node -e \"const { rmSync } = require('node:fs'); rmSync('dist', { recursive: true, force: true }); rmSync('tsconfig.tsbuildinfo', { force: true });\"",
+    "typecheck": "tsc -b --pretty false",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "harness": "tsc -b && vitest run --reporter=verbose"
+  },
+  "dependencies": {
+    "pdfjs-dist": "6.2.108",
+    "pptxgenjs": "4.0.1",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  },
+  "devDependencies": {
+    "mammoth": "1.12.0"
+  }
+}

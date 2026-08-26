@@ -1,0 +1,7 @@
+{
+  "contractVersion": "v1alpha1",
+  "policyRevision": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+  "leaseTtlMillis": 30000,
+  "leaseRenewalIntervalMillis": 10000,
+  "recoveryQueryDeadlineMillis": 45000
+}

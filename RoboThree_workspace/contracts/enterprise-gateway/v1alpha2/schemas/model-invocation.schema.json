@@ -1,0 +1,790 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://robothree.local/contracts/enterprise-gateway/v1alpha2/model-invocation.schema.json",
+  "title": "Enterprise Model Invocation",
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "resourceId": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 160,
+      "pattern": "^[a-z][a-z0-9]*(?:[._:-][a-z0-9]+)+$"
+    },
+    "invocationStatus": {
+      "enum": [
+        "accepted",
+        "running",
+        "completed",
+        "failed",
+        "cancelled",
+        "timed_out",
+        "uncertain"
+      ]
+    },
+    "dataCategory": {
+      "enum": [
+        "user_text",
+        "platform_agent_instructions",
+        "tool_schema",
+        "workspace_content",
+        "skill_content",
+        "knowledge_content",
+        "tool_result"
+      ]
+    },
+    "textPart": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "text"],
+      "properties": {
+        "type": { "const": "text" },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 262144,
+          "x-robothree-maxUtf8Bytes": 524288
+        }
+      }
+    },
+    "toolCall": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["toolCallId", "name", "arguments", "argumentsDigest"],
+      "properties": {
+        "toolCallId": { "$ref": "#/$defs/uuid" },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "arguments": {
+          "type": "object",
+          "additionalProperties": true,
+          "maxProperties": 128,
+          "x-robothree-maxDocumentBytes": 262144
+        },
+        "argumentsDigest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "instructionMessage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "sourceId",
+        "sourceRevision",
+        "sourceDigest",
+        "content"
+      ],
+      "properties": {
+        "role": { "const": "system" },
+        "sourceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "sourceRevision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "sourceDigest": { "$ref": "#/$defs/digest" },
+        "content": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": { "$ref": "#/$defs/textPart" }
+        }
+      }
+    },
+    "userMessage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "content"],
+      "properties": {
+        "role": { "const": "user" },
+        "content": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": { "$ref": "#/$defs/textPart" }
+        }
+      }
+    },
+    "assistantMessage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "content", "toolCalls"],
+      "properties": {
+        "role": { "const": "assistant" },
+        "content": {
+          "type": "array",
+          "maxItems": 64,
+          "items": { "$ref": "#/$defs/textPart" }
+        },
+        "toolCalls": {
+          "type": "array",
+          "maxItems": 32,
+          "items": { "$ref": "#/$defs/toolCall" }
+        }
+      }
+    },
+    "toolResultMessage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "toolCallId",
+        "outcome",
+        "resultDigest",
+        "content"
+      ],
+      "properties": {
+        "role": { "const": "tool" },
+        "toolCallId": { "$ref": "#/$defs/uuid" },
+        "outcome": {
+          "enum": [
+            "succeeded",
+            "failed",
+            "cancelled",
+            "timed_out",
+            "user_rejected"
+          ]
+        },
+        "resultDigest": { "$ref": "#/$defs/digest" },
+        "content": {
+          "type": "array",
+          "maxItems": 64,
+          "items": { "$ref": "#/$defs/textPart" }
+        }
+      }
+    },
+    "message": {
+      "oneOf": [
+        { "$ref": "#/$defs/instructionMessage" },
+        { "$ref": "#/$defs/userMessage" },
+        { "$ref": "#/$defs/assistantMessage" },
+        { "$ref": "#/$defs/toolResultMessage" }
+      ]
+    },
+    "toolDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "capabilityId",
+        "capabilityRevision",
+        "name",
+        "description",
+        "inputSchema",
+        "inputSchemaDigest"
+      ],
+      "properties": {
+        "capabilityId": { "$ref": "#/$defs/resourceId" },
+        "capabilityRevision": { "$ref": "#/$defs/digest" },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "inputSchema": {
+          "type": "object",
+          "additionalProperties": true,
+          "maxProperties": 128,
+          "x-robothree-maxDocumentBytes": 262144
+        },
+        "inputSchemaDigest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "modelTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "modelId",
+        "modelRevision",
+        "configurationRevision",
+        "runtimeRegistryGeneration"
+      ],
+      "properties": {
+        "modelId": { "$ref": "#/$defs/resourceId" },
+        "modelRevision": { "$ref": "#/$defs/digest" },
+        "configurationRevision": { "$ref": "#/$defs/digest" },
+        "runtimeRegistryGeneration": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "providerNeutralRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "snapshotId",
+        "contextSourceDigest",
+        "model",
+        "messages",
+        "tools",
+        "maxOutputTokens"
+      ],
+      "properties": {
+        "snapshotId": { "$ref": "#/$defs/uuid" },
+        "contextSourceDigest": { "$ref": "#/$defs/digest" },
+        "model": { "$ref": "#/$defs/modelTarget" },
+        "messages": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 512,
+          "items": { "$ref": "#/$defs/message" }
+        },
+        "tools": {
+          "type": "array",
+          "maxItems": 64,
+          "items": { "$ref": "#/$defs/toolDefinition" }
+        },
+        "maxOutputTokens": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 262144
+        }
+      },
+      "x-robothree-maxDocumentBytes": 4194304
+    },
+    "developmentSyntheticAdmission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "externalTarget",
+        "syntheticCaseId",
+        "syntheticDataDigest"
+      ],
+      "properties": {
+        "type": { "const": "development_synthetic" },
+        "externalTarget": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 500
+        },
+        "syntheticCaseId": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 160
+        },
+        "syntheticDataDigest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "userConfirmedAdmission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "taskId",
+        "confirmationId",
+        "externalTarget",
+        "dataCategories",
+        "dataScopeDigest",
+        "confirmationDigest"
+      ],
+      "properties": {
+        "type": { "const": "user_confirmed" },
+        "taskId": { "$ref": "#/$defs/uuid" },
+        "confirmationId": { "$ref": "#/$defs/uuid" },
+        "externalTarget": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 500
+        },
+        "dataCategories": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 7,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/dataCategory" }
+        },
+        "dataScopeDigest": { "$ref": "#/$defs/digest" },
+        "confirmationDigest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "admission": {
+      "oneOf": [
+        { "$ref": "#/$defs/developmentSyntheticAdmission" },
+        { "$ref": "#/$defs/userConfirmedAdmission" }
+      ]
+    },
+    "timeoutPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "providerRequestDeadlineAt",
+        "providerStreamIdleTimeoutMillis"
+      ],
+      "properties": {
+        "providerRequestDeadlineAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "providerStreamIdleTimeoutMillis": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 300000
+        }
+      }
+    },
+    "cacheContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sessionScopeDigest"],
+      "properties": {
+        "sessionScopeDigest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "acceptRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contractVersion",
+        "clientRequestId",
+        "requestId",
+        "requestDigest",
+        "audience",
+        "requiredPermission",
+        "modelRequest",
+        "admission",
+        "timeoutPolicy",
+        "cacheContext",
+        "cacheContextDigest"
+      ],
+      "properties": {
+        "contractVersion": { "const": "v1alpha2" },
+        "clientRequestId": { "$ref": "#/$defs/uuid" },
+        "requestId": { "$ref": "#/$defs/uuid" },
+        "requestDigest": { "$ref": "#/$defs/digest" },
+        "audience": { "const": "enterprise-model-gateway" },
+        "requiredPermission": { "const": "model.use" },
+        "modelRequest": { "$ref": "#/$defs/providerNeutralRequest" },
+        "admission": { "$ref": "#/$defs/admission" },
+        "timeoutPolicy": { "$ref": "#/$defs/timeoutPolicy" },
+        "cacheContext": { "$ref": "#/$defs/cacheContext" },
+        "cacheContextDigest": { "$ref": "#/$defs/digest" }
+      },
+      "x-robothree-maxDocumentBytes": 4194304
+    },
+    "acceptedResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contractVersion",
+        "invocationId",
+        "clientRequestId",
+        "requestDigest",
+        "status",
+        "statusRevision",
+        "createdAt",
+        "lastDurableEventSequence",
+        "durableCursor"
+      ],
+      "properties": {
+        "contractVersion": { "const": "v1alpha2" },
+        "invocationId": { "$ref": "#/$defs/uuid" },
+        "clientRequestId": { "$ref": "#/$defs/uuid" },
+        "requestDigest": { "$ref": "#/$defs/digest" },
+        "status": { "const": "accepted" },
+        "statusRevision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "lastDurableEventSequence": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "durableCursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      }
+    },
+    "usage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inputTokens", "outputTokens"],
+      "properties": {
+        "inputTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "outputTokens": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "statusResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contractVersion",
+        "invocationId",
+        "clientRequestId",
+        "requestDigest",
+        "modelId",
+        "modelRevision",
+        "configurationRevision",
+        "runtimeRegistryGeneration",
+        "status",
+        "statusRevision",
+        "createdAt",
+        "lastDurableEventSequence",
+        "durableCursor"
+      ],
+      "properties": {
+        "contractVersion": { "const": "v1alpha2" },
+        "invocationId": { "$ref": "#/$defs/uuid" },
+        "clientRequestId": { "$ref": "#/$defs/uuid" },
+        "requestDigest": { "$ref": "#/$defs/digest" },
+        "modelId": { "$ref": "#/$defs/resourceId" },
+        "modelRevision": { "$ref": "#/$defs/digest" },
+        "configurationRevision": { "$ref": "#/$defs/digest" },
+        "runtimeRegistryGeneration": { "$ref": "#/$defs/digest" },
+        "status": { "$ref": "#/$defs/invocationStatus" },
+        "statusRevision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "startedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "endedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "usage": { "$ref": "#/$defs/usage" },
+        "finishReason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "safeErrorCode": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 128,
+          "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$"
+        },
+        "safeSummary": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "lastDurableEventSequence": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "durableEventStreamDigest": { "$ref": "#/$defs/digest" },
+        "durableCursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      }
+    },
+    "cancelRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contractVersion",
+        "requestId",
+        "expectedStatusRevision",
+        "reason"
+      ],
+      "properties": {
+        "contractVersion": { "const": "v1alpha2" },
+        "requestId": { "$ref": "#/$defs/uuid" },
+        "expectedStatusRevision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "reason": {
+          "enum": [
+            "user_requested",
+            "task_cancelled",
+            "deadline_exceeded"
+          ]
+        }
+      }
+    },
+    "lifecyclePayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "statusRevision"],
+      "properties": {
+        "status": { "$ref": "#/$defs/invocationStatus" },
+        "statusRevision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "finishReason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "safeErrorCode": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 128,
+          "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$"
+        },
+        "safeSummary": {
+          "type": "string",
+          "maxLength": 4096
+        }
+      }
+    },
+    "usagePayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["usage"],
+      "properties": {
+        "usage": { "$ref": "#/$defs/usage" }
+      }
+    },
+    "durableLifecycleEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contractVersion",
+        "invocationId",
+        "eventId",
+        "eventClass",
+        "durableSequence",
+        "eventType",
+        "eventPayload",
+        "eventDigest",
+        "durableCursor",
+        "occurredAt"
+      ],
+      "properties": {
+        "contractVersion": { "const": "v1alpha2" },
+        "invocationId": { "$ref": "#/$defs/uuid" },
+        "eventId": { "$ref": "#/$defs/uuid" },
+        "eventClass": { "const": "durable" },
+        "durableSequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "eventType": {
+          "enum": [
+            "accepted",
+            "dispatch_decided",
+            "completed",
+            "failed",
+            "cancelled",
+            "timed_out",
+            "uncertain"
+          ]
+        },
+        "eventPayload": { "$ref": "#/$defs/lifecyclePayload" },
+        "eventDigest": { "$ref": "#/$defs/digest" },
+        "durableCursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "durableUsageEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contractVersion",
+        "invocationId",
+        "eventId",
+        "eventClass",
+        "durableSequence",
+        "eventType",
+        "eventPayload",
+        "eventDigest",
+        "durableCursor",
+        "occurredAt"
+      ],
+      "properties": {
+        "contractVersion": { "const": "v1alpha2" },
+        "invocationId": { "$ref": "#/$defs/uuid" },
+        "eventId": { "$ref": "#/$defs/uuid" },
+        "eventClass": { "const": "durable" },
+        "durableSequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "eventType": { "const": "usage_recorded" },
+        "eventPayload": { "$ref": "#/$defs/usagePayload" },
+        "eventDigest": { "$ref": "#/$defs/digest" },
+        "durableCursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "ephemeralStartedEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contractVersion",
+        "invocationId",
+        "eventId",
+        "eventClass",
+        "streamSequence",
+        "eventType",
+        "eventPayload",
+        "eventDigest",
+        "occurredAt"
+      ],
+      "properties": {
+        "contractVersion": { "const": "v1alpha2" },
+        "invocationId": { "$ref": "#/$defs/uuid" },
+        "eventId": { "$ref": "#/$defs/uuid" },
+        "eventClass": { "const": "ephemeral" },
+        "streamSequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "eventType": { "const": "started" },
+        "eventPayload": {
+          "type": "object",
+          "additionalProperties": false,
+          "maxProperties": 0,
+          "properties": {}
+        },
+        "eventDigest": { "$ref": "#/$defs/digest" },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "ephemeralTextDeltaEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contractVersion",
+        "invocationId",
+        "eventId",
+        "eventClass",
+        "streamSequence",
+        "eventType",
+        "eventPayload",
+        "eventDigest",
+        "occurredAt"
+      ],
+      "properties": {
+        "contractVersion": { "const": "v1alpha2" },
+        "invocationId": { "$ref": "#/$defs/uuid" },
+        "eventId": { "$ref": "#/$defs/uuid" },
+        "eventClass": { "const": "ephemeral" },
+        "streamSequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "eventType": { "const": "text_delta" },
+        "eventPayload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["delta"],
+          "properties": {
+            "delta": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 65536,
+              "x-robothree-maxUtf8Bytes": 131072
+            }
+          }
+        },
+        "eventDigest": { "$ref": "#/$defs/digest" },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "ephemeralToolCallEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contractVersion",
+        "invocationId",
+        "eventId",
+        "eventClass",
+        "streamSequence",
+        "eventType",
+        "eventPayload",
+        "eventDigest",
+        "occurredAt"
+      ],
+      "properties": {
+        "contractVersion": { "const": "v1alpha2" },
+        "invocationId": { "$ref": "#/$defs/uuid" },
+        "eventId": { "$ref": "#/$defs/uuid" },
+        "eventClass": { "const": "ephemeral" },
+        "streamSequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "eventType": { "const": "tool_call" },
+        "eventPayload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["call"],
+          "properties": {
+            "call": { "$ref": "#/$defs/toolCall" }
+          }
+        },
+        "eventDigest": { "$ref": "#/$defs/digest" },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "eventEnvelope": {
+      "oneOf": [
+        { "$ref": "#/$defs/durableLifecycleEvent" },
+        { "$ref": "#/$defs/durableUsageEvent" },
+        { "$ref": "#/$defs/ephemeralStartedEvent" },
+        { "$ref": "#/$defs/ephemeralTextDeltaEvent" },
+        { "$ref": "#/$defs/ephemeralToolCallEvent" }
+      ]
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/$defs/acceptRequest" },
+    { "$ref": "#/$defs/acceptedResponse" },
+    { "$ref": "#/$defs/statusResponse" },
+    { "$ref": "#/$defs/cancelRequest" },
+    { "$ref": "#/$defs/eventEnvelope" }
+  ]
+}
+

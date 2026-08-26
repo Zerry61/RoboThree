@@ -1,0 +1,19 @@
+{
+  "packageId": "skill.package-001",
+  "kind": "skill",
+  "revision": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "manifest": {
+    "name": "Fixture Skill",
+    "description": "Conformance-only package"
+  },
+  "files": [
+    {
+      "relativePath": "SKILL.md",
+      "mediaType": "text/markdown",
+      "utf8Content": "# Fixture Skill\n\nConformance only.",
+      "contentDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    }
+  ],
+  "packageDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "createdAt": "2026-07-24T17:30:00+08:00"
+}

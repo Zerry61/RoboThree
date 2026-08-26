@@ -1,0 +1,118 @@
+{
+  "cases": [
+    {
+      "name": "challengeBinding",
+      "domain": "robothree.enterprise-session.challenge-binding.v1",
+      "value": {
+        "schemaVersion": "enterprise-session.v1alpha1",
+        "claimsProfile": "eipc.session-token.v1",
+        "verifiedIdentityId": "55555555-5555-4555-8555-555555555555",
+        "currentClientInstanceId": "11111111-1111-4111-8111-111111111111",
+        "audience": "robothree.enterprise-gateway",
+        "requiredPermissions": ["configuration.read", "personal_model.configure"],
+        "deviceKeyId": "device-key.fixture-001",
+        "correlationId": "22222222-2222-4222-8222-222222222222",
+        "challengeId": "33333333-3333-4333-8333-333333333333",
+        "nonce": "RklYVFVSRV9OT05DRV9OT1RfUkVBTF9DUllQVE8",
+        "issuedAt": "2026-08-23T10:00:00.000Z",
+        "expiresAt": "2026-08-23T10:01:00.000Z"
+      },
+      "canonicalJson": "{\"audience\":\"robothree.enterprise-gateway\",\"challengeId\":\"33333333-3333-4333-8333-333333333333\",\"claimsProfile\":\"eipc.session-token.v1\",\"correlationId\":\"22222222-2222-4222-8222-222222222222\",\"currentClientInstanceId\":\"11111111-1111-4111-8111-111111111111\",\"deviceKeyId\":\"device-key.fixture-001\",\"expiresAt\":\"2026-08-23T10:01:00.000Z\",\"issuedAt\":\"2026-08-23T10:00:00.000Z\",\"nonce\":\"RklYVFVSRV9OT05DRV9OT1RfUkVBTF9DUllQVE8\",\"requiredPermissions\":[\"configuration.read\",\"personal_model.configure\"],\"schemaVersion\":\"enterprise-session.v1alpha1\",\"verifiedIdentityId\":\"55555555-5555-4555-8555-555555555555\"}",
+      "sha256": "sha256:d5eebe3078a3020437ec49169174b98027d4f5320242910aea44f591210b4af6"
+    },
+    {
+      "name": "assertionRevision",
+      "domain": "robothree.enterprise-session.assertion-revision.v1",
+      "value": {
+        "claimsProfile": "eipc.session-token.v1",
+        "audience": "robothree.enterprise-gateway",
+        "scope": {
+          "enterpriseId": "enterprise.fixture",
+          "userId": "user.fixture",
+          "deviceId": "device.fixture-001",
+          "clientInstanceId": "11111111-1111-4111-8111-111111111111"
+        },
+        "permissions": ["configuration.read", "personal_model.configure"],
+        "identityDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "deviceRevision": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "permissionRevision": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "compatibilityRevision": "compatibility.fixture-001"
+      },
+      "canonicalJson": "{\"audience\":\"robothree.enterprise-gateway\",\"claimsProfile\":\"eipc.session-token.v1\",\"compatibilityRevision\":\"compatibility.fixture-001\",\"deviceRevision\":\"sha256:2222222222222222222222222222222222222222222222222222222222222222\",\"identityDigest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"permissionRevision\":\"sha256:3333333333333333333333333333333333333333333333333333333333333333\",\"permissions\":[\"configuration.read\",\"personal_model.configure\"],\"scope\":{\"clientInstanceId\":\"11111111-1111-4111-8111-111111111111\",\"deviceId\":\"device.fixture-001\",\"enterpriseId\":\"enterprise.fixture\",\"userId\":\"user.fixture\"}}",
+      "sha256": "sha256:0e65caa3e6488ffed187e7cb63dff46f7942a41a579da049abd62bf984e66942"
+    },
+    {
+      "name": "assertion",
+      "domain": "robothree.enterprise-session.assertion.v1",
+      "value": {
+        "kind": "enterprise_session_assertion",
+        "schemaVersion": "eipc.v1alpha1",
+        "validity": "valid",
+        "audience": "robothree.enterprise-gateway",
+        "scope": {
+          "enterpriseId": "enterprise.fixture",
+          "userId": "user.fixture",
+          "deviceId": "device.fixture-001",
+          "clientInstanceId": "11111111-1111-4111-8111-111111111111"
+        },
+        "permissions": ["configuration.read", "personal_model.configure"],
+        "issuedAt": "2026-08-23T10:00:05.000Z",
+        "expiresAt": "2026-08-23T10:15:00.000Z",
+        "assertionRevision": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "canonicalJson": "{\"assertionRevision\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"audience\":\"robothree.enterprise-gateway\",\"expiresAt\":\"2026-08-23T10:15:00.000Z\",\"issuedAt\":\"2026-08-23T10:00:05.000Z\",\"kind\":\"enterprise_session_assertion\",\"permissions\":[\"configuration.read\",\"personal_model.configure\"],\"schemaVersion\":\"eipc.v1alpha1\",\"scope\":{\"clientInstanceId\":\"11111111-1111-4111-8111-111111111111\",\"deviceId\":\"device.fixture-001\",\"enterpriseId\":\"enterprise.fixture\",\"userId\":\"user.fixture\"},\"validity\":\"valid\"}",
+      "sha256": "sha256:2e0ff92b6925834a4822695c487ecc4002fc7c967ad94f54cd22a4f19a7f681f"
+    },
+    {
+      "name": "deviceTrustRevision",
+      "domain": "robothree.enterprise-session.device-trust-revision.v1",
+      "value": {
+        "ownerIdentity": {
+          "enterpriseId": "enterprise.fixture",
+          "userId": "user.fixture",
+          "deviceId": "device.fixture-001"
+        },
+        "deviceRevision": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "trustSource": "mdm.fixture",
+        "managedStatus": "managed",
+        "complianceStatus": "compliant"
+      },
+      "canonicalJson": "{\"complianceStatus\":\"compliant\",\"deviceRevision\":\"sha256:2222222222222222222222222222222222222222222222222222222222222222\",\"managedStatus\":\"managed\",\"ownerIdentity\":{\"deviceId\":\"device.fixture-001\",\"enterpriseId\":\"enterprise.fixture\",\"userId\":\"user.fixture\"},\"trustSource\":\"mdm.fixture\"}",
+      "sha256": "sha256:7aad6c402172f3f755a85da9c48ff05e5408ea430d4ba20163606fc4417d3f30"
+    },
+    {
+      "name": "deviceTrust",
+      "domain": "robothree.enterprise-session.device-trust.v1",
+      "value": {
+        "kind": "enterprise_device_trust_decision",
+        "schemaVersion": "eipc.v1alpha1",
+        "decision": "trusted",
+        "ownerIdentity": {
+          "enterpriseId": "enterprise.fixture",
+          "userId": "user.fixture",
+          "deviceId": "device.fixture-001"
+        },
+        "decisionRevision": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "evaluatedAt": "2026-08-23T10:00:04.000Z"
+      },
+      "canonicalJson": "{\"decision\":\"trusted\",\"decisionRevision\":\"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"evaluatedAt\":\"2026-08-23T10:00:04.000Z\",\"kind\":\"enterprise_device_trust_decision\",\"ownerIdentity\":{\"deviceId\":\"device.fixture-001\",\"enterpriseId\":\"enterprise.fixture\",\"userId\":\"user.fixture\"},\"schemaVersion\":\"eipc.v1alpha1\"}",
+      "sha256": "sha256:216b6d7d4592015c9f9fa058eb2edfbd196d22a17a2d17a03103589cbae88f57"
+    },
+    {
+      "name": "sourceDecision",
+      "domain": "robothree.enterprise-session.source-decision.v1",
+      "value": {
+        "claimsProfile": "eipc.session-token.v1",
+        "sessionAssertionDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "deviceTrustDecisionDigest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "compatibilityRevision": "compatibility.fixture-001",
+        "currentClientInstanceId": "11111111-1111-4111-8111-111111111111",
+        "requiredPermissions": ["configuration.read", "personal_model.configure"],
+        "issuedAt": "2026-08-23T10:00:05.000Z",
+        "expiresAt": "2026-08-23T10:15:00.000Z"
+      },
+      "canonicalJson": "{\"claimsProfile\":\"eipc.session-token.v1\",\"compatibilityRevision\":\"compatibility.fixture-001\",\"currentClientInstanceId\":\"11111111-1111-4111-8111-111111111111\",\"deviceTrustDecisionDigest\":\"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"expiresAt\":\"2026-08-23T10:15:00.000Z\",\"issuedAt\":\"2026-08-23T10:00:05.000Z\",\"requiredPermissions\":[\"configuration.read\",\"personal_model.configure\"],\"sessionAssertionDigest\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"}",
+      "sha256": "sha256:fb05436316ab9b1df9ca2d4b05425ccd72fdd53c3f4716fe8d373a7228c45a33"
+    }
+  ]
+}

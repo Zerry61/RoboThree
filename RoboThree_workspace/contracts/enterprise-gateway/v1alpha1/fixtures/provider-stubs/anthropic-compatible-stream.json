@@ -1,0 +1,31 @@
+{
+  "fixtureVersion": "v1alpha1",
+  "protocol": "anthropic_compatible",
+  "frames": [
+    {
+      "type": "message_start"
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "text_delta",
+        "text": "RoboThree "
+      }
+    },
+    {
+      "type": "content_block_delta",
+      "delta": {
+        "type": "text_delta",
+        "text": "ready"
+      }
+    },
+    {
+      "type": "message_delta",
+      "stop_reason": "end_turn",
+      "usage": {
+        "input_tokens": 8,
+        "output_tokens": 3
+      }
+    }
+  ]
+}

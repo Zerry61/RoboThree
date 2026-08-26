@@ -1,0 +1,10 @@
+{
+  "contractVersion": "v1alpha1",
+  "snapshotId": "configuration.snapshot-001",
+  "snapshotRevision": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "snapshotDigest": "1111111111111111111111111111111111111111111111111111111111111111",
+  "packageId": "skill.package-001",
+  "kind": "skill",
+  "packageRevision": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "packageDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+}

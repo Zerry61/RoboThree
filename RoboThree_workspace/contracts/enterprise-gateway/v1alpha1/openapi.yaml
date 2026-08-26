@@ -1,0 +1,308 @@
+openapi: 3.1.0
+info:
+  title: RoboThree Enterprise Gateway Contract
+  version: v1alpha1
+  description: >
+    Canonical cross-language HTTP surface. CGF-1.0 freezes Contract only and
+    does not implement these routes. Enterprise identity is established by an
+    adapter-specific OA flow outside this canonical surface and represented
+    here only by a short-lived verifiedIdentityId. This Contract never freezes
+    OA username/password, ticket, SDK, token exchange, OIDC, PKCE, or browser
+    callback fields.
+servers:
+  - url: https://enterprise.example.invalid
+paths:
+  /v1alpha1/compatibility:
+    get:
+      operationId: getCompatibility
+      responses:
+        "200":
+          description: Compatible Enterprise Gateway
+          content:
+            application/json:
+              schema:
+                $ref: ./schemas/compatibility.schema.json
+        default:
+          $ref: "#/components/responses/EnterpriseError"
+  /v1alpha1/device-challenges:
+    post:
+      operationId: issueDeviceChallenge
+      description: >
+        Issues a short-lived, single-use challenge bound to a verified
+        enterprise identity context, client instance, audience, and purpose.
+        The local sign operation is not a Central HTTP API.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./schemas/device-challenge.schema.json#/$defs/deviceChallengeRequest
+      responses:
+        "200":
+          description: Device challenge
+          content:
+            application/json:
+              schema:
+                $ref: ./schemas/device-challenge.schema.json#/$defs/deviceChallenge
+        default:
+          $ref: "#/components/responses/EnterpriseError"
+  /v1alpha1/device-enrollment:
+    post:
+      operationId: enrollDevice
+      description: >
+        Optional Alpha manual device enrollment. The enrollment code authorizes
+        a device registration only and never proves enterprise user identity.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./schemas/enrollment.schema.json#/$defs/enrollDeviceRequest
+      responses:
+        "200":
+          description: Trusted device enrollment result
+          content:
+            application/json:
+              schema:
+                $ref: ./schemas/enrollment.schema.json#/$defs/enrollDeviceResult
+        default:
+          $ref: "#/components/responses/EnterpriseError"
+  /v1alpha1/token:
+    post:
+      operationId: issueAccessToken
+      description: >
+        Issues a short-lived RoboThree Access Token only after the verified
+        enterprise identity, single-use device proof, current device trust,
+        fixed permission, and compatibility checks all succeed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./schemas/token.schema.json#/$defs/issueAccessTokenRequest
+      responses:
+        "200":
+          description: Short-lived RoboThree Access Token
+          content:
+            application/json:
+              schema:
+                $ref: ./schemas/token.schema.json#/$defs/tokenResult
+        default:
+          $ref: "#/components/responses/EnterpriseError"
+  /v1alpha1/configuration:
+    get:
+      operationId: getConfigurationSnapshot
+      security:
+        - roboThreeAccessToken: []
+      responses:
+        "200":
+          description: Immutable full configuration snapshot
+          content:
+            application/json:
+              schema:
+                $ref: ./schemas/configuration-snapshot.schema.json
+        default:
+          $ref: "#/components/responses/EnterpriseError"
+  /v1alpha1/configuration/{snapshotId}/revisions/{snapshotRevision}/packages/{kind}/{packageId}/revisions/{packageRevision}:
+    get:
+      operationId: getExactPackageDocument
+      description: >
+        Reads one immutable Agent or Skill Package that is an exact member of
+        the specified Configuration Snapshot. This operation never resolves a
+        latest package and never lists or searches packages.
+      security:
+        - roboThreeAccessToken: []
+      parameters:
+        - name: snapshotId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 3
+            maxLength: 160
+            pattern: "^[a-z][a-z0-9]*(?:[._:-][a-z0-9]+)+$"
+        - name: snapshotRevision
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[a-f0-9]{64}$"
+        - name: kind
+          in: path
+          required: true
+          schema:
+            enum: [agent, skill]
+        - name: packageId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 3
+            maxLength: 160
+            pattern: "^[a-z][a-z0-9]*(?:[._:-][a-z0-9]+)+$"
+        - name: packageRevision
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[a-f0-9]{64}$"
+        - name: snapshotDigest
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: "^[a-f0-9]{64}$"
+        - name: packageDigest
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: "^[a-f0-9]{64}$"
+        - name: If-None-Match
+          in: header
+          required: false
+          schema:
+            type: string
+            maxLength: 160
+      responses:
+        "200":
+          description: Exact immutable Agent or Skill Package
+          headers:
+            ETag:
+              schema:
+                type: string
+                maxLength: 160
+          content:
+            application/json:
+              schema:
+                $ref: ./schemas/package-document.schema.json
+        "304":
+          description: The exact Package digest is already cached
+          headers:
+            ETag:
+              schema:
+                type: string
+                maxLength: 160
+        default:
+          $ref: "#/components/responses/EnterpriseError"
+  /v1alpha1/model-invocations:
+    post:
+      operationId: acceptModelInvocation
+      description: >
+        Accepts one provider-neutral Model Invocation after the Central
+        security context has independently verified enterprise identity,
+        managed device trust, model.use permission, compatibility, the exact
+        Model revision, and the external-data admission evidence. The request
+        cannot self-declare identity, credentials, provider endpoints, lease
+        ownership, or recovery policy.
+      security:
+        - roboThreeAccessToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./schemas/model-invocation.schema.json#/$defs/acceptRequest
+      responses:
+        "202":
+          description: Durable Model Invocation accepted
+          content:
+            application/json:
+              schema:
+                $ref: ./schemas/model-invocation.schema.json#/$defs/acceptedResponse
+        default:
+          $ref: "#/components/responses/EnterpriseError"
+  /v1alpha1/model-invocations/{invocationId}:
+    get:
+      operationId: getModelInvocation
+      security:
+        - roboThreeAccessToken: []
+      parameters:
+        - $ref: "#/components/parameters/ModelInvocationId"
+      responses:
+        "200":
+          description: Current durable Model Invocation status
+          content:
+            application/json:
+              schema:
+                $ref: ./schemas/model-invocation.schema.json#/$defs/statusResponse
+        default:
+          $ref: "#/components/responses/EnterpriseError"
+  /v1alpha1/model-invocations/{invocationId}/cancel:
+    post:
+      operationId: cancelModelInvocation
+      security:
+        - roboThreeAccessToken: []
+      parameters:
+        - $ref: "#/components/parameters/ModelInvocationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./schemas/model-invocation.schema.json#/$defs/cancelRequest
+      responses:
+        "200":
+          description: Current durable Model Invocation status after cancellation convergence
+          content:
+            application/json:
+              schema:
+                $ref: ./schemas/model-invocation.schema.json#/$defs/statusResponse
+        default:
+          $ref: "#/components/responses/EnterpriseError"
+  /v1alpha1/model-invocations/{invocationId}/events:
+    get:
+      operationId: streamModelInvocationEvents
+      description: >
+        Streams provider-neutral SSE events. A durable cursor resumes durable
+        lifecycle and usage facts only; ephemeral text and Tool Call deltas are
+        not guaranteed to replay. Reconnect starts with status reconciliation.
+      security:
+        - roboThreeAccessToken: []
+      parameters:
+        - $ref: "#/components/parameters/ModelInvocationId"
+        - name: cursor
+          in: query
+          required: false
+          description: Opaque Gateway durable cursor.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 512
+      responses:
+        "200":
+          description: Provider-neutral Model Invocation event stream
+          content:
+            text/event-stream:
+              schema:
+                $ref: ./schemas/model-invocation.schema.json#/$defs/eventEnvelope
+        default:
+          $ref: "#/components/responses/EnterpriseError"
+components:
+  securitySchemes:
+    roboThreeAccessToken:
+      type: http
+      scheme: bearer
+      bearerFormat: RoboThree-Access-Token
+  schemas:
+    Error:
+      $ref: ./schemas/error.schema.json
+    AccessTokenClaims:
+      $ref: ./schemas/access-token-claims.schema.json
+    ModelInvocation:
+      $ref: ./schemas/model-invocation.schema.json
+  parameters:
+    ModelInvocationId:
+      name: invocationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    EnterpriseError:
+      description: Typed enterprise identity, device, compatibility, Model Gateway, or service error
+      content:
+        application/json:
+          schema:
+            $ref: ./schemas/error.schema.json

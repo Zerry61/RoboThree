@@ -1,0 +1,89 @@
+[
+  {
+    "schema": "compatibility_projection",
+    "reason": "pending boolean does not match activation state",
+    "value": {
+      "contractVersion": "v1alpha2",
+      "coreVersion": "0.0.0-cgf.1.2a",
+      "supportedContractVersions": ["v1alpha1", "v1alpha2"],
+      "selectedContractVersion": "v1alpha2",
+      "features": ["enterprise_configuration_status"],
+      "runtimeInstanceId": "runtime.instance-001",
+      "activationState": "pending_restart",
+      "pendingRuntimeActivation": false,
+      "enterpriseConfigurationStatusQueryRef": "enterprise-configuration.status"
+    }
+  },
+  {
+    "schema": "enterprise_configuration_status_projection",
+    "reason": "current state requires matching storage/runtime revisions",
+    "value": {
+      "contractVersion": "v1alpha2",
+      "syncState": "idle",
+      "activationState": "current",
+      "storageActiveRevision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "runtimeActiveRevision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }
+  },
+  {
+    "schema": "enterprise_configuration_status_projection",
+    "reason": "secret field must not enter status projection",
+    "value": {
+      "contractVersion": "v1alpha2",
+      "syncState": "failed",
+      "activationState": "uninitialized",
+      "lastErrorCode": "enterprise_configuration.sync_failed",
+      "accessToken": "must-not-be-exposed"
+    }
+  },
+  {
+    "schema": "enterprise_configuration_status_event",
+    "reason": "durable status event requires cursor",
+    "value": {
+      "contractVersion": "v1alpha2",
+      "eventId": "44444444-4444-4444-8444-444444444444",
+      "deliveryKind": "durable",
+      "runtimeInstanceId": "runtime.instance-001",
+      "emittedAt": "2026-07-25T18:00:00+08:00",
+      "payload": {
+        "type": "enterprise_configuration.status_changed",
+        "syncState": "idle",
+        "activationState": "uninitialized",
+        "statusQueryRef": "enterprise-configuration.status"
+      }
+    }
+  },
+  {
+    "schema": "workspace_entries_query",
+    "reason": "workspace browsing must be authorized by taskId, not workspaceGrantId",
+    "value": {
+      "contractVersion": "v1alpha2",
+      "queryId": "55555555-5555-4555-8555-555555555555",
+      "correlationId": "66666666-6666-4666-8666-666666666666",
+      "clientInstanceId": "77777777-7777-4777-8777-777777777777",
+      "type": "list_workspace_entries",
+      "taskId": "task:88888888-8888-4888-8888-888888888888",
+      "workspaceGrantId": "workspace:99999999-9999-4999-8999-999999999999"
+    }
+  },
+  {
+    "schema": "workspace_directory_projection",
+    "reason": "symlinks cannot be navigable",
+    "value": {
+      "contractVersion": "v1alpha2",
+      "workspaceGrantId": "workspace:99999999-9999-4999-8999-999999999999",
+      "breadcrumbDisplayNames": [],
+      "entries": [
+        {
+          "entryId": "wse1.eyJraW5kIjoiZW50cnkifQ.dGVzdC1zaWduYXR1cmUtdGhhdC1pcy1sb25nLWVub3VnaA",
+          "displayName": "escape",
+          "kind": "symlink",
+          "navigable": true,
+          "unavailableReason": "workspace.symlink_navigation_disabled"
+        }
+      ],
+      "truncated": false,
+      "snapshotDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  }
+]

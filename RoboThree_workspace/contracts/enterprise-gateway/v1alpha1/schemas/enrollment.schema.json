@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://robothree.local/contracts/enterprise-gateway/v1alpha1/enrollment.schema.json",
+  "title": "Optional Enterprise Device Enrollment",
+  "oneOf": [
+    { "$ref": "#/$defs/enrollDeviceRequest" },
+    { "$ref": "#/$defs/enrollDeviceResult" }
+  ],
+  "$defs": {
+    "enrollDeviceRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "contractVersion",
+        "verifiedIdentityId",
+        "deviceEnrollmentCode",
+        "clientInstanceId",
+        "devicePublicKey",
+        "deviceProof"
+      ],
+      "properties": {
+        "type": { "const": "enroll_device_request" },
+        "contractVersion": { "const": "v1alpha1" },
+        "verifiedIdentityId": { "type": "string", "format": "uuid" },
+        "deviceEnrollmentCode": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 512
+        },
+        "clientInstanceId": { "type": "string", "format": "uuid" },
+        "devicePublicKey": {
+          "$ref": "#/$defs/devicePublicKey"
+        },
+        "deviceProof": {
+          "$ref": "./device-challenge.schema.json#/$defs/deviceProof"
+        }
+      }
+    },
+    "enrollDeviceResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "contractVersion",
+        "enterpriseId",
+        "userId",
+        "deviceId",
+        "deviceKeyId",
+        "clientInstanceId",
+        "enrolledAt"
+      ],
+      "properties": {
+        "type": { "const": "enroll_device_result" },
+        "contractVersion": { "const": "v1alpha1" },
+        "enterpriseId": { "type": "string", "minLength": 3, "maxLength": 160 },
+        "userId": { "type": "string", "minLength": 3, "maxLength": 160 },
+        "deviceId": { "type": "string", "minLength": 3, "maxLength": 160 },
+        "deviceKeyId": { "type": "string", "minLength": 3, "maxLength": 160 },
+        "clientInstanceId": { "type": "string", "format": "uuid" },
+        "enrolledAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "devicePublicKey": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["keyId", "algorithm", "format", "encodedKey"],
+      "properties": {
+        "keyId": { "type": "string", "minLength": 3, "maxLength": 160 },
+        "algorithm": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 32,
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]+$"
+        },
+        "format": {
+          "enum": ["spki_der_base64", "x509_certificate_pem"]
+        },
+        "encodedKey": {
+          "type": "string",
+          "minLength": 32,
+          "maxLength": 16384
+        }
+      }
+    }
+  }
+}

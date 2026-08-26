@@ -1,0 +1,60 @@
+{
+  "name": "@robothree/contracts",
+  "version": "0.0.0-r2d.3.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./admin-control/v1alpha1": {
+      "types": "./dist/admin-control/v1alpha1/index.d.ts",
+      "import": "./dist/admin-control/v1alpha1/index.js"
+    },
+    "./desktop-private/personal-credential-broker-v1": {
+      "types": "./dist/desktop-private/personal-credential-broker-v1/index.d.ts",
+      "import": "./dist/desktop-private/personal-credential-broker-v1/index.js"
+    },
+    "./desktop-private/personal-credential-transport-v1": {
+      "types": "./dist/desktop-private/personal-credential-transport-v1/index.d.ts",
+      "import": "./dist/desktop-private/personal-credential-transport-v1/index.js"
+    },
+    "./reasoning-mode/v1alpha1": {
+      "types": "./dist/reasoning-mode/index.d.ts",
+      "import": "./dist/reasoning-mode/index.js"
+    },
+    "./model-protocol/v1alpha2": {
+      "types": "./dist/model-protocol/v1alpha2.d.ts",
+      "import": "./dist/model-protocol/v1alpha2.js"
+    },
+    "./runtime-selection/v1alpha2": {
+      "types": "./dist/runtime-selection/v1alpha2.d.ts",
+      "import": "./dist/runtime-selection/v1alpha2.js"
+    },
+    "./runtime-selection/v1alpha3": {
+      "types": "./dist/runtime-selection/v1alpha3/index.d.ts",
+      "import": "./dist/runtime-selection/v1alpha3/index.js"
+    },
+    "./runtime-selection/agent-definition/v1alpha2": {
+      "types": "./dist/runtime-selection/agent-definition/v1alpha2/index.d.ts",
+      "import": "./dist/runtime-selection/agent-definition/v1alpha2/index.js"
+    },
+    "./submit-turn-coordination/v1alpha3": {
+      "types": "./dist/submit-turn-coordination/v1alpha3.d.ts",
+      "import": "./dist/submit-turn-coordination/v1alpha3.js"
+    },
+    "./submit-turn-coordination/v1alpha4": {
+      "types": "./dist/submit-turn-coordination/v1alpha4/index.d.ts",
+      "import": "./dist/submit-turn-coordination/v1alpha4/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "node ../../scripts/clean.mjs packages/contracts"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  }
+}

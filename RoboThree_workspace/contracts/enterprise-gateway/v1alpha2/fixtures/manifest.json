@@ -1,0 +1,77 @@
+{
+  "contractVersion": "v1alpha2",
+  "cases": [
+    {
+      "schema": "model-invocation",
+      "file": "invalid/model-invocation-accept-cache-context-extra-field.json",
+      "valid": false
+    },
+    {
+      "schema": "model-invocation",
+      "file": "invalid/model-invocation-accept-missing-cache-context.json",
+      "valid": false
+    },
+    {
+      "schema": "model-invocation",
+      "file": "invalid/model-invocation-accept-raw-session.json",
+      "valid": false
+    },
+    {
+      "schema": "model-invocation",
+      "file": "invalid/model-invocation-accept-scope-format.json",
+      "valid": false
+    },
+    {
+      "schema": "model-invocation",
+      "file": "invalid/model-invocation-accept-unknown-field.json",
+      "valid": false
+    },
+    {
+      "schema": "compatibility",
+      "file": "valid/compatibility.json",
+      "valid": true
+    },
+    {
+      "schema": "model-invocation",
+      "file": "valid/model-invocation-accept-assistant.json",
+      "valid": true
+    },
+    {
+      "schema": "model-invocation",
+      "file": "valid/model-invocation-accept-compaction.json",
+      "valid": true
+    },
+    {
+      "schema": "model-invocation",
+      "file": "valid/model-invocation-accepted.json",
+      "valid": true
+    },
+    {
+      "schema": "model-invocation",
+      "file": "valid/model-invocation-cancel.json",
+      "valid": true
+    },
+    {
+      "schema": "model-invocation",
+      "file": "valid/model-invocation-event-durable.json",
+      "valid": true
+    },
+    {
+      "schema": "model-invocation",
+      "file": "valid/model-invocation-event-text-delta.json",
+      "valid": true
+    },
+    {
+      "schema": "model-invocation",
+      "file": "valid/model-invocation-status-running.json",
+      "valid": true
+    }
+  ],
+  "canonicalDigest": {
+    "value": {
+      "sessionScopeDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "canonicalJson": "{\"sessionScopeDigest\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}",
+    "sha256": "6d93dc7d3c929d1506fc29c38137666a5dd9393cb34eeda555e815ad5fc52ee3"
+  }
+}

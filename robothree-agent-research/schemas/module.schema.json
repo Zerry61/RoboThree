@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://robothree.local/schemas/module.schema.json",
+  "title": "Source Code Module",
+  "description": "对单个源码模块（文件 / 类 / 函数簇）的描述，用于生成 code map 与对比表。",
+  "type": "object",
+  "required": ["name", "path", "role"],
+  "properties": {
+    "name": { "type": "string" },
+    "path": { "type": "string", "description": "相对仓库根的路径" },
+    "symbol": { "type": "string", "description": "类名 / 函数名 / 包名" },
+    "layer": {
+      "type": "string",
+      "enum": [
+        "entry",
+        "runtime",
+        "model-adapter",
+        "context",
+        "tool",
+        "permission",
+        "session",
+        "memory",
+        "skill",
+        "subagent",
+        "persistence",
+        "event",
+        "ui",
+        "observability",
+        "other"
+      ]
+    },
+    "role": { "type": "string", "description": "该模块的作用一句话" },
+    "depends_on": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "依赖的其他 module.name 列表"
+    },
+    "exports": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "对外暴露的关键 API / 类型"
+    },
+    "evidence": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "证实上述字段的代码引用，格式 path/to/file.ts:L10-L30"
+    },
+    "confidence": { "enum": ["F", "I", "R"] }
+  }
+}

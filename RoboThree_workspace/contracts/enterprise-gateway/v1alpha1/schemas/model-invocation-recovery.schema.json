@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://robothree.local/contracts/enterprise-gateway/v1alpha1/model-invocation-recovery.schema.json",
+  "title": "Enterprise Model Invocation Recovery Coordination",
+  "description": "Language-neutral internal coordination facts. These objects are not public HTTP request bodies.",
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "nodeId": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 160,
+      "pattern": "^[a-z][a-z0-9]*(?:[._:-][a-z0-9]+)+$"
+    },
+    "recoveryPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contractVersion",
+        "policyRevision",
+        "leaseTtlMillis",
+        "leaseRenewalIntervalMillis",
+        "recoveryQueryDeadlineMillis"
+      ],
+      "properties": {
+        "contractVersion": { "const": "v1alpha1" },
+        "policyRevision": { "$ref": "#/$defs/digest" },
+        "leaseTtlMillis": {
+          "type": "integer",
+          "minimum": 5000,
+          "maximum": 300000
+        },
+        "leaseRenewalIntervalMillis": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 120000
+        },
+        "recoveryQueryDeadlineMillis": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 300000
+        }
+      }
+    },
+    "leaseRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contractVersion",
+        "invocationId",
+        "ownerNodeId",
+        "fencingEpoch",
+        "statusRevision",
+        "leaseExpiresAt",
+        "databaseObservedAt"
+      ],
+      "properties": {
+        "contractVersion": { "const": "v1alpha1" },
+        "invocationId": { "$ref": "#/$defs/uuid" },
+        "ownerNodeId": { "$ref": "#/$defs/nodeId" },
+        "fencingEpoch": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "statusRevision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "leaseExpiresAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "databaseObservedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "claimRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contractVersion",
+        "requestId",
+        "invocationId",
+        "claimantNodeId",
+        "claimType",
+        "expectedFencingEpoch",
+        "observedDatabaseTime"
+      ],
+      "properties": {
+        "contractVersion": { "const": "v1alpha1" },
+        "requestId": { "$ref": "#/$defs/uuid" },
+        "invocationId": { "$ref": "#/$defs/uuid" },
+        "claimantNodeId": { "$ref": "#/$defs/nodeId" },
+        "claimType": {
+          "enum": ["acquire", "renew", "takeover"]
+        },
+        "expectedFencingEpoch": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "observedDatabaseTime": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "fencedCommit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contractVersion",
+        "invocationId",
+        "ownerNodeId",
+        "fencingEpoch",
+        "expectedStatusRevision",
+        "nextDurableSequence",
+        "commitDigest"
+      ],
+      "properties": {
+        "contractVersion": { "const": "v1alpha1" },
+        "invocationId": { "$ref": "#/$defs/uuid" },
+        "ownerNodeId": { "$ref": "#/$defs/nodeId" },
+        "fencingEpoch": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "expectedStatusRevision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "nextDurableSequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "commitDigest": { "$ref": "#/$defs/digest" }
+      }
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/$defs/recoveryPolicy" },
+    { "$ref": "#/$defs/leaseRecord" },
+    { "$ref": "#/$defs/claimRequest" },
+    { "$ref": "#/$defs/fencedCommit" }
+  ]
+}

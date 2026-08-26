@@ -1,0 +1,8 @@
+{
+  "contractVersion": "v1alpha1",
+  "code": "device_not_compliant",
+  "category": "authorization",
+  "retryable": false,
+  "safeSummary": "The current device does not satisfy enterprise compliance requirements.",
+  "correlationId": "60000000-0000-4000-8000-000000000002"
+}

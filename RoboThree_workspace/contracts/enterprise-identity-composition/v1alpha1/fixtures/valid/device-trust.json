@@ -1,0 +1,13 @@
+{
+  "kind": "enterprise_device_trust_decision",
+  "schemaVersion": "eipc.v1alpha1",
+  "decision": "trusted",
+  "ownerIdentity": {
+    "enterpriseId": "enterprise.acme",
+    "userId": "user.alice",
+    "deviceId": "device.managed-one"
+  },
+  "decisionRevision": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "decisionDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "evaluatedAt": "2026-08-22T01:30:00.000Z"
+}

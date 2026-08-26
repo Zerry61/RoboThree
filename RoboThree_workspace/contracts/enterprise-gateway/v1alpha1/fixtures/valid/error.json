@@ -1,0 +1,9 @@
+{
+  "contractVersion": "v1alpha1",
+  "code": "configuration.not_found",
+  "category": "availability",
+  "retryable": true,
+  "retryAfterSeconds": 30,
+  "safeSummary": "Configuration is temporarily unavailable.",
+  "correlationId": "22222222-2222-4222-8222-222222222222"
+}

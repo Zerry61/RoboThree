@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.robothree.central.persistence.mybatis.mapper.ConfigurationPersistenceMapper">
+
+    <resultMap id="snapshot" type="com.robothree.central.persistence.mybatis.entity.ConfigurationSnapshotEntity">
+        <id property="snapshotId" column="snapshot_id"/>
+        <id property="revision" column="revision"/>
+        <result property="digest" column="digest"/>
+        <result property="schemaVersion" column="schema_version"/>
+        <result property="documentJson" column="document_json"/>
+        <result property="etag" column="etag"/>
+        <result property="active" column="active"/>
+        <result property="generatedAt" column="generated_at"/>
+        <result property="insertedAt" column="inserted_at"/>
+    </resultMap>
+
+    <resultMap id="package" type="com.robothree.central.persistence.mybatis.entity.PackageDocumentEntity">
+        <id property="packageId" column="package_id"/>
+        <id property="revision" column="revision"/>
+        <result property="kind" column="kind"/>
+        <result property="digest" column="digest"/>
+        <result property="documentJson" column="document_json"/>
+        <result property="insertedAt" column="inserted_at"/>
+    </resultMap>
+
+    <insert id="insertSnapshot">
+        INSERT INTO enterprise_configuration_snapshot (
+            snapshot_id, revision, digest, schema_version, document_json,
+            etag, active, generated_at, inserted_at
+        ) VALUES (
+            #{snapshotId}, #{revision}, #{digest}, #{schemaVersion}, #{documentJson},
+            #{etag}, #{active}, #{generatedAt}, #{insertedAt}
+        )
+        ON CONFLICT (snapshot_id, revision) DO NOTHING
+    </insert>
+
+    <select id="findSnapshot" resultMap="snapshot">
+        SELECT *
+        FROM enterprise_configuration_snapshot
+        WHERE snapshot_id = #{snapshotId}
+          AND revision = #{revision}
+    </select>
+
+    <select id="findActiveSnapshot" resultMap="snapshot">
+        SELECT *
+        FROM enterprise_configuration_snapshot
+        WHERE active = TRUE
+    </select>
+
+    <insert id="insertPackage">
+        INSERT INTO enterprise_package_document (
+            package_id, kind, revision, digest, document_json, inserted_at
+        ) VALUES (
+            #{packageId}, #{kind}, #{revision}, #{digest}, #{documentJson}, #{insertedAt}
+        )
+        ON CONFLICT (package_id, revision) DO NOTHING
+    </insert>
+
+    <select id="findPackage" resultMap="package">
+        SELECT *
+        FROM enterprise_package_document
+        WHERE package_id = #{packageId}
+          AND revision = #{revision}
+    </select>
+</mapper>

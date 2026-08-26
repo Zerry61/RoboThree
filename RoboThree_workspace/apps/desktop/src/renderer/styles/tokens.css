@@ -1,0 +1,46 @@
+:root {
+  --r3-color-background: #fafbfc;
+  --r3-color-surface: #ffffff;
+  --r3-color-surface-hover: #f3f4f7;
+  --r3-color-surface-active: #e9ebf0;
+  --r3-color-border: #e4e6ec;
+  --r3-color-border-strong: #d0d3dc;
+  --r3-color-primary: #4f6ef7;
+  --r3-color-primary-hover: #3d5ce5;
+  --r3-color-primary-subtle: #eef1fe;
+  --r3-color-text: #1a1d2e;
+  --r3-color-text-secondary: #5f6478;
+  --r3-color-text-tertiary: #9498a8;
+  --r3-color-text-placeholder: #b8bcc9;
+  --r3-color-danger: #c43d4b;
+  --r3-color-danger-subtle: #fff0f2;
+  --r3-color-warning: #a05d00;
+  --r3-color-warning-subtle: #fff6e5;
+  --r3-color-success: #2f7a4f;
+  --r3-color-success-subtle: #edf8f1;
+  --r3-font-family: system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --r3-font-size-xs: 12px;
+  --r3-font-size-sm: 13px;
+  --r3-font-size-md: 14px;
+  --r3-font-size-lg: 15px;
+  --r3-font-size-xl: 18px;
+  --r3-font-size-2xl: 22px;
+  --r3-line-height: 1.5;
+  --r3-radius-sm: 6px;
+  --r3-radius-md: 8px;
+  --r3-radius-lg: 12px;
+  --r3-radius-pill: 20px;
+  --r3-sidebar-expanded: 264px;
+  --r3-sidebar-collapsed: 68px;
+  --r3-composer-max-width: 760px;
+  --r3-page-max-width: 1080px;
+  --r3-page-narrow-width: 960px;
+  --r3-motion-fast: 150ms;
+  --r3-focus-ring: 0 0 0 3px rgba(79, 110, 247, 0.22);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --r3-motion-fast: 0ms;
+  }
+}

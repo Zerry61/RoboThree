@@ -1,0 +1,14 @@
+{
+  "contractVersion": "v1alpha1",
+  "invocationId": "31000000-0000-4000-8000-000000000061",
+  "eventId": "31000000-0000-4000-8000-000000000062",
+  "eventClass": "durable",
+  "durableSequence": 1,
+  "eventType": "accepted",
+  "eventPayload": {
+    "status": "accepted",
+    "statusRevision": 0
+  },
+  "eventDigest": "6161616161616161616161616161616161616161616161616161616161616161",
+  "occurredAt": "2026-07-30T12:00:00Z"
+}

@@ -1,0 +1,43 @@
+{
+  "contractVersion": "v1alpha1",
+  "clientRequestId": "31000000-0000-4000-8000-000000000031",
+  "requestId": "31000000-0000-4000-8000-000000000032",
+  "requestDigest": "3131313131313131313131313131313131313131313131313131313131313131",
+  "audience": "enterprise-model-gateway",
+  "requiredPermission": "model.use",
+  "modelRequest": {
+    "snapshotId": "31000000-0000-4000-8000-000000000033",
+    "contextSourceDigest": "3232323232323232323232323232323232323232323232323232323232323232",
+    "model": {
+      "modelId": "model.enterprise.general",
+      "modelRevision": "3333333333333333333333333333333333333333333333333333333333333333",
+      "configurationRevision": "3434343434343434343434343434343434343434343434343434343434343434",
+      "runtimeRegistryGeneration": "3535353535353535353535353535353535353535353535353535353535353535"
+    },
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "User content without confirmation."
+          }
+        ]
+      }
+    ],
+    "tools": [],
+    "maxOutputTokens": 128
+  },
+  "admission": {
+    "type": "user_confirmed",
+    "taskId": "31000000-0000-4000-8000-000000000034",
+    "externalTarget": "gateway.enterprise.model",
+    "dataCategories": ["user_text"],
+    "dataScopeDigest": "3636363636363636363636363636363636363636363636363636363636363636",
+    "confirmationDigest": "3737373737373737373737373737373737373737373737373737373737373737"
+  },
+  "timeoutPolicy": {
+    "providerRequestDeadlineAt": "2026-07-30T12:10:00Z",
+    "providerStreamIdleTimeoutMillis": 30000
+  }
+}

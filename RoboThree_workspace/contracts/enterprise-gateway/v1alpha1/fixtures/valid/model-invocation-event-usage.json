@@ -1,0 +1,17 @@
+{
+  "contractVersion": "v1alpha1",
+  "invocationId": "30000000-0000-4000-8000-000000000021",
+  "eventId": "30000000-0000-4000-8000-000000000042",
+  "eventClass": "durable",
+  "durableSequence": 3,
+  "eventType": "usage_recorded",
+  "eventPayload": {
+    "usage": {
+      "inputTokens": 32,
+      "outputTokens": 12
+    }
+  },
+  "eventDigest": "2424242424242424242424242424242424242424242424242424242424242424",
+  "durableCursor": "model-invocation:opaque:event:3",
+  "occurredAt": "2026-07-30T12:00:05Z"
+}

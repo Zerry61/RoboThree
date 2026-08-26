@@ -1,0 +1,10 @@
+{
+  "contractVersion": "v1alpha1",
+  "requestId": "32000000-0000-4000-8000-000000000012",
+  "invocationId": "32000000-0000-4000-8000-000000000011",
+  "claimantNodeId": "central.node-b",
+  "claimType": "takeover",
+  "expectedFencingEpoch": 2,
+  "observedDatabaseTime": "2026-07-30T12:00:31Z",
+  "providerStreamIdleTimeoutMillis": 1
+}

@@ -1,0 +1,17 @@
+{
+  "kind": "enterprise_session_assertion",
+  "schemaVersion": "eipc.v1alpha1",
+  "validity": "valid",
+  "audience": "robothree.enterprise-gateway",
+  "scope": {
+    "enterpriseId": "enterprise.acme",
+    "userId": "user.alice",
+    "deviceId": "device.managed-one",
+    "clientInstanceId": "11111111-1111-4111-8111-111111111111"
+  },
+  "permissions": ["configuration.read", "personal_model.configure"],
+  "issuedAt": "2026-08-22T01:00:00.000Z",
+  "expiresAt": "2026-08-22T03:00:00.000Z",
+  "assertionRevision": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "assertionDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+}

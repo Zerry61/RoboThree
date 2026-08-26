@@ -1,0 +1,88 @@
+:root {
+  --r3-admin-surface-base: #f7f8fa;
+  --r3-admin-surface-subtle: #ffffff;
+  --r3-admin-surface-raised: #ffffff;
+  --r3-admin-surface-overlay: rgba(16, 24, 40, 0.46);
+  --r3-admin-surface-inverse: #14171f;
+  --r3-admin-text-primary: #1b1f2a;
+  --r3-admin-text-secondary: #4b5565;
+  --r3-admin-text-muted: #697386;
+  --r3-admin-text-inverse: #ffffff;
+  --r3-admin-text-danger: #b42318;
+  --r3-admin-border-default: #d8dde8;
+  --r3-admin-border-subtle: #eaedf3;
+  --r3-admin-border-strong: #aab3c2;
+  --r3-admin-border-focus: #2563eb;
+  --r3-admin-border-danger: #d92d20;
+  --r3-admin-action-primary: #2563eb;
+  --r3-admin-action-primary-hover: #1d4ed8;
+  --r3-admin-action-secondary: #eff4ff;
+  --r3-admin-action-disabled: #d8dde8;
+  --r3-admin-action-danger: #d92d20;
+  --r3-admin-semantic-info: #0e7490;
+  --r3-admin-semantic-success: #16803c;
+  --r3-admin-semantic-warning: #b54708;
+  --r3-admin-semantic-danger: #b42318;
+  --r3-admin-semantic-neutral: #4b5565;
+  --r3-admin-font-family-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --r3-admin-font-size-12: 12px;
+  --r3-admin-font-size-14: 14px;
+  --r3-admin-font-size-16: 16px;
+  --r3-admin-font-size-20: 20px;
+  --r3-admin-font-size-24: 24px;
+  --r3-admin-line-height-tight: 1.25;
+  --r3-admin-line-height-default: 1.5;
+  --r3-admin-line-height-relaxed: 1.7;
+  --r3-admin-font-weight-regular: 400;
+  --r3-admin-font-weight-medium: 500;
+  --r3-admin-font-weight-semibold: 600;
+  --r3-admin-space-0: 0;
+  --r3-admin-space-1: 4px;
+  --r3-admin-space-2: 8px;
+  --r3-admin-space-3: 12px;
+  --r3-admin-space-4: 16px;
+  --r3-admin-space-5: 20px;
+  --r3-admin-space-6: 24px;
+  --r3-admin-space-8: 32px;
+  --r3-admin-space-10: 40px;
+  --r3-admin-space-12: 48px;
+  --r3-admin-radius-none: 0;
+  --r3-admin-radius-2: 2px;
+  --r3-admin-radius-4: 4px;
+  --r3-admin-radius-6: 6px;
+  --r3-admin-radius-8: 8px;
+  --r3-admin-radius-round: 999px;
+  --r3-admin-shadow-none: none;
+  --r3-admin-shadow-popover: 0 8px 20px rgba(16, 24, 40, 0.1);
+  --r3-admin-shadow-modal: 0 16px 40px rgba(16, 24, 40, 0.18);
+  --r3-admin-shadow-drawer: -12px 0 28px rgba(16, 24, 40, 0.16);
+  --r3-admin-focus-ring-color: #2563eb;
+  --r3-admin-focus-ring-width: 2px;
+  --r3-admin-focus-ring-offset: 2px;
+  --r3-admin-z-dropdown: 100;
+  --r3-admin-z-sticky: 200;
+  --r3-admin-z-drawer: 300;
+  --r3-admin-z-modal: 400;
+  --r3-admin-z-toast: 500;
+  --r3-admin-z-tooltip: 600;
+  --r3-admin-motion-duration-fast: 120ms;
+  --r3-admin-motion-duration-default: 180ms;
+  --r3-admin-motion-duration-slow: 260ms;
+  --r3-admin-motion-easing-standard: cubic-bezier(0.2, 0, 0, 1);
+  --r3-admin-bp-admin-min: 1024px;
+  --r3-admin-bp-desktop: 1280px;
+  --r3-admin-bp-wide: 1440px;
+  --r3-admin-table-row-height-compact: 36px;
+  --r3-admin-table-row-height-default: 44px;
+  --r3-admin-table-cell-padding-x: 12px;
+  --r3-admin-table-cell-padding-y: 8px;
+  --r3-admin-table-header-height: 40px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --r3-admin-motion-duration-fast: 0ms;
+    --r3-admin-motion-duration-default: 0ms;
+    --r3-admin-motion-duration-slow: 0ms;
+  }
+}

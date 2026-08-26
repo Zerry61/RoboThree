@@ -1,0 +1,70 @@
+openapi: 3.1.0
+info:
+  title: RoboThree Enterprise Session Contract
+  version: enterprise-session.v1alpha1
+  description: >
+    Canonical handle-bound Device Challenge and Session Lease surface. EIPC-1.1.1
+    freezes Contract and cross-language conformance only. Production identity
+    handle resolution, token signing, persistence and HTTP activation remain disabled.
+servers:
+  - url: https://enterprise.example.invalid
+paths:
+  /enterprise-session/v1alpha1/device-challenges:
+    post:
+      operationId: issueEnterpriseSessionDeviceChallenge
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./schemas/device-challenge.schema.json#/$defs/request
+      responses:
+        "200":
+          description: Handle-bound single-use Device Challenge
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: no-store
+          content:
+            application/json:
+              schema:
+                $ref: ./schemas/device-challenge.schema.json#/$defs/response
+        default:
+          $ref: "#/components/responses/EnterpriseSessionError"
+  /enterprise-session/v1alpha1/session-leases:
+    post:
+      operationId: issueEnterpriseSessionLease
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./schemas/session-lease.schema.json#/$defs/request
+      responses:
+        "200":
+          description: Atomic Enterprise Session Lease result
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: no-store
+          content:
+            application/json:
+              schema:
+                $ref: ./schemas/session-lease.schema.json#/$defs/result
+        default:
+          $ref: "#/components/responses/EnterpriseSessionError"
+components:
+  responses:
+    EnterpriseSessionError:
+      description: Typed Enterprise Session failure
+      headers:
+        Cache-Control:
+          schema:
+            type: string
+            const: no-store
+      content:
+        application/json:
+          schema:
+            $ref: ./schemas/error.schema.json

@@ -1,0 +1,49 @@
+spring:
+  application:
+    name: robothree-central-service
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+
+robothree:
+  enterprise-session:
+    enabled: false
+
+mybatis-plus:
+  type-handlers-package: com.robothree.central.persistence.mybatis.typehandler
+  configuration:
+    log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
+    map-underscore-to-camel-case: true
+
+server:
+  address: 127.0.0.1
+  port: ${ROBOTHREE_CGF_FIXTURE_PORT:0}
+
+logging:
+  level:
+    root: WARN
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+  tracing:
+    enabled: true
+    propagation:
+      type: W3C
+    sampling:
+      probability: ${ROBOTHREE_TRACING_SAMPLING_PROBABILITY:0.1}
+  otlp:
+    tracing:
+      export:
+        enabled: ${ROBOTHREE_OTLP_TRACING_ENABLED:false}
+      endpoint: ${ROBOTHREE_OTLP_TRACING_ENDPOINT:http://127.0.0.1:4318/v1/traces}
+      connect-timeout: ${ROBOTHREE_OTLP_CONNECT_TIMEOUT:2s}
+      timeout: ${ROBOTHREE_OTLP_EXPORT_TIMEOUT:5s}

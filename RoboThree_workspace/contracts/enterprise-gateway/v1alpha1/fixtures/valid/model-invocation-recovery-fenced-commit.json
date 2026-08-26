@@ -1,0 +1,9 @@
+{
+  "contractVersion": "v1alpha1",
+  "invocationId": "32000000-0000-4000-8000-000000000001",
+  "ownerNodeId": "central.node-b",
+  "fencingEpoch": 5,
+  "expectedStatusRevision": 1,
+  "nextDurableSequence": 3,
+  "commitDigest": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2"
+}

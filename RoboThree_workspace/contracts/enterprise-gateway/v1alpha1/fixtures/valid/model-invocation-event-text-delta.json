@@ -1,0 +1,13 @@
+{
+  "contractVersion": "v1alpha1",
+  "invocationId": "30000000-0000-4000-8000-000000000021",
+  "eventId": "30000000-0000-4000-8000-000000000043",
+  "eventClass": "ephemeral",
+  "streamSequence": 2,
+  "eventType": "text_delta",
+  "eventPayload": {
+    "delta": "RoboThree "
+  },
+  "eventDigest": "2525252525252525252525252525252525252525252525252525252525252525",
+  "occurredAt": "2026-07-30T12:00:03Z"
+}

@@ -1,0 +1,22 @@
+{
+  "contractVersion": "enterprise-session.v1alpha1",
+  "claimsProfile": "eipc.session-token.v1",
+  "cases": [
+    { "schema": "device-challenge", "file": "valid/device-challenge-request.json", "valid": true },
+    { "schema": "device-challenge", "file": "valid/device-challenge.json", "valid": true },
+    { "schema": "session-lease", "file": "valid/session-lease-request.json", "valid": true },
+    { "schema": "session-lease", "file": "valid/session-lease-result.json", "valid": true },
+    { "schema": "session-token-claims", "file": "valid/session-token-claims.json", "valid": true },
+    { "schema": "error", "file": "valid/error.json", "valid": true },
+    { "schema": "device-challenge", "file": "invalid/challenge-handle-short.json", "valid": false },
+    { "schema": "device-challenge", "file": "invalid/challenge-self-declared-owner.json", "valid": false },
+    { "schema": "device-challenge", "file": "invalid/challenge-duplicate-permission.json", "valid": false },
+    { "schema": "device-challenge", "file": "invalid/challenge-unknown-permission.json", "valid": false },
+    { "schema": "session-lease", "file": "invalid/lease-private-key.json", "valid": false },
+    { "schema": "session-lease", "file": "invalid/lease-self-declared-trust.json", "valid": false },
+    { "schema": "session-lease", "file": "invalid/result-credential-reference.json", "valid": false },
+    { "schema": "session-token-claims", "file": "invalid/session-token-legacy-profile.json", "valid": false },
+    { "schema": "session-token-claims", "file": "invalid/session-token-unknown-field.json", "valid": false },
+    { "schema": "error", "file": "invalid/error-unknown-code.json", "valid": false }
+  ]
+}

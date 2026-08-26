@@ -1,0 +1,15 @@
+body {
+  font-family: var(--r3-font-family);
+  font-size: var(--r3-font-size-md);
+  line-height: var(--r3-line-height);
+  color: var(--r3-color-text);
+  background: var(--r3-color-background);
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}

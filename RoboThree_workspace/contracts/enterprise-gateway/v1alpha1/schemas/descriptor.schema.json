@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://robothree.local/contracts/enterprise-gateway/v1alpha1/descriptor.schema.json",
+  "title": "Enterprise Resource Descriptor",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "id",
+    "revision",
+    "digest",
+    "capabilities",
+    "gatewayEndpoint",
+    "credentialAvailable",
+    "enabled",
+    "fixedPermissions"
+  ],
+  "properties": {
+    "kind": { "enum": ["model", "tool", "knowledge"] },
+    "id": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 160,
+      "pattern": "^[a-z][a-z0-9]*(?:[._:-][a-z0-9]+)+$"
+    },
+    "revision": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "capabilities": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 128 }
+    },
+    "gatewayEndpoint": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "credentialAvailable": { "type": "boolean" },
+    "unavailableReason": { "type": "string", "maxLength": 4096 },
+    "enabled": { "type": "boolean" },
+    "fixedPermissions": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 3, "maxLength": 128 }
+    }
+  }
+}

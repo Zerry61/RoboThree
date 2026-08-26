@@ -1,0 +1,17 @@
+{
+  "kind": "enterprise_session_lease_request",
+  "schemaVersion": "enterprise-session.v1alpha1",
+  "verifiedIdentityHandle": "T1BBUVVFX0lERU5USVRZX0hBTkRMRV9GSVhUVVJF",
+  "currentClientInstanceId": "11111111-1111-4111-8111-111111111111",
+  "audience": "robothree.enterprise-gateway",
+  "requiredPermissions": ["configuration.read"],
+  "deviceProof": {
+    "challengeId": "33333333-3333-4333-8333-333333333333",
+    "deviceKeyId": "device-key.fixture-001",
+    "algorithm": "ES256",
+    "signature": "RklYVFVSRV9TSUdOQVRVUkVfTk9UX1JFQUw",
+    "signedAt": "2026-08-23T10:00:05.000Z",
+    "privateKey": "forbidden"
+  },
+  "correlationId": "22222222-2222-4222-8222-222222222222"
+}

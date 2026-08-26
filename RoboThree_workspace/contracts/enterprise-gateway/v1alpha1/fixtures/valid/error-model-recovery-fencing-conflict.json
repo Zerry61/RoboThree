@@ -1,0 +1,8 @@
+{
+  "contractVersion": "v1alpha1",
+  "code": "model_recovery_fencing_conflict",
+  "category": "conflict",
+  "retryable": true,
+  "safeSummary": "The recovery owner or fencing epoch is stale.",
+  "correlationId": "33000000-0000-4000-8000-000000000005"
+}

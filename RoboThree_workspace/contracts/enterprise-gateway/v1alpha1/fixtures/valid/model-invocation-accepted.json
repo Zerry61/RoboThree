@@ -1,0 +1,11 @@
+{
+  "contractVersion": "v1alpha1",
+  "invocationId": "30000000-0000-4000-8000-000000000021",
+  "clientRequestId": "30000000-0000-4000-8000-000000000001",
+  "requestDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "status": "accepted",
+  "statusRevision": 0,
+  "createdAt": "2026-07-30T12:00:00Z",
+  "lastDurableEventSequence": 1,
+  "durableCursor": "model-invocation:opaque:accepted"
+}

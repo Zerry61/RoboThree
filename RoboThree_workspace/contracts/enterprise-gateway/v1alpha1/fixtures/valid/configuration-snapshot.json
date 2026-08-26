@@ -1,0 +1,45 @@
+{
+  "contractVersion": "v1alpha1",
+  "snapshotId": "configuration.snapshot-001",
+  "revision": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "schemaVersion": "v1alpha1",
+  "digest": "1111111111111111111111111111111111111111111111111111111111111111",
+  "minimumDesktopVersion": "0.0.0-dcf.1.0",
+  "minimumCoreVersion": "0.0.0-dcf.1.0",
+  "models": [
+    {
+      "kind": "model",
+      "id": "model.enterprise-001",
+      "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "capabilities": ["text", "streaming"],
+      "gatewayEndpoint": "enterprise.model-gateway",
+      "credentialAvailable": true,
+      "enabled": true,
+      "fixedPermissions": ["model.use"]
+    }
+  ],
+  "tools": [],
+  "agents": [
+    {
+      "packageId": "agent.package-001",
+      "kind": "agent",
+      "revision": "2222222222222222222222222222222222222222222222222222222222222222",
+      "digest": "3333333333333333333333333333333333333333333333333333333333333333"
+    }
+  ],
+  "skills": [
+    {
+      "packageId": "skill.package-001",
+      "kind": "skill",
+      "revision": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "digest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    }
+  ],
+  "knowledge": [],
+  "fixedPermissions": ["agent.use", "model.use", "skill.use"],
+  "gatewayEndpoints": {
+    "configuration": "enterprise.configuration"
+  },
+  "generatedAt": "2026-07-24T17:30:00+08:00"
+}

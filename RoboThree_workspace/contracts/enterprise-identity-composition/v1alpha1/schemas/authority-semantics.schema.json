@@ -1,0 +1,175 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://robothree.local/contracts/enterprise-identity-composition/v1alpha1/authority-semantics.schema.json",
+  "title": "RoboThree Enterprise Identity Composition Facts",
+  "oneOf": [
+    { "$ref": "#/$defs/sessionAssertion" },
+    { "$ref": "#/$defs/deviceTrustDecision" },
+    { "$ref": "#/$defs/runtimeActiveSource" },
+    { "$ref": "#/$defs/sessionBinding" },
+    { "$ref": "#/$defs/authoritySnapshot" }
+  ],
+  "$defs": {
+    "identityId": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 160,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "revision": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "ownerIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enterpriseId", "userId", "deviceId"],
+      "properties": {
+        "enterpriseId": { "$ref": "#/$defs/identityId" },
+        "userId": { "$ref": "#/$defs/identityId" },
+        "deviceId": { "$ref": "#/$defs/identityId" }
+      }
+    },
+    "sessionScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enterpriseId", "userId", "deviceId", "clientInstanceId"],
+      "properties": {
+        "enterpriseId": { "$ref": "#/$defs/identityId" },
+        "userId": { "$ref": "#/$defs/identityId" },
+        "deviceId": { "$ref": "#/$defs/identityId" },
+        "clientInstanceId": { "type": "string", "format": "uuid" }
+      }
+    },
+    "offlineState": {
+      "enum": [
+        "online",
+        "service_temporarily_unavailable",
+        "enterprise_session_invalid",
+        "recovered_update_waiting_for_application"
+      ]
+    },
+    "sessionAssertion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind", "schemaVersion", "validity", "audience", "scope", "permissions",
+        "issuedAt", "expiresAt", "assertionRevision", "assertionDigest"
+      ],
+      "properties": {
+        "kind": { "const": "enterprise_session_assertion" },
+        "schemaVersion": { "const": "eipc.v1alpha1" },
+        "validity": { "enum": ["valid", "invalid"] },
+        "audience": { "type": "string", "minLength": 3, "maxLength": 256 },
+        "scope": { "$ref": "#/$defs/sessionScope" },
+        "permissions": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "configuration.read", "model.use", "tool.use", "agent.use",
+              "skill.use", "knowledge.use", "personal_model.configure"
+            ]
+          }
+        },
+        "issuedAt": { "type": "string", "format": "date-time" },
+        "expiresAt": { "type": "string", "format": "date-time" },
+        "assertionRevision": { "$ref": "#/$defs/digest" },
+        "assertionDigest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "deviceTrustDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind", "schemaVersion", "decision", "ownerIdentity",
+        "decisionRevision", "decisionDigest", "evaluatedAt"
+      ],
+      "properties": {
+        "kind": { "const": "enterprise_device_trust_decision" },
+        "schemaVersion": { "const": "eipc.v1alpha1" },
+        "decision": { "enum": ["trusted", "invalid"] },
+        "ownerIdentity": { "$ref": "#/$defs/ownerIdentity" },
+        "decisionRevision": { "$ref": "#/$defs/digest" },
+        "decisionDigest": { "$ref": "#/$defs/digest" },
+        "evaluatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "runtimeActiveSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind", "schemaVersion", "generationId", "activationScope", "registryRevision",
+        "enterpriseConfigurationRevision", "enterpriseConfigurationDigest",
+        "compatibilityState", "compatibilityRevision", "compatibilityDigest", "activatedAt"
+      ],
+      "properties": {
+        "kind": { "const": "runtime_active_authority_source" },
+        "schemaVersion": { "const": "eipc.v1alpha1" },
+        "generationId": { "$ref": "#/$defs/identityId" },
+        "activationScope": { "$ref": "#/$defs/sessionScope" },
+        "registryRevision": { "$ref": "#/$defs/digest" },
+        "enterpriseConfigurationRevision": { "$ref": "#/$defs/revision" },
+        "enterpriseConfigurationDigest": { "$ref": "#/$defs/digest" },
+        "compatibilityState": { "enum": ["compatible", "incompatible"] },
+        "compatibilityRevision": { "$ref": "#/$defs/revision" },
+        "compatibilityDigest": { "$ref": "#/$defs/digest" },
+        "activatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "sessionBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind", "schemaVersion", "runtimeInstanceId", "currentClientInstanceId",
+        "ownerIdentity", "activationClientInstanceId", "activationGenerationId",
+        "tokenSessionAssertionDigest", "deviceTrustDecisionDigest",
+        "enterpriseConfigurationRevision", "compatibilityRevision", "entitlementRevision",
+        "offlineState", "sourceFactsDigest", "evaluatedAt"
+      ],
+      "properties": {
+        "kind": { "const": "enterprise_session_binding" },
+        "schemaVersion": { "const": "eipc.v1alpha1" },
+        "runtimeInstanceId": { "type": "string", "format": "uuid" },
+        "currentClientInstanceId": { "type": "string", "format": "uuid" },
+        "ownerIdentity": { "$ref": "#/$defs/ownerIdentity" },
+        "activationClientInstanceId": { "type": "string", "format": "uuid" },
+        "activationGenerationId": { "$ref": "#/$defs/identityId" },
+        "tokenSessionAssertionDigest": { "$ref": "#/$defs/digest" },
+        "deviceTrustDecisionDigest": { "$ref": "#/$defs/digest" },
+        "enterpriseConfigurationRevision": { "$ref": "#/$defs/revision" },
+        "compatibilityRevision": { "$ref": "#/$defs/revision" },
+        "entitlementRevision": { "$ref": "#/$defs/digest" },
+        "offlineState": { "$ref": "#/$defs/offlineState" },
+        "sourceFactsDigest": { "$ref": "#/$defs/digest" },
+        "evaluatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "authoritySnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind", "schemaVersion", "binding", "entitlement", "entitlementGranted",
+        "entitlementRevision", "offlineState", "sourceFactsDigest", "snapshotDigest", "evaluatedAt"
+      ],
+      "properties": {
+        "kind": { "const": "runtime_active_enterprise_authority_snapshot" },
+        "schemaVersion": { "const": "eipc.v1alpha1" },
+        "binding": { "$ref": "#/$defs/sessionBinding" },
+        "entitlement": { "const": "personal_model.configure" },
+        "entitlementGranted": { "type": "boolean" },
+        "entitlementRevision": { "$ref": "#/$defs/digest" },
+        "offlineState": { "$ref": "#/$defs/offlineState" },
+        "sourceFactsDigest": { "$ref": "#/$defs/digest" },
+        "snapshotDigest": { "$ref": "#/$defs/digest" },
+        "evaluatedAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Promote Research Decision"
+  short_description: "将已批准的研究结论安全提升为可追溯的 RoboThree 架构文档"
+  default_prompt: "Use $promote-research-decision to promote an approved research conclusion into RoboThree architecture documentation."

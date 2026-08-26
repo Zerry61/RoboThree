@@ -1,0 +1,16 @@
+{
+  "contractVersion": "v1alpha1",
+  "invocationId": "31000000-0000-4000-8000-000000000091",
+  "eventId": "31000000-0000-4000-8000-000000000092",
+  "eventClass": "durable",
+  "durableSequence": 4,
+  "eventType": "completed",
+  "eventPayload": {
+    "status": "completed",
+    "statusRevision": 2,
+    "output": "Full provider output must not enter a durable event."
+  },
+  "eventDigest": "9191919191919191919191919191919191919191919191919191919191919191",
+  "durableCursor": "model-invocation:opaque:invalid-output",
+  "occurredAt": "2026-07-30T12:00:05Z"
+}

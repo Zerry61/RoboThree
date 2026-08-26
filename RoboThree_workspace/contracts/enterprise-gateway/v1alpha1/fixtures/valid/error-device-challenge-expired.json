@@ -1,0 +1,8 @@
+{
+  "contractVersion": "v1alpha1",
+  "code": "device_challenge_expired",
+  "category": "authentication",
+  "retryable": true,
+  "safeSummary": "The device challenge has expired.",
+  "correlationId": "60000000-0000-4000-8000-000000000004"
+}

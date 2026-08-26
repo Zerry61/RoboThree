@@ -1,0 +1,15 @@
+.r3-focusable:focus-visible,
+.r3-button:focus-visible,
+.r3-icon-button:focus-visible,
+.r3-input:focus-visible,
+.r3-select:focus-visible,
+.r3-textarea:focus-visible {
+  outline: none;
+  box-shadow: var(--r3-focus-ring);
+}
+
+.r3-disabled,
+:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
+}

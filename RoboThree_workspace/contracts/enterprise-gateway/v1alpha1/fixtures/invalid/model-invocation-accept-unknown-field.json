@@ -1,0 +1,42 @@
+{
+  "contractVersion": "v1alpha1",
+  "clientRequestId": "31000000-0000-4000-8000-000000000001",
+  "requestId": "31000000-0000-4000-8000-000000000002",
+  "requestDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "audience": "enterprise-model-gateway",
+  "requiredPermission": "model.use",
+  "modelRequest": {
+    "snapshotId": "31000000-0000-4000-8000-000000000003",
+    "contextSourceDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "model": {
+      "modelId": "model.deepseek.development",
+      "modelRevision": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "configurationRevision": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "runtimeRegistryGeneration": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    },
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Synthetic input."
+          }
+        ]
+      }
+    ],
+    "tools": [],
+    "maxOutputTokens": 128
+  },
+  "admission": {
+    "type": "development_synthetic",
+    "externalTarget": "provider.deepseek.development",
+    "syntheticCaseId": "synthetic.unknown.field",
+    "syntheticDataDigest": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "timeoutPolicy": {
+    "providerRequestDeadlineAt": "2026-07-30T12:10:00Z",
+    "providerStreamIdleTimeoutMillis": 30000
+  },
+  "providerEndpoint": "https://provider.invalid"
+}

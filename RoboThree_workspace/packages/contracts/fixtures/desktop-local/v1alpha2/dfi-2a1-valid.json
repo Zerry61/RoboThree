@@ -1,0 +1,84 @@
+[
+  {
+    "schema": "authorization_preference",
+    "value": {
+      "schemaVersion": "v1alpha1",
+      "requestedMode": "manual_review"
+    }
+  },
+  {
+    "schema": "authorization_preference",
+    "value": {
+      "schemaVersion": "v1alpha1",
+      "requestedMode": "smart_confirm"
+    }
+  },
+  {
+    "schema": "authorization_preference",
+    "value": {
+      "schemaVersion": "v1alpha1",
+      "requestedMode": "task_scoped"
+    }
+  },
+  {
+    "schema": "submit_turn",
+    "value": {
+      "contractVersion": "v1alpha2",
+      "commandId": "11111111-1111-4111-8111-111111111111",
+      "correlationId": "22222222-2222-4222-8222-222222222222",
+      "clientInstanceId": "33333333-3333-4333-8333-333333333333",
+      "type": "submit_turn",
+      "clientTurnId": "client-turn-dfi-2a1",
+      "sessionId": "session:44444444-4444-4444-8444-444444444444",
+      "userInput": "Run the task",
+      "selectionRequest": {
+        "agentId": "agent.general",
+        "selectedSkillIds": [],
+        "selectedKnowledgeIds": [],
+        "workspaceGrantId": "workspace:55555555-5555-4555-8555-555555555555",
+        "authorizationPreference": {
+          "schemaVersion": "v1alpha1",
+          "requestedMode": "smart_confirm"
+        }
+      }
+    }
+  },
+  {
+    "schema": "submit_turn_receipt",
+    "value": {
+      "contractVersion": "v1alpha2",
+      "submitTurnCommandId": "11111111-1111-4111-8111-111111111111",
+      "clientTurnId": "client-turn-dfi-2a1",
+      "userMessageId": "message:66666666-6666-4666-8666-666666666666",
+      "taskId": "task:77777777-7777-4777-8777-777777777777",
+      "runtimeSelectionId": "runtime-selection:88888888-8888-4888-8888-888888888888",
+      "status": "accepted",
+      "runtimeSelectionSummary": {
+        "runtimeSelectionId": "runtime-selection:88888888-8888-4888-8888-888888888888",
+        "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "agent": {
+          "id": "agent.general",
+          "revision": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+        },
+        "defaultModelId": "model.desktop-scripted",
+        "resolvedModel": {
+          "id": "model.desktop-scripted",
+          "revision": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+        },
+        "activeSkills": [],
+        "allowedTools": [],
+        "knowledge": [],
+        "workspaceGrantId": "workspace:55555555-5555-4555-8555-555555555555",
+        "resolvedAuthorization": {
+          "requestedMode": "smart_confirm",
+          "resolvedMode": "smart_confirm",
+          "policyRevision": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+          "source": "user_selected",
+          "authorizationSelectionDigest": "sha256:5555555555555555555555555555555555555555555555555555555555555555"
+        },
+        "executionSelectionDigest": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+      },
+      "acceptedAt": "2026-08-17T00:00:00.000Z"
+    }
+  }
+]

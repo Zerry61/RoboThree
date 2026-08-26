@@ -1,0 +1,8 @@
+{
+  "contractVersion": "v1alpha1",
+  "code": "device_access_denied",
+  "category": "authorization",
+  "retryable": false,
+  "safeSummary": "Enterprise access is denied for the current device.",
+  "correlationId": "60000000-0000-4000-8000-000000000003"
+}

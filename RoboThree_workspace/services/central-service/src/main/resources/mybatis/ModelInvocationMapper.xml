@@ -1,0 +1,409 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.robothree.central.persistence.mybatis.mapper.ModelInvocationPersistenceMapper">
+
+    <resultMap id="invocation" type="com.robothree.central.persistence.mybatis.entity.ModelInvocationEntity">
+        <id property="invocationId" column="invocation_id"/>
+        <result property="enterpriseId" column="enterprise_id"/>
+        <result property="userId" column="user_id"/>
+        <result property="deviceId" column="device_id"/>
+        <result property="clientInstanceId" column="client_instance_id"/>
+        <result property="clientRequestId" column="client_request_id"/>
+        <result property="requestId" column="request_id"/>
+        <result property="requestDigest" column="request_digest"/>
+        <result property="modelId" column="model_id"/>
+        <result property="modelRevision" column="model_revision"/>
+        <result property="configurationRevision" column="configuration_revision"/>
+        <result property="runtimeRegistryGeneration" column="runtime_registry_generation"/>
+        <result property="admissionType" column="admission_type"/>
+        <result property="admissionDigest" column="admission_digest"/>
+        <result property="providerRequestDeadlineAt" column="provider_request_deadline_at"/>
+        <result property="providerStreamIdleTimeoutMillis" column="provider_stream_idle_timeout_millis"/>
+        <result property="status" column="status"/>
+        <result property="statusRevision" column="status_revision"/>
+        <result property="lastDurableEventSequence" column="last_durable_event_sequence"/>
+        <result property="durableEventStreamDigest" column="durable_event_stream_digest"/>
+        <result property="dispatchDecision" column="dispatch_decision"/>
+        <result property="cancelRequestedAt" column="cancel_requested_at"/>
+        <result property="cancelReason" column="cancel_reason"/>
+        <result property="timeoutIntentAt" column="timeout_intent_at"/>
+        <result property="usageJson" column="usage_json"/>
+        <result property="finishReason" column="finish_reason"/>
+        <result property="safeErrorCode" column="safe_error_code"/>
+        <result property="safeSummary" column="safe_summary"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="startedAt" column="started_at"/>
+        <result property="endedAt" column="ended_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <resultMap id="event" type="com.robothree.central.persistence.mybatis.entity.ModelInvocationEventEntity">
+        <id property="invocationId" column="invocation_id"/>
+        <id property="eventSequence" column="event_sequence"/>
+        <result property="eventId" column="event_id"/>
+        <result property="eventType" column="event_type"/>
+        <result property="status" column="status"/>
+        <result property="statusRevision" column="status_revision"/>
+        <result property="eventDigest" column="event_digest"/>
+        <result property="streamDigest" column="stream_digest"/>
+        <result property="metadataJson" column="metadata_json"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <resultMap id="lease" type="com.robothree.central.persistence.mybatis.entity.ModelInvocationRecoveryLeaseEntity">
+        <id property="invocationId" column="invocation_id"/>
+        <result property="ownerNodeId" column="owner_node_id"/>
+        <result property="fencingEpoch" column="fencing_epoch"/>
+        <result property="statusRevision" column="status_revision"/>
+        <result property="leaseExpiresAt" column="lease_expires_at"/>
+        <result property="databaseObservedAt" column="database_observed_at"/>
+        <result property="recoveryAttempt" column="recovery_attempt"/>
+        <result property="policyRevision" column="policy_revision"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <resultMap id="outbox" type="com.robothree.central.persistence.mybatis.entity.ModelInvocationAuditOutboxEntity">
+        <id property="outboxId" column="outbox_id"/>
+        <result property="invocationId" column="invocation_id"/>
+        <result property="eventId" column="event_id"/>
+        <result property="eventType" column="event_type"/>
+        <result property="eventDigest" column="event_digest"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="publishedAt" column="published_at"/>
+        <result property="attemptCount" column="attempt_count"/>
+    </resultMap>
+
+    <resultMap id="providerAttempt" type="com.robothree.central.persistence.mybatis.entity.ModelProviderAttemptEntity">
+        <id property="usageAuthority" column="usage_authority"/>
+        <id property="authorityInvocationId" column="authority_invocation_id"/>
+        <id property="providerAttemptKey" column="provider_attempt_key"/>
+        <result property="fencingEpoch" column="fencing_epoch"/>
+        <result property="registeredAt" column="registered_at"/>
+    </resultMap>
+
+    <resultMap id="providerUsageFact" type="com.robothree.central.persistence.mybatis.entity.ProviderUsageFactEntity">
+        <id property="usageFactId" column="usage_fact_id"/>
+        <result property="usageAuthority" column="usage_authority"/>
+        <result property="authorityInvocationId" column="authority_invocation_id"/>
+        <result property="providerAttemptKey" column="provider_attempt_key"/>
+        <result property="fencingEpoch" column="fencing_epoch"/>
+        <result property="usageDigest" column="usage_digest"/>
+        <result property="sourceProtocol" column="source_protocol"/>
+        <result property="reportingSemanticsRevision" column="reporting_semantics_revision"/>
+        <result property="providerInputTokens" column="provider_input_tokens"/>
+        <result property="providerOutputTokens" column="provider_output_tokens"/>
+        <result property="cacheReadInputTokens" column="cache_read_input_tokens"/>
+        <result property="cacheWriteInputTokens" column="cache_write_input_tokens"/>
+        <result property="reasoningOutputTokens" column="reasoning_output_tokens"/>
+        <result property="normalizedTotalInputTokens" column="normalized_total_input_tokens"/>
+        <result property="attemptDisposition" column="attempt_disposition"/>
+        <result property="recordedAt" column="recorded_at"/>
+    </resultMap>
+
+    <resultMap id="cacheContext" type="com.robothree.central.persistence.mybatis.entity.ModelInvocationCacheContextEntity">
+        <id property="invocationId" column="invocation_id"/>
+        <result property="cacheExecutionAuthority" column="cache_execution_authority"/>
+        <result property="gatewayContractVersion" column="gateway_contract_version"/>
+        <result property="sessionScopeDigest" column="session_scope_digest"/>
+        <result property="cacheContextDigest" column="cache_context_digest"/>
+        <result property="contextRecordDigest" column="context_record_digest"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <resultMap id="promptCachePlan" type="com.robothree.central.persistence.mybatis.entity.PromptCachePlanEntity">
+        <id property="invocationId" column="invocation_id"/>
+        <result property="cacheContextDigest" column="cache_context_digest"/>
+        <result property="cacheScopeIdDigest" column="cache_scope_id_digest"/>
+        <result property="staticSourceLockDigest" column="static_source_lock_digest"/>
+        <result property="staticPrefixDigest" column="static_prefix_digest"/>
+        <result property="compatibilityFingerprintDigest" column="compatibility_fingerprint_digest"/>
+        <result property="cacheKeyDigest" column="cache_key_digest"/>
+        <result property="cachePolicyRevision" column="cache_policy_revision"/>
+        <result property="bindingRevision" column="binding_revision"/>
+        <result property="bindingDigest" column="binding_digest"/>
+        <result property="profileId" column="profile_id"/>
+        <result property="profileRevision" column="profile_revision"/>
+        <result property="profileDigest" column="profile_digest"/>
+        <result property="providerProjectionMode" column="provider_projection_mode"/>
+        <result property="eligible" column="eligible"/>
+        <result property="skipReason" column="skip_reason"/>
+        <result property="planDigest" column="plan_digest"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <insert id="insertInvocation">
+        INSERT INTO model_invocation (
+            invocation_id, enterprise_id, user_id, device_id, client_instance_id,
+            client_request_id, request_id, request_digest, model_id, model_revision,
+            configuration_revision, runtime_registry_generation, admission_type,
+            admission_digest, provider_request_deadline_at,
+            provider_stream_idle_timeout_millis, status, status_revision,
+            last_durable_event_sequence, durable_event_stream_digest,
+            dispatch_decision, cancel_requested_at, cancel_reason, timeout_intent_at,
+            usage_json, finish_reason, safe_error_code, safe_summary,
+            created_at, started_at, ended_at, updated_at
+        ) VALUES (
+            #{invocationId}, #{enterpriseId}, #{userId}, #{deviceId}, #{clientInstanceId},
+            #{clientRequestId}, #{requestId}, #{requestDigest}, #{modelId}, #{modelRevision},
+            #{configurationRevision}, #{runtimeRegistryGeneration}, #{admissionType},
+            #{admissionDigest}, #{providerRequestDeadlineAt},
+            #{providerStreamIdleTimeoutMillis}, #{status}, #{statusRevision},
+            #{lastDurableEventSequence}, #{durableEventStreamDigest},
+            #{dispatchDecision}, #{cancelRequestedAt}, #{cancelReason}, #{timeoutIntentAt},
+            #{usageJson}, #{finishReason}, #{safeErrorCode}, #{safeSummary},
+            #{createdAt}, #{startedAt}, #{endedAt}, #{updatedAt}
+        )
+        ON CONFLICT (enterprise_id, user_id, device_id, client_instance_id, client_request_id)
+        DO NOTHING
+    </insert>
+
+    <select id="findInvocationById" resultMap="invocation">
+        SELECT *
+        FROM model_invocation
+        WHERE invocation_id = #{invocationId}
+    </select>
+
+    <select id="findInvocationByIdForUpdate" resultMap="invocation">
+        SELECT *
+        FROM model_invocation
+        WHERE invocation_id = #{invocationId}
+        FOR UPDATE
+    </select>
+
+    <select id="findInvocationByClientRequest" resultMap="invocation">
+        SELECT *
+        FROM model_invocation
+        WHERE enterprise_id = #{enterpriseId}
+          AND user_id = #{userId}
+          AND device_id = #{deviceId}
+          AND client_instance_id = #{clientInstanceId}
+          AND client_request_id = #{clientRequestId}
+    </select>
+
+    <update id="updateInvocation">
+        UPDATE model_invocation
+        SET status = #{invocation.status},
+            status_revision = #{invocation.statusRevision},
+            last_durable_event_sequence = #{invocation.lastDurableEventSequence},
+            durable_event_stream_digest = #{invocation.durableEventStreamDigest},
+            dispatch_decision = #{invocation.dispatchDecision},
+            cancel_requested_at = #{invocation.cancelRequestedAt},
+            cancel_reason = #{invocation.cancelReason},
+            timeout_intent_at = #{invocation.timeoutIntentAt},
+            usage_json = #{invocation.usageJson},
+            finish_reason = #{invocation.finishReason},
+            safe_error_code = #{invocation.safeErrorCode},
+            safe_summary = #{invocation.safeSummary},
+            started_at = #{invocation.startedAt},
+            ended_at = #{invocation.endedAt},
+            updated_at = #{invocation.updatedAt}
+        WHERE invocation_id = #{invocation.invocationId}
+          AND status_revision = #{expectedStatusRevision}
+    </update>
+
+    <insert id="insertEvent">
+        INSERT INTO model_invocation_event (
+            invocation_id, event_sequence, event_id, event_type, status,
+            status_revision, event_digest, stream_digest, metadata_json, created_at
+        ) VALUES (
+            #{invocationId}, #{eventSequence}, #{eventId}, #{eventType}, #{status},
+            #{statusRevision}, #{eventDigest}, #{streamDigest}, #{metadataJson}, #{createdAt}
+        )
+        ON CONFLICT (invocation_id, event_sequence) DO NOTHING
+    </insert>
+
+    <select id="findEventBySequence" resultMap="event">
+        SELECT *
+        FROM model_invocation_event
+        WHERE invocation_id = #{invocationId}
+          AND event_sequence = #{eventSequence}
+    </select>
+
+    <select id="findEventsAfter" resultMap="event">
+        SELECT *
+        FROM model_invocation_event
+        WHERE invocation_id = #{invocationId}
+          AND event_sequence &gt; #{afterSequence}
+        ORDER BY event_sequence
+        LIMIT #{limit}
+    </select>
+
+    <insert id="insertLease">
+        INSERT INTO model_invocation_recovery_lease (
+            invocation_id, owner_node_id, fencing_epoch, status_revision,
+            lease_expires_at, database_observed_at, recovery_attempt,
+            policy_revision, updated_at
+        ) VALUES (
+            #{invocationId}, #{ownerNodeId}, #{fencingEpoch}, #{statusRevision},
+            #{leaseExpiresAt}, #{databaseObservedAt}, #{recoveryAttempt},
+            #{policyRevision}, #{updatedAt}
+        )
+        ON CONFLICT (invocation_id) DO NOTHING
+    </insert>
+
+    <select id="findLease" resultMap="lease">
+        SELECT *
+        FROM model_invocation_recovery_lease
+        WHERE invocation_id = #{invocationId}
+    </select>
+
+    <select id="findLeaseForUpdate" resultMap="lease">
+        SELECT *
+        FROM model_invocation_recovery_lease
+        WHERE invocation_id = #{invocationId}
+        FOR UPDATE
+    </select>
+
+    <select id="currentDatabaseTime" resultType="java.time.Instant">
+        SELECT CURRENT_TIMESTAMP
+    </select>
+
+    <update id="replaceLease">
+        UPDATE model_invocation_recovery_lease
+        SET owner_node_id = #{lease.ownerNodeId},
+            fencing_epoch = #{lease.fencingEpoch},
+            status_revision = #{lease.statusRevision},
+            lease_expires_at = #{lease.leaseExpiresAt},
+            database_observed_at = #{lease.databaseObservedAt},
+            recovery_attempt = #{lease.recoveryAttempt},
+            policy_revision = #{lease.policyRevision},
+            updated_at = #{lease.updatedAt}
+        WHERE invocation_id = #{lease.invocationId}
+          AND fencing_epoch = #{expectedFencingEpoch}
+    </update>
+
+    <insert id="insertAuditOutbox">
+        INSERT INTO model_invocation_audit_outbox (
+            outbox_id, invocation_id, event_id, event_type, event_digest,
+            created_at, published_at, attempt_count
+        ) VALUES (
+            #{outboxId}, #{invocationId}, #{eventId}, #{eventType}, #{eventDigest},
+            #{createdAt}, #{publishedAt}, #{attemptCount}
+        )
+        ON CONFLICT (outbox_id) DO NOTHING
+    </insert>
+
+    <select id="findAuditOutboxById" resultMap="outbox">
+        SELECT *
+        FROM model_invocation_audit_outbox
+        WHERE outbox_id = #{outboxId}
+    </select>
+
+    <select id="findPendingAuditOutbox" resultMap="outbox">
+        SELECT *
+        FROM model_invocation_audit_outbox
+        WHERE published_at IS NULL
+        ORDER BY created_at, outbox_id
+        LIMIT #{limit}
+    </select>
+
+    <insert id="insertProviderAttempt">
+        INSERT INTO model_invocation_provider_attempt (
+            usage_authority, authority_invocation_id, provider_attempt_key,
+            fencing_epoch, registered_at
+        ) VALUES (
+            #{usageAuthority}, #{authorityInvocationId}, #{providerAttemptKey},
+            #{fencingEpoch}, #{registeredAt}
+        )
+        ON CONFLICT (usage_authority, authority_invocation_id, provider_attempt_key)
+        DO NOTHING
+    </insert>
+
+    <select id="findProviderAttempt" resultMap="providerAttempt">
+        SELECT *
+        FROM model_invocation_provider_attempt
+        WHERE usage_authority = #{usageAuthority}
+          AND authority_invocation_id = #{authorityInvocationId}
+          AND provider_attempt_key = #{providerAttemptKey}
+    </select>
+
+    <insert id="insertProviderUsageFact">
+        INSERT INTO model_invocation_usage_fact (
+            usage_fact_id, usage_authority, authority_invocation_id,
+            provider_attempt_key, fencing_epoch, usage_digest, source_protocol,
+            reporting_semantics_revision, provider_input_tokens,
+            provider_output_tokens, cache_read_input_tokens,
+            cache_write_input_tokens, reasoning_output_tokens,
+            normalized_total_input_tokens, attempt_disposition, recorded_at
+        ) VALUES (
+            #{usageFactId}, #{usageAuthority}, #{authorityInvocationId},
+            #{providerAttemptKey}, #{fencingEpoch}, #{usageDigest}, #{sourceProtocol},
+            #{reportingSemanticsRevision}, #{providerInputTokens},
+            #{providerOutputTokens}, #{cacheReadInputTokens},
+            #{cacheWriteInputTokens}, #{reasoningOutputTokens},
+            #{normalizedTotalInputTokens}, #{attemptDisposition}, #{recordedAt}
+        )
+        ON CONFLICT (usage_authority, authority_invocation_id, provider_attempt_key)
+        DO NOTHING
+    </insert>
+
+    <select id="findProviderUsageFact" resultMap="providerUsageFact">
+        SELECT *
+        FROM model_invocation_usage_fact
+        WHERE usage_authority = #{usageAuthority}
+          AND authority_invocation_id = #{authorityInvocationId}
+          AND provider_attempt_key = #{providerAttemptKey}
+    </select>
+
+    <select id="findProviderUsageFactsByInvocation" resultMap="providerUsageFact">
+        SELECT *
+        FROM model_invocation_usage_fact
+        WHERE authority_invocation_id = #{authorityInvocationId}
+        ORDER BY fencing_epoch, provider_attempt_key
+    </select>
+
+    <insert id="insertCacheContext">
+        INSERT INTO model_invocation_cache_context (
+            invocation_id, cache_execution_authority, gateway_contract_version,
+            session_scope_digest, cache_context_digest, context_record_digest, created_at
+        ) VALUES (
+            #{invocationId}, #{cacheExecutionAuthority}, #{gatewayContractVersion},
+            #{sessionScopeDigest}, #{cacheContextDigest}, #{contextRecordDigest}, #{createdAt}
+        )
+        ON CONFLICT (invocation_id) DO NOTHING
+    </insert>
+
+    <select id="findCacheContext" resultMap="cacheContext">
+        SELECT * FROM model_invocation_cache_context
+        WHERE invocation_id = #{invocationId}
+    </select>
+
+    <insert id="insertPromptCachePlan">
+        INSERT INTO model_invocation_prompt_cache_plan (
+            invocation_id, cache_context_digest, cache_scope_id_digest,
+            static_source_lock_digest, static_prefix_digest,
+            compatibility_fingerprint_digest, cache_key_digest, cache_policy_revision,
+            binding_revision, binding_digest, profile_id, profile_revision, profile_digest,
+            provider_projection_mode, eligible, skip_reason, plan_digest, created_at
+        ) VALUES (
+            #{invocationId}, #{cacheContextDigest}, #{cacheScopeIdDigest},
+            #{staticSourceLockDigest}, #{staticPrefixDigest},
+            #{compatibilityFingerprintDigest}, #{cacheKeyDigest}, #{cachePolicyRevision},
+            #{bindingRevision}, #{bindingDigest}, #{profileId}, #{profileRevision}, #{profileDigest},
+            #{providerProjectionMode}, #{eligible}, #{skipReason}, #{planDigest}, #{createdAt}
+        )
+        ON CONFLICT (invocation_id) DO NOTHING
+    </insert>
+
+    <select id="findPromptCachePlan" resultMap="promptCachePlan">
+        SELECT * FROM model_invocation_prompt_cache_plan
+        WHERE invocation_id = #{invocationId}
+    </select>
+
+    <select id="findLatestPromptCachePlanByIdentity" resultMap="promptCachePlan">
+        SELECT * FROM model_invocation_prompt_cache_plan
+        WHERE cache_scope_id_digest = #{cacheScopeIdDigest}
+          AND static_source_lock_digest = #{staticSourceLockDigest}
+          AND binding_revision = #{bindingRevision}
+          AND binding_digest = #{bindingDigest}
+          AND profile_revision = #{profileRevision}
+          AND profile_digest = #{profileDigest}
+          AND compatibility_fingerprint_digest = #{compatibilityFingerprintDigest}
+          AND cache_policy_revision = #{cachePolicyRevision}
+          AND provider_projection_mode = #{providerProjectionMode}
+        ORDER BY created_at DESC, invocation_id DESC
+        LIMIT 1
+    </select>
+</mapper>

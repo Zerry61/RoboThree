@@ -1,0 +1,8 @@
+{
+  "contractVersion": "v1alpha1",
+  "invocationId": "32000000-0000-4000-8000-000000000011",
+  "ownerNodeId": "central.node-a",
+  "statusRevision": 1,
+  "leaseExpiresAt": "2026-07-30T12:00:30Z",
+  "databaseObservedAt": "2026-07-30T12:00:00Z"
+}

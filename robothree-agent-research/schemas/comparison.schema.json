@@ -1,0 +1,42 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://robothree.local/schemas/comparison.schema.json",
+  "title": "Cross-Project Comparison",
+  "description": "跨项目对比的研究输出，按维度对齐，定位 RoboThree 的能力差距与借鉴策略。",
+  "type": "object",
+  "required": ["dimension", "compared_at", "rows"],
+  "properties": {
+    "dimension": {
+      "type": "string",
+      "description": "对比的维度名，例如 'tool_dispatch'、'context_compression'、'subagent_lifecycle'"
+    },
+    "compared_at": { "type": "string", "format": "date" },
+    "rows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["project", "approach", "evidence", "implication"],
+        "properties": {
+          "project": { "type": "string", "description": "项目名" },
+          "approach": { "type": "string", "description": "该项目在该维度的实现思路一句话" },
+          "evidence": { "type": "string", "description": "源码引用 path:line" },
+          "implication": {
+            "type": "string",
+            "description": "对 RoboThree 的启示：adopt / inspired-by / avoid"
+          },
+          "confidence": { "enum": ["F", "I", "R"] }
+        }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "description": "经过对比后，对 RoboThree 在该维度的设计取向与初步决定",
+      "properties": {
+        "headline": { "type": "string" },
+        "options_considered": { "type": "array", "items": { "type": "string" } },
+        "chosen": { "type": "string" },
+        "rationale": { "type": "string" }
+      }
+    }
+  }
+}

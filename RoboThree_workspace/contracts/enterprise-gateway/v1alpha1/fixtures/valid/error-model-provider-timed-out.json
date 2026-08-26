@@ -1,0 +1,8 @@
+{
+  "contractVersion": "v1alpha1",
+  "code": "model_provider_timed_out",
+  "category": "timeout",
+  "retryable": true,
+  "safeSummary": "The Provider returned a trusted timeout outcome.",
+  "correlationId": "33000000-0000-4000-8000-000000000003"
+}

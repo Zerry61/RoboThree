@@ -1,0 +1,42 @@
+{
+  "contractVersion": "v1alpha1",
+  "clientRequestId": "31000000-0000-4000-8000-000000000041",
+  "requestId": "31000000-0000-4000-8000-000000000042",
+  "requestDigest": "4141414141414141414141414141414141414141414141414141414141414141",
+  "audience": "enterprise-model-gateway",
+  "requiredPermission": "model.use",
+  "modelRequest": {
+    "snapshotId": "31000000-0000-4000-8000-000000000043",
+    "contextSourceDigest": "4242424242424242424242424242424242424242424242424242424242424242",
+    "model": {
+      "modelId": "model.deepseek.development",
+      "modelRevision": "4343434343434343434343434343434343434343434343434343434343434343",
+      "configurationRevision": "4444444444444444444444444444444444444444444444444444444444444444",
+      "runtimeRegistryGeneration": "4545454545454545454545454545454545454545454545454545454545454545"
+    },
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Client must not control lease TTL."
+          }
+        ]
+      }
+    ],
+    "tools": [],
+    "maxOutputTokens": 128
+  },
+  "admission": {
+    "type": "development_synthetic",
+    "externalTarget": "provider.deepseek.development",
+    "syntheticCaseId": "synthetic.client.lease",
+    "syntheticDataDigest": "4646464646464646464646464646464646464646464646464646464646464646"
+  },
+  "timeoutPolicy": {
+    "providerRequestDeadlineAt": "2026-07-30T12:10:00Z",
+    "providerStreamIdleTimeoutMillis": 30000,
+    "leaseTtlMillis": 1
+  }
+}

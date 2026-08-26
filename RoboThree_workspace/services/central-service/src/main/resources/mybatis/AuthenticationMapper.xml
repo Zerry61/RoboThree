@@ -1,0 +1,304 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.robothree.central.persistence.mybatis.mapper.AuthenticationPersistenceMapper">
+
+    <resultMap id="verifiedIdentity" type="com.robothree.central.persistence.mybatis.entity.VerifiedIdentityEntity">
+        <id property="verifiedIdentityId" column="verified_identity_id"/>
+        <result property="enterpriseId" column="enterprise_id"/>
+        <result property="userId" column="user_id"/>
+        <result property="provider" column="provider"/>
+        <result property="providerSubjectDigest" column="provider_subject_digest"/>
+        <result property="identityDigest" column="identity_digest"/>
+        <result property="issuedAt" column="issued_at"/>
+        <result property="expiresAt" column="expires_at"/>
+        <result property="disabledAt" column="disabled_at"/>
+    </resultMap>
+
+    <resultMap id="permission" type="com.robothree.central.persistence.mybatis.entity.EnterprisePermissionEntity">
+        <id property="enterpriseId" column="enterprise_id"/>
+        <id property="userId" column="user_id"/>
+        <id property="permission" column="permission"/>
+        <result property="enabled" column="enabled"/>
+        <result property="revision" column="revision"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <resultMap id="device" type="com.robothree.central.persistence.mybatis.entity.EnterpriseDeviceEntity">
+        <id property="deviceId" column="device_id"/>
+        <result property="enterpriseId" column="enterprise_id"/>
+        <result property="deviceKeyId" column="device_key_id"/>
+        <result property="publicKeyFormat" column="public_key_format"/>
+        <result property="publicKeyEncoded" column="public_key_encoded"/>
+        <result property="publicKeyDigest" column="public_key_digest"/>
+        <result property="algorithm" column="algorithm"/>
+        <result property="trustSource" column="trust_source"/>
+        <result property="managedStatus" column="managed_status"/>
+        <result property="complianceStatus" column="compliance_status"/>
+        <result property="revision" column="revision"/>
+        <result property="registeredAt" column="registered_at"/>
+        <result property="revokedAt" column="revoked_at"/>
+        <result property="disabledAt" column="disabled_at"/>
+    </resultMap>
+
+    <resultMap id="enrollmentGrant" type="com.robothree.central.persistence.mybatis.entity.DeviceEnrollmentGrantEntity">
+        <id property="enrollmentGrantId" column="enrollment_grant_id"/>
+        <result property="codeDigest" column="code_digest"/>
+        <result property="enterpriseId" column="enterprise_id"/>
+        <result property="authorizedUserId" column="authorized_user_id"/>
+        <result property="issuedAt" column="issued_at"/>
+        <result property="expiresAt" column="expires_at"/>
+        <result property="consumedAt" column="consumed_at"/>
+        <result property="disabledAt" column="disabled_at"/>
+    </resultMap>
+
+    <resultMap id="challenge" type="com.robothree.central.persistence.mybatis.entity.DeviceChallengeEntity">
+        <id property="challengeId" column="challenge_id"/>
+        <result property="purpose" column="purpose"/>
+        <result property="verifiedIdentityId" column="verified_identity_id"/>
+        <result property="clientInstanceId" column="client_instance_id"/>
+        <result property="expectedDeviceKeyId" column="expected_device_key_id"/>
+        <result property="expectedPublicKeyDigest" column="expected_public_key_digest"/>
+        <result property="nonce" column="nonce"/>
+        <result property="audience" column="audience"/>
+        <result property="allowedAlgorithms" column="allowed_algorithms"
+                typeHandler="com.robothree.central.persistence.mybatis.typehandler.PostgresTextArrayTypeHandler"/>
+        <result property="challengeDigest" column="challenge_digest"/>
+        <result property="issuedAt" column="issued_at"/>
+        <result property="expiresAt" column="expires_at"/>
+        <result property="consumedAt" column="consumed_at"/>
+        <result property="consumedBy" column="consumed_by"/>
+        <result property="consumedRequestDigest" column="consumed_request_digest"/>
+    </resultMap>
+
+    <resultMap id="tokenIssuance" type="com.robothree.central.persistence.mybatis.entity.AccessTokenIssuanceEntity">
+        <id property="tokenId" column="token_id"/>
+        <result property="tokenDigest" column="token_digest"/>
+        <result property="enterpriseId" column="enterprise_id"/>
+        <result property="userId" column="user_id"/>
+        <result property="deviceId" column="device_id"/>
+        <result property="clientInstanceId" column="client_instance_id"/>
+        <result property="permissions" column="permissions"
+                typeHandler="com.robothree.central.persistence.mybatis.typehandler.PostgresTextArrayTypeHandler"/>
+        <result property="identityDigest" column="identity_digest"/>
+        <result property="deviceRevision" column="device_revision"/>
+        <result property="permissionRevision" column="permission_revision"/>
+        <result property="issuedAt" column="issued_at"/>
+        <result property="expiresAt" column="expires_at"/>
+        <result property="challengeId" column="challenge_id"/>
+    </resultMap>
+
+    <insert id="insertVerifiedIdentity">
+        INSERT INTO enterprise_verified_identity (
+            verified_identity_id, enterprise_id, user_id, provider,
+            provider_subject_digest, identity_digest, issued_at, expires_at, disabled_at
+        ) VALUES (
+            #{verifiedIdentityId}, #{enterpriseId}, #{userId}, #{provider},
+            #{providerSubjectDigest}, #{identityDigest}, #{issuedAt}, #{expiresAt}, #{disabledAt}
+        )
+        ON CONFLICT (verified_identity_id) DO NOTHING
+    </insert>
+
+    <select id="findVerifiedIdentityById" resultMap="verifiedIdentity">
+        SELECT *
+        FROM enterprise_verified_identity
+        WHERE verified_identity_id = #{id}
+    </select>
+
+    <select id="findVerifiedIdentityByIdForUpdate" resultMap="verifiedIdentity">
+        SELECT *
+        FROM enterprise_verified_identity
+        WHERE verified_identity_id = #{id}
+        FOR UPDATE
+    </select>
+
+    <update id="disableVerifiedIdentity">
+        UPDATE enterprise_verified_identity
+        SET disabled_at = COALESCE(disabled_at, #{disabledAt})
+        WHERE verified_identity_id = #{id}
+    </update>
+
+    <insert id="savePermission">
+        INSERT INTO enterprise_user_permission (
+            enterprise_id, user_id, permission, enabled, revision, updated_at
+        ) VALUES (
+            #{enterpriseId}, #{userId}, #{permission}, #{enabled}, #{revision}, #{updatedAt}
+        )
+        ON CONFLICT (enterprise_id, user_id, permission) DO UPDATE SET
+            enabled = EXCLUDED.enabled,
+            revision = EXCLUDED.revision,
+            updated_at = EXCLUDED.updated_at
+        WHERE EXCLUDED.revision > enterprise_user_permission.revision
+           OR (
+               EXCLUDED.revision = enterprise_user_permission.revision
+               AND EXCLUDED.enabled = enterprise_user_permission.enabled
+               AND EXCLUDED.updated_at = enterprise_user_permission.updated_at
+           )
+    </insert>
+
+    <select id="findPermission" resultMap="permission">
+        SELECT *
+        FROM enterprise_user_permission
+        WHERE enterprise_id = #{enterpriseId}
+          AND user_id = #{userId}
+          AND permission = #{permission}
+    </select>
+
+    <select id="findEnabledPermissions" resultMap="permission">
+        SELECT *
+        FROM enterprise_user_permission
+        WHERE enterprise_id = #{enterpriseId}
+          AND user_id = #{userId}
+          AND enabled = TRUE
+        ORDER BY permission
+    </select>
+
+    <select id="findEnabledPermissionsForUpdate" resultMap="permission">
+        SELECT *
+        FROM enterprise_user_permission
+        WHERE enterprise_id = #{enterpriseId}
+          AND user_id = #{userId}
+          AND enabled = TRUE
+        ORDER BY permission
+        FOR UPDATE
+    </select>
+
+    <select id="findRequestedPermissionsForUpdate" resultMap="permission">
+        SELECT *
+        FROM enterprise_user_permission
+        WHERE enterprise_id = #{enterpriseId}
+          AND user_id = #{userId}
+          AND permission = ANY(
+              #{permissions,jdbcType=ARRAY,typeHandler=com.robothree.central.persistence.mybatis.typehandler.PostgresTextArrayTypeHandler}
+          )
+        ORDER BY permission
+        FOR UPDATE
+    </select>
+
+    <insert id="insertDevice">
+        INSERT INTO enterprise_device (
+            device_id, enterprise_id, device_key_id, public_key_format,
+            public_key_encoded, public_key_digest, algorithm, trust_source,
+            managed_status, compliance_status, revision, registered_at,
+            revoked_at, disabled_at
+        ) VALUES (
+            #{deviceId}, #{enterpriseId}, #{deviceKeyId}, #{publicKeyFormat},
+            #{publicKeyEncoded}, #{publicKeyDigest}, #{algorithm}, #{trustSource},
+            #{managedStatus}, #{complianceStatus}, #{revision}, #{registeredAt},
+            #{revokedAt}, #{disabledAt}
+        )
+        ON CONFLICT (device_id) DO NOTHING
+    </insert>
+
+    <select id="findDeviceById" resultMap="device">
+        SELECT * FROM enterprise_device WHERE device_id = #{deviceId}
+    </select>
+
+    <select id="findDeviceByIdForUpdate" resultMap="device">
+        SELECT * FROM enterprise_device WHERE device_id = #{deviceId} FOR UPDATE
+    </select>
+
+    <select id="findDeviceByKeyId" resultMap="device">
+        SELECT *
+        FROM enterprise_device
+        WHERE enterprise_id = #{enterpriseId}
+          AND device_key_id = #{deviceKeyId}
+    </select>
+
+    <select id="findDeviceByPublicKeyDigest" resultMap="device">
+        SELECT *
+        FROM enterprise_device
+        WHERE enterprise_id = #{enterpriseId}
+          AND public_key_digest = #{publicKeyDigest}
+    </select>
+
+    <insert id="insertEnrollmentGrant">
+        INSERT INTO device_enrollment_grant (
+            enrollment_grant_id, code_digest, enterprise_id, authorized_user_id,
+            issued_at, expires_at, consumed_at, disabled_at
+        ) VALUES (
+            #{enrollmentGrantId}, #{codeDigest}, #{enterpriseId}, #{authorizedUserId},
+            #{issuedAt}, #{expiresAt}, #{consumedAt}, #{disabledAt}
+        )
+        ON CONFLICT (enrollment_grant_id) DO NOTHING
+    </insert>
+
+    <select id="findEnrollmentGrantById" resultMap="enrollmentGrant">
+        SELECT *
+        FROM device_enrollment_grant
+        WHERE enrollment_grant_id = #{id}
+    </select>
+
+    <select id="findEnrollmentGrantByCodeDigest" resultMap="enrollmentGrant">
+        SELECT *
+        FROM device_enrollment_grant
+        WHERE code_digest = #{codeDigest}
+    </select>
+
+    <select id="findEnrollmentGrantByCodeDigestForUpdate" resultMap="enrollmentGrant">
+        SELECT *
+        FROM device_enrollment_grant
+        WHERE code_digest = #{codeDigest}
+        FOR UPDATE
+    </select>
+
+    <update id="consumeEnrollmentGrant">
+        UPDATE device_enrollment_grant
+        SET consumed_at = #{consumedAt}
+        WHERE enrollment_grant_id = #{id}
+          AND consumed_at IS NULL
+    </update>
+
+    <insert id="insertChallenge">
+        INSERT INTO device_challenge (
+            challenge_id, purpose, verified_identity_id, client_instance_id,
+            expected_device_key_id, expected_public_key_digest, nonce, audience,
+            allowed_algorithms, challenge_digest, issued_at, expires_at,
+            consumed_at, consumed_by, consumed_request_digest
+        ) VALUES (
+            #{challengeId}, #{purpose}, #{verifiedIdentityId}, #{clientInstanceId},
+            #{expectedDeviceKeyId}, #{expectedPublicKeyDigest}, #{nonce}, #{audience},
+            #{allowedAlgorithms,jdbcType=ARRAY,typeHandler=com.robothree.central.persistence.mybatis.typehandler.PostgresTextArrayTypeHandler},
+            #{challengeDigest}, #{issuedAt}, #{expiresAt},
+            #{consumedAt}, #{consumedBy}, #{consumedRequestDigest}
+        )
+        ON CONFLICT (challenge_id) DO NOTHING
+    </insert>
+
+    <select id="findChallengeById" resultMap="challenge">
+        SELECT * FROM device_challenge WHERE challenge_id = #{id}
+    </select>
+
+    <select id="findChallengeByIdForUpdate" resultMap="challenge">
+        SELECT * FROM device_challenge WHERE challenge_id = #{id} FOR UPDATE
+    </select>
+
+    <update id="consumeChallenge">
+        UPDATE device_challenge
+        SET consumed_at = #{consumedAt},
+            consumed_by = #{consumedBy},
+            consumed_request_digest = #{requestDigest}
+        WHERE challenge_id = #{id}
+          AND consumed_at IS NULL
+    </update>
+
+    <insert id="insertTokenIssuance">
+        INSERT INTO access_token_issuance (
+            token_id, token_digest, enterprise_id, user_id, device_id,
+            client_instance_id, permissions, identity_digest, device_revision,
+            permission_revision, issued_at, expires_at, challenge_id
+        ) VALUES (
+            #{tokenId}, #{tokenDigest}, #{enterpriseId}, #{userId}, #{deviceId},
+            #{clientInstanceId},
+            #{permissions,jdbcType=ARRAY,typeHandler=com.robothree.central.persistence.mybatis.typehandler.PostgresTextArrayTypeHandler},
+            #{identityDigest}, #{deviceRevision}, #{permissionRevision},
+            #{issuedAt}, #{expiresAt}, #{challengeId}
+        )
+        ON CONFLICT (token_id) DO NOTHING
+    </insert>
+
+    <select id="findTokenIssuanceById" resultMap="tokenIssuance">
+        SELECT * FROM access_token_issuance WHERE token_id = #{id}
+    </select>
+</mapper>

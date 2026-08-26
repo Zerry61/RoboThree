@@ -1,0 +1,12 @@
+{
+  "kind": "enterprise_session_device_challenge",
+  "schemaVersion": "enterprise-session.v1alpha1",
+  "challengeId": "33333333-3333-4333-8333-333333333333",
+  "nonce": "RklYVFVSRV9OT05DRV9OT1RfUkVBTF9DUllQVE8",
+  "issuedAt": "2026-08-23T10:00:00.000Z",
+  "expiresAt": "2026-08-23T10:01:00.000Z",
+  "audience": "robothree.enterprise-gateway",
+  "currentClientInstanceId": "11111111-1111-4111-8111-111111111111",
+  "allowedAlgorithms": ["ES256"],
+  "challengeDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}

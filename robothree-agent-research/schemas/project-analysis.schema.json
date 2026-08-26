@@ -1,0 +1,141 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://robothree.local/schemas/project-analysis.schema.json",
+  "title": "Project Analysis",
+  "description": "对一个开源 Agent 项目进行源码级研究后的结构化输出。本文件由 schemas 起草，禁止在报告中遗漏顶层字段。",
+  "type": "object",
+  "required": ["project", "commit", "analyzed_at", "dimensions"],
+  "properties": {
+    "project": {
+      "type": "object",
+      "required": ["name", "repository", "license", "language"],
+      "properties": {
+        "name": { "type": "string", "description": "项目显示名称" },
+        "repository": { "type": "string", "description": "owner/repo" },
+        "license": { "type": "string", "description": "SPDX 标识符或 'see LICENSE-NOTES.md'" },
+        "language": { "type": "string", "description": "主导实现语言，如 TypeScript / Python / Go" },
+        "stars": { "type": "integer" },
+        "research_value": { "type": "string", "description": "本项目对 RoboThree 的研究价值一句话" }
+      }
+    },
+    "commit": {
+      "type": "object",
+      "required": ["sha"],
+      "properties": {
+        "sha": { "type": "string", "description": "本次研究锁定的完整 commit SHA" },
+        "short_sha": { "type": "string", "description": "短 SHA，用于行内引用" },
+        "branch": { "type": "string" },
+        "tag": { "type": "string" }
+      }
+    },
+    "analyzed_at": {
+      "type": "string",
+      "format": "date",
+      "description": "分析完成日期（YYYY-MM-DD）"
+    },
+    "analyzer": {
+      "type": "string",
+      "description": "执行分析的 Subagent 或人类作者"
+    },
+    "dimensions": {
+      "type": "object",
+      "description": "见 CLAUDE.md 的必分析维度清单；每个维度对应一篇 research/<project>/<dimension>.md",
+      "properties": {
+        "positioning": { "$ref": "#/definitions/dimension" },
+        "entry_point": { "$ref": "#/definitions/dimension" },
+        "agent_loop": { "$ref": "#/definitions/dimension" },
+        "model_adapter": { "$ref": "#/definitions/dimension" },
+        "context_assembly": { "$ref": "#/definitions/dimension" },
+        "tool_registry": { "$ref": "#/definitions/dimension" },
+        "tool_dispatch": { "$ref": "#/definitions/dimension" },
+        "permission_system": { "$ref": "#/definitions/dimension" },
+        "session_state": { "$ref": "#/definitions/dimension" },
+        "memory": { "$ref": "#/definitions/dimension" },
+        "skill_plugin_mcp": { "$ref": "#/definitions/dimension" },
+        "subagent": { "$ref": "#/definitions/dimension" },
+        "task_queue": { "$ref": "#/definitions/dimension" },
+        "event_system": { "$ref": "#/definitions/dimension" },
+        "ui_tui": { "$ref": "#/definitions/dimension" },
+        "persistence": { "$ref": "#/definitions/dimension" },
+        "error_recovery": { "$ref": "#/definitions/dimension" },
+        "observability": { "$ref": "#/definitions/dimension" },
+        "security_boundary": { "$ref": "#/definitions/dimension" },
+        "deployment_model": { "$ref": "#/definitions/dimension" }
+      }
+    },
+    "key_files": {
+      "type": "array",
+      "description": "核心源码清单，每项含 path、symbol、role、confidence",
+      "items": {
+        "type": "object",
+        "required": ["path", "symbol", "role", "confidence"],
+        "properties": {
+          "path": { "type": "string" },
+          "symbol": { "type": "string" },
+          "role": { "type": "string" },
+          "confidence": { "enum": ["F", "I", "R"] }
+        }
+      }
+    },
+    "risks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["category", "summary", "evidence"],
+        "properties": {
+          "category": {
+            "enum": [
+              "security",
+              "permission",
+              "supply_chain",
+              "performance",
+              "scalability",
+              "maintainability",
+              "license",
+              "correctness"
+            ]
+          },
+          "summary": { "type": "string" },
+          "evidence": { "type": "string", "description": "path:line 或 issue 链接" }
+        }
+      }
+    },
+    "reusable_patterns": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["pattern", "evidence", "adopt", "adaptation"],
+        "properties": {
+          "pattern": { "type": "string" },
+          "evidence": { "type": "string" },
+          "adopt": { "enum": ["yes", "no", "partial"] },
+          "adaptation": { "type": "string", "description": "adopt=no/partial 时说明原因与 RoboThree 的调整方案" }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "dimension": {
+      "type": "object",
+      "required": ["status", "evidence_path", "confidence"],
+      "properties": {
+        "status": {
+          "enum": ["analyzed", "partial", "skipped"],
+          "description": "本维度是否已分析"
+        },
+        "evidence_path": {
+          "type": "string",
+          "description": "对应 analysis 文档的相对路径，例如 research/grok-build/architecture.md"
+        },
+        "confidence": {
+          "enum": ["F", "I", "R"],
+          "description": "本维度整体结论的置信度等级；维度内部具体结论单独标注"
+        },
+        "summary": {
+          "type": "string",
+          "description": "一句话结论"
+        }
+      }
+    }
+  }
+}

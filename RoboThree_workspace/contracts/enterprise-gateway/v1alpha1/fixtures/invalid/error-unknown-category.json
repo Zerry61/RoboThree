@@ -1,0 +1,8 @@
+{
+  "contractVersion": "v1alpha1",
+  "code": "configuration.not_found",
+  "category": "anything",
+  "retryable": false,
+  "safeSummary": "invalid category",
+  "correlationId": "22222222-2222-4222-8222-222222222222"
+}

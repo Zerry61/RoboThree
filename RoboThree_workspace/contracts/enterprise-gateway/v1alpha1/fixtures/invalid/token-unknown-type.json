@@ -1,0 +1,6 @@
+{
+  "type": "refresh_token",
+  "contractVersion": "v1alpha1",
+  "accessToken": "fixture-access-token-not-a-real-secret-0001",
+  "expiresAt": "2026-07-24T18:00:00+08:00"
+}

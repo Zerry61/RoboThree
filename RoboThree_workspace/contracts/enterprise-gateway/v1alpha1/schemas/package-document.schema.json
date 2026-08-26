@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://robothree.local/contracts/enterprise-gateway/v1alpha1/package-document.schema.json",
+  "title": "Immutable Agent or Skill Package",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "packageId",
+    "kind",
+    "revision",
+    "manifest",
+    "files",
+    "packageDigest",
+    "createdAt"
+  ],
+  "properties": {
+    "packageId": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 160,
+      "pattern": "^[a-z][a-z0-9]*(?:[._:-][a-z0-9]+)+$"
+    },
+    "kind": { "enum": ["agent", "skill"] },
+    "revision": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "manifest": {
+      "type": "object",
+      "maxProperties": 128
+    },
+    "files": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["relativePath", "mediaType", "utf8Content", "contentDigest"],
+        "properties": {
+          "relativePath": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512,
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*//)[^\\\\\\u0000]+$",
+            "x-robothree-maxUtf8Bytes": 512
+          },
+          "mediaType": {
+            "enum": ["application/json", "text/markdown", "text/plain"]
+          },
+          "utf8Content": {
+            "type": "string",
+            "maxLength": 524288,
+            "x-robothree-maxUtf8Bytes": 524288
+          },
+          "contentDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+        }
+      }
+    },
+    "packageDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "createdAt": { "type": "string", "format": "date-time" }
+  },
+  "x-robothree-maxDocumentBytes": 4194304,
+  "x-robothree-maxMaterializedBytes": 67108864
+}

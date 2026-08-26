@@ -1,0 +1,14 @@
+{
+  "contractVersion": "eipc.v1alpha1",
+  "cases": [
+    { "file": "valid/session-assertion.json", "valid": true },
+    { "file": "valid/device-trust.json", "valid": true },
+    { "file": "valid/runtime-active-source.json", "valid": true },
+    { "file": "valid/session-binding.json", "valid": true },
+    { "file": "valid/authority-snapshot.json", "valid": true },
+    { "file": "invalid/session-assertion-secret.json", "valid": false },
+    { "file": "invalid/session-assertion-permission.json", "valid": false },
+    { "file": "invalid/device-trust-proof.json", "valid": false },
+    { "file": "invalid/authority-snapshot-unknown-field.json", "valid": false }
+  ]
+}

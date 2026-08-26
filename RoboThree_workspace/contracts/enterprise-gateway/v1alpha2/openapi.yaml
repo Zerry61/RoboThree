@@ -1,0 +1,108 @@
+openapi: 3.1.0
+info:
+  title: RoboThree Enterprise Model Gateway v1alpha2
+  version: v1alpha2
+  description: >-
+    Additive Model Invocation subprotocol carrying an opaque exact-Session
+    cache context. It does not version Configuration Snapshot or identity data.
+servers:
+  - url: https://enterprise.example.invalid
+security:
+  - roboThreeAccessToken: []
+paths:
+  /v1alpha2/compatibility:
+    get:
+      operationId: getCompatibilityV1Alpha2
+      responses:
+        "200":
+          description: Compatibility projection
+          content:
+            application/json:
+              schema:
+                $ref: ./schemas/compatibility.schema.json
+  /v1alpha2/model-invocations:
+    post:
+      operationId: acceptModelInvocationV1Alpha2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./schemas/model-invocation.schema.json#/$defs/acceptRequest
+      responses:
+        "202":
+          description: Accepted invocation
+          content:
+            application/json:
+              schema:
+                $ref: ./schemas/model-invocation.schema.json#/$defs/acceptedResponse
+  /v1alpha2/model-invocations/{invocationId}:
+    parameters:
+      - name: invocationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getModelInvocationV1Alpha2
+      responses:
+        "200":
+          description: Invocation status
+          content:
+            application/json:
+              schema:
+                $ref: ./schemas/model-invocation.schema.json#/$defs/statusResponse
+  /v1alpha2/model-invocations/{invocationId}/cancel:
+    parameters:
+      - name: invocationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: cancelModelInvocationV1Alpha2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./schemas/model-invocation.schema.json#/$defs/cancelRequest
+      responses:
+        "200":
+          description: Invocation status after cancellation decision
+          content:
+            application/json:
+              schema:
+                $ref: ./schemas/model-invocation.schema.json#/$defs/statusResponse
+  /v1alpha2/model-invocations/{invocationId}/events:
+    parameters:
+      - name: invocationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 512
+    get:
+      operationId: streamModelInvocationEventsV1Alpha2
+      responses:
+        "200":
+          description: SSE stream whose data frames are strict event envelopes
+          content:
+            text/event-stream:
+              schema:
+                $ref: ./schemas/model-invocation.schema.json#/$defs/eventEnvelope
+components:
+  securitySchemes:
+    roboThreeAccessToken:
+      type: http
+      scheme: bearer
+      bearerFormat: RoboThreeAccessToken

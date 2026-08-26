@@ -1,0 +1,109 @@
+{
+  "fixtureVersion": "v1alpha1",
+  "idempotency": [
+    {
+      "name": "same-logical-id-same-digest",
+      "existingClientRequestId": "35000000-0000-4000-8000-000000000001",
+      "existingDigest": "0101010101010101010101010101010101010101010101010101010101010101",
+      "candidateClientRequestId": "35000000-0000-4000-8000-000000000001",
+      "candidateDigest": "0101010101010101010101010101010101010101010101010101010101010101",
+      "expectedDecision": "replay"
+    },
+    {
+      "name": "same-logical-id-different-digest",
+      "existingClientRequestId": "35000000-0000-4000-8000-000000000002",
+      "existingDigest": "0202020202020202020202020202020202020202020202020202020202020202",
+      "candidateClientRequestId": "35000000-0000-4000-8000-000000000002",
+      "candidateDigest": "0303030303030303030303030303030303030303030303030303030303030303",
+      "expectedDecision": "conflict"
+    },
+    {
+      "name": "new-logical-id",
+      "existingClientRequestId": "35000000-0000-4000-8000-000000000003",
+      "existingDigest": "0404040404040404040404040404040404040404040404040404040404040404",
+      "candidateClientRequestId": "35000000-0000-4000-8000-000000000004",
+      "candidateDigest": "0404040404040404040404040404040404040404040404040404040404040404",
+      "expectedDecision": "accept"
+    }
+  ],
+  "outcomes": [
+    {
+      "name": "deadline-before-dispatch",
+      "dispatchPersisted": false,
+      "trustedProviderTimeout": false,
+      "providerOutcomeKnown": false,
+      "recoveryEvidenceExhausted": false,
+      "leaseExpired": false,
+      "expectedStatus": "timed_out"
+    },
+    {
+      "name": "trusted-provider-timeout",
+      "dispatchPersisted": true,
+      "trustedProviderTimeout": true,
+      "providerOutcomeKnown": true,
+      "recoveryEvidenceExhausted": false,
+      "leaseExpired": false,
+      "expectedStatus": "timed_out"
+    },
+    {
+      "name": "dispatched-outcome-unknown",
+      "dispatchPersisted": true,
+      "trustedProviderTimeout": false,
+      "providerOutcomeKnown": false,
+      "recoveryEvidenceExhausted": true,
+      "leaseExpired": false,
+      "expectedStatus": "uncertain"
+    },
+    {
+      "name": "lease-expiry-only-does-not-change-public-status",
+      "dispatchPersisted": true,
+      "trustedProviderTimeout": false,
+      "providerOutcomeKnown": false,
+      "recoveryEvidenceExhausted": false,
+      "leaseExpired": true,
+      "expectedStatus": "running"
+    }
+  ],
+  "recovery": [
+    {
+      "name": "first-acquire",
+      "claimType": "acquire",
+      "currentEpoch": 0,
+      "expectedEpoch": 0,
+      "leaseExpired": true,
+      "ownerMatches": false,
+      "expectedDecision": "acquired",
+      "resultEpoch": 1
+    },
+    {
+      "name": "owner-renew",
+      "claimType": "renew",
+      "currentEpoch": 4,
+      "expectedEpoch": 4,
+      "leaseExpired": false,
+      "ownerMatches": true,
+      "expectedDecision": "renewed",
+      "resultEpoch": 4
+    },
+    {
+      "name": "expired-takeover",
+      "claimType": "takeover",
+      "currentEpoch": 4,
+      "expectedEpoch": 4,
+      "leaseExpired": true,
+      "ownerMatches": false,
+      "expectedDecision": "taken_over",
+      "resultEpoch": 5
+    },
+    {
+      "name": "stale-owner-commit",
+      "claimType": "commit",
+      "currentEpoch": 5,
+      "expectedEpoch": 4,
+      "leaseExpired": false,
+      "ownerMatches": false,
+      "expectedDecision": "fencing_conflict",
+      "resultEpoch": 5
+    }
+  ]
+}

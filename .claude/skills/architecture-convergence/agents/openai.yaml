@@ -1,0 +1,4 @@
+interface:
+  display_name: "Architecture Convergence"
+  short_description: "将多份研究证据收敛为 RoboThree 架构候选"
+  default_prompt: "Use $architecture-convergence to synthesize RoboThree architecture candidates from the research repository."

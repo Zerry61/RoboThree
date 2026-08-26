@@ -1,0 +1,8 @@
+{
+  "contractVersion": "v1alpha1",
+  "code": "device_challenge_replayed",
+  "category": "authentication",
+  "retryable": false,
+  "safeSummary": "The device challenge has already been consumed.",
+  "correlationId": "60000000-0000-4000-8000-000000000005"
+}

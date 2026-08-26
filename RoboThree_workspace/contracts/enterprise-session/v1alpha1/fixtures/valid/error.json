@@ -1,0 +1,8 @@
+{
+  "kind": "enterprise_session_error",
+  "schemaVersion": "enterprise-session.v1alpha1",
+  "errorCode": "enterprise_session_unavailable",
+  "message": "Enterprise session is not available.",
+  "retryable": true,
+  "correlationId": "22222222-2222-4222-8222-222222222222"
+}

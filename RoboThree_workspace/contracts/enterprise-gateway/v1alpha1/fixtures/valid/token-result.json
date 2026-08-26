@@ -1,0 +1,7 @@
+{
+  "type": "token_result",
+  "contractVersion": "v1alpha1",
+  "tokenType": "Bearer",
+  "accessToken": "fixture-access-token-not-a-real-secret-0001",
+  "expiresAt": "2026-07-24T18:00:00+08:00"
+}

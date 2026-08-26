@@ -1,0 +1,73 @@
+{
+  "contractVersion": "v1alpha2",
+  "clientRequestId": "30000000-0000-4000-8000-000000000011",
+  "requestId": "30000000-0000-4000-8000-000000000012",
+  "requestDigest": "1212121212121212121212121212121212121212121212121212121212121212",
+  "audience": "enterprise-model-gateway",
+  "requiredPermission": "model.use",
+  "modelRequest": {
+    "snapshotId": "30000000-0000-4000-8000-000000000013",
+    "contextSourceDigest": "1313131313131313131313131313131313131313131313131313131313131313",
+    "model": {
+      "modelId": "model.enterprise.general",
+      "modelRevision": "1414141414141414141414141414141414141414141414141414141414141414",
+      "configurationRevision": "1515151515151515151515151515151515151515151515151515151515151515",
+      "runtimeRegistryGeneration": "1616161616161616161616161616161616161616161616161616161616161616"
+    },
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Summarize the explicitly confirmed task input."
+          }
+        ]
+      }
+    ],
+    "tools": [
+      {
+        "capabilityId": "tool.workspace.read",
+        "capabilityRevision": "1717171717171717171717171717171717171717171717171717171717171717",
+        "name": "workspace_read",
+        "description": "Read a confirmed workspace file.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "relativePath": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "relativePath"
+          ],
+          "additionalProperties": false
+        },
+        "inputSchemaDigest": "1818181818181818181818181818181818181818181818181818181818181818"
+      }
+    ],
+    "maxOutputTokens": 512
+  },
+  "admission": {
+    "type": "user_confirmed",
+    "taskId": "30000000-0000-4000-8000-000000000014",
+    "confirmationId": "30000000-0000-4000-8000-000000000015",
+    "externalTarget": "gateway.enterprise.model",
+    "dataCategories": [
+      "user_text",
+      "tool_schema"
+    ],
+    "dataScopeDigest": "1919191919191919191919191919191919191919191919191919191919191919",
+    "confirmationDigest": "2020202020202020202020202020202020202020202020202020202020202020"
+  },
+  "timeoutPolicy": {
+    "providerRequestDeadlineAt": "2026-07-30T12:20:00Z",
+    "providerStreamIdleTimeoutMillis": 60000
+  },
+  "cacheContext": {
+    "sessionScopeDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "unexpected": "x"
+  },
+  "cacheContextDigest": "6d93dc7d3c929d1506fc29c38137666a5dd9393cb34eeda555e815ad5fc52ee3"
+}
+

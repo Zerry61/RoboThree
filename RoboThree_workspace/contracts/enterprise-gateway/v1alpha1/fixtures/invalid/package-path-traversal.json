@@ -1,0 +1,16 @@
+{
+  "packageId": "skill.package-001",
+  "kind": "skill",
+  "revision": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "manifest": { "name": "Invalid" },
+  "files": [
+    {
+      "relativePath": "../escape.md",
+      "mediaType": "text/markdown",
+      "utf8Content": "invalid",
+      "contentDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    }
+  ],
+  "packageDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "createdAt": "2026-07-24T17:30:00+08:00"
+}

@@ -1,0 +1,9 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/contracts" },
+    { "path": "./services/document-worker" },
+    { "path": "./services/core" },
+    { "path": "./apps/desktop" }
+  ]
+}

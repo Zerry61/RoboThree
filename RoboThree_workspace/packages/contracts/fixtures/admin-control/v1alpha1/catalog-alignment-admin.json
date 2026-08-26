@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "admin-control.catalog-alignment.v1",
+  "robot": {
+    "robotId": "agent:catalog-fixture",
+    "publishedRobotRevision": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "displayName": "Catalog fixture robot",
+    "description": "Cross-consumer Robot catalog fixture.",
+    "source": "enterprise_published",
+    "lifecycle": "published",
+    "restrictionSummary": {
+      "models": "restricted_nonempty",
+      "skills": "restricted_empty",
+      "tools": "restricted_nonempty",
+      "knowledge": "restricted_empty"
+    }
+  },
+  "tool": {
+    "toolId": "tool.catalog_fixture",
+    "toolDefinitionRevision": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "displayName": "Catalog fixture tool",
+    "description": "Cross-consumer Tool catalog fixture.",
+    "source": "official_package",
+    "lifecycle": "published",
+    "readOnly": true,
+    "riskSummary": ["routine_file"],
+    "policyState": "unavailable",
+    "connectionState": "unavailable",
+    "credentialStatus": "unavailable",
+    "healthState": "unavailable"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "contractVersion": "v1alpha1",
+  "invocationId": "30000000-0000-4000-8000-000000000021",
+  "eventId": "30000000-0000-4000-8000-000000000044",
+  "eventClass": "ephemeral",
+  "streamSequence": 3,
+  "eventType": "tool_call",
+  "eventPayload": {
+    "call": {
+      "toolCallId": "30000000-0000-4000-8000-000000000045",
+      "name": "workspace_read",
+      "arguments": {
+        "relativePath": "README.md"
+      },
+      "argumentsDigest": "2626262626262626262626262626262626262626262626262626262626262626"
+    }
+  },
+  "eventDigest": "2727272727272727272727272727272727272727272727272727272727272727",
+  "occurredAt": "2026-07-30T12:00:04Z"
+}

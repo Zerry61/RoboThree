@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["fixtures/type-errors/**/*", "src/**/*.d.ts"],
+  "exclude": ["dist", "node_modules"],
+  "vueCompilerOptions": {
+    "target": 2.7,
+    "strictTemplates": true
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "fixtureVersion": "v1alpha1",
+  "events": [
+    {
+      "eventType": "started",
+      "payload": {}
+    },
+    {
+      "eventType": "text_delta",
+      "payload": {
+        "delta": "RoboThree "
+      }
+    },
+    {
+      "eventType": "text_delta",
+      "payload": {
+        "delta": "ready"
+      }
+    },
+    {
+      "eventType": "completed",
+      "payload": {
+        "finishReason": "stop",
+        "usage": {
+          "inputTokens": 8,
+          "outputTokens": 3
+        }
+      }
+    }
+  ]
+}

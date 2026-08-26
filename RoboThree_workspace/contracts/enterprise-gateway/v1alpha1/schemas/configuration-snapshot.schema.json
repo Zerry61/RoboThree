@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://robothree.local/contracts/enterprise-gateway/v1alpha1/configuration-snapshot.schema.json",
+  "title": "Enterprise Configuration Snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contractVersion",
+    "snapshotId",
+    "revision",
+    "schemaVersion",
+    "digest",
+    "minimumDesktopVersion",
+    "minimumCoreVersion",
+    "models",
+    "tools",
+    "agents",
+    "skills",
+    "knowledge",
+    "fixedPermissions",
+    "gatewayEndpoints",
+    "generatedAt"
+  ],
+  "properties": {
+    "contractVersion": { "const": "v1alpha1" },
+    "snapshotId": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 160,
+      "pattern": "^[a-z][a-z0-9]*(?:[._:-][a-z0-9]+)+$"
+    },
+    "revision": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "schemaVersion": { "const": "v1alpha1" },
+    "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "minimumDesktopVersion": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "minimumCoreVersion": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "models": {
+      "type": "array",
+      "maxItems": 128,
+      "items": { "$ref": "descriptor.schema.json" }
+    },
+    "tools": {
+      "type": "array",
+      "maxItems": 256,
+      "items": { "$ref": "descriptor.schema.json" }
+    },
+    "agents": {
+      "type": "array",
+      "maxItems": 128,
+      "items": { "$ref": "#/$defs/packageRef" }
+    },
+    "skills": {
+      "type": "array",
+      "maxItems": 256,
+      "items": { "$ref": "#/$defs/packageRef" }
+    },
+    "knowledge": {
+      "type": "array",
+      "maxItems": 64,
+      "items": { "$ref": "descriptor.schema.json" }
+    },
+    "fixedPermissions": {
+      "type": "array",
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 3, "maxLength": 128 }
+    },
+    "gatewayEndpoints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["configuration"],
+      "properties": {
+        "configuration": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "model": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "tool": { "type": "string", "minLength": 1, "maxLength": 512 }
+      }
+    },
+    "generatedAt": { "type": "string", "format": "date-time" }
+  },
+  "$defs": {
+    "packageRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["packageId", "kind", "revision", "digest"],
+      "properties": {
+        "packageId": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 160,
+          "pattern": "^[a-z][a-z0-9]*(?:[._:-][a-z0-9]+)+$"
+        },
+        "kind": { "enum": ["agent", "skill"] },
+        "revision": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    }
+  },
+  "x-robothree-maxDocumentBytes": 2097152
+}

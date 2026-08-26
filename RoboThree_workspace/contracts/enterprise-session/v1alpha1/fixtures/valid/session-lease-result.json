@@ -1,0 +1,40 @@
+{
+  "kind": "enterprise_session_lease_result",
+  "schemaVersion": "enterprise-session.v1alpha1",
+  "claimsProfile": "eipc.session-token.v1",
+  "tokenType": "Bearer",
+  "accessToken": "eyFixture.Header.Payload.Signature",
+  "expiresAt": "2026-08-23T10:15:00.000Z",
+  "sessionAssertion": {
+    "kind": "enterprise_session_assertion",
+    "schemaVersion": "eipc.v1alpha1",
+    "validity": "valid",
+    "audience": "robothree.enterprise-gateway",
+    "scope": {
+      "enterpriseId": "enterprise.fixture",
+      "userId": "user.fixture",
+      "deviceId": "device.fixture-001",
+      "clientInstanceId": "11111111-1111-4111-8111-111111111111"
+    },
+    "permissions": ["configuration.read", "personal_model.configure"],
+    "issuedAt": "2026-08-23T10:00:05.000Z",
+    "expiresAt": "2026-08-23T10:15:00.000Z",
+    "assertionRevision": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "assertionDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  },
+  "deviceTrustDecision": {
+    "kind": "enterprise_device_trust_decision",
+    "schemaVersion": "eipc.v1alpha1",
+    "decision": "trusted",
+    "ownerIdentity": {
+      "enterpriseId": "enterprise.fixture",
+      "userId": "user.fixture",
+      "deviceId": "device.fixture-001"
+    },
+    "decisionRevision": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "decisionDigest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "evaluatedAt": "2026-08-23T10:00:04.000Z"
+  },
+  "compatibilityRevision": "compatibility.fixture-001",
+  "sourceDecisionDigest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+}

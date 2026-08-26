@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://robothree.local/contracts/enterprise-gateway/v1alpha1/exact-package-read.schema.json",
+  "title": "Exact Enterprise Package Read Reference",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contractVersion",
+    "snapshotId",
+    "snapshotRevision",
+    "snapshotDigest",
+    "packageId",
+    "kind",
+    "packageRevision",
+    "packageDigest"
+  ],
+  "properties": {
+    "contractVersion": { "const": "v1alpha1" },
+    "snapshotId": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 160,
+      "pattern": "^[a-z][a-z0-9]*(?:[._:-][a-z0-9]+)+$"
+    },
+    "snapshotRevision": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "snapshotDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "packageId": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 160,
+      "pattern": "^[a-z][a-z0-9]*(?:[._:-][a-z0-9]+)+$"
+    },
+    "kind": { "enum": ["agent", "skill"] },
+    "packageRevision": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "packageDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+  }
+}

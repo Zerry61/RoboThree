@@ -1,0 +1,112 @@
+{
+  "fixtureVersion": "v1alpha1",
+  "scenarios": [
+    {
+      "name": "accepted-running-completed",
+      "expectedValid": true,
+      "events": [
+        {
+          "durableSequence": 1,
+          "eventId": "34000000-0000-4000-8000-000000000001",
+          "eventType": "accepted",
+          "status": "accepted",
+          "eventDigest": "0101010101010101010101010101010101010101010101010101010101010101"
+        },
+        {
+          "durableSequence": 2,
+          "eventId": "34000000-0000-4000-8000-000000000002",
+          "eventType": "dispatch_decided",
+          "status": "running",
+          "eventDigest": "0202020202020202020202020202020202020202020202020202020202020202"
+        },
+        {
+          "durableSequence": 3,
+          "eventId": "34000000-0000-4000-8000-000000000003",
+          "eventType": "completed",
+          "status": "completed",
+          "eventDigest": "0303030303030303030303030303030303030303030303030303030303030303"
+        }
+      ]
+    },
+    {
+      "name": "terminal-cannot-return-to-running",
+      "expectedValid": false,
+      "events": [
+        {
+          "durableSequence": 1,
+          "eventId": "34000000-0000-4000-8000-000000000011",
+          "eventType": "accepted",
+          "status": "accepted",
+          "eventDigest": "1111111111111111111111111111111111111111111111111111111111111111"
+        },
+        {
+          "durableSequence": 2,
+          "eventId": "34000000-0000-4000-8000-000000000012",
+          "eventType": "cancelled",
+          "status": "cancelled",
+          "eventDigest": "1212121212121212121212121212121212121212121212121212121212121212"
+        },
+        {
+          "durableSequence": 3,
+          "eventId": "34000000-0000-4000-8000-000000000013",
+          "eventType": "dispatch_decided",
+          "status": "running",
+          "eventDigest": "1313131313131313131313131313131313131313131313131313131313131313"
+        }
+      ]
+    },
+    {
+      "name": "durable-sequence-gap",
+      "expectedValid": false,
+      "events": [
+        {
+          "durableSequence": 1,
+          "eventId": "34000000-0000-4000-8000-000000000021",
+          "eventType": "accepted",
+          "status": "accepted",
+          "eventDigest": "2121212121212121212121212121212121212121212121212121212121212121"
+        },
+        {
+          "durableSequence": 3,
+          "eventId": "34000000-0000-4000-8000-000000000022",
+          "eventType": "dispatch_decided",
+          "status": "running",
+          "eventDigest": "2222222222222222222222222222222222222222222222222222222222222222"
+        }
+      ]
+    },
+    {
+      "name": "duplicate-event-id-digest-conflict",
+      "expectedValid": false,
+      "events": [
+        {
+          "durableSequence": 1,
+          "eventId": "34000000-0000-4000-8000-000000000031",
+          "eventType": "accepted",
+          "status": "accepted",
+          "eventDigest": "3131313131313131313131313131313131313131313131313131313131313131"
+        },
+        {
+          "durableSequence": 2,
+          "eventId": "34000000-0000-4000-8000-000000000031",
+          "eventType": "dispatch_decided",
+          "status": "running",
+          "eventDigest": "3232323232323232323232323232323232323232323232323232323232323232"
+        }
+      ]
+    },
+    {
+      "name": "event-type-status-mismatch",
+      "expectedValid": false,
+      "events": [
+        {
+          "durableSequence": 1,
+          "eventId": "34000000-0000-4000-8000-000000000041",
+          "eventType": "accepted",
+          "status": "running",
+          "eventDigest": "4141414141414141414141414141414141414141414141414141414141414141"
+        }
+      ]
+    }
+  ]
+}

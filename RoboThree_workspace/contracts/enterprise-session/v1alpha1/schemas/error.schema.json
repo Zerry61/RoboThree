@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://robothree.local/contracts/enterprise-session/v1alpha1/schemas/error.schema.json",
+  "title": "RoboThree Enterprise Session Error",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "schemaVersion", "errorCode", "message", "retryable", "correlationId"],
+  "properties": {
+    "kind": { "const": "enterprise_session_error" },
+    "schemaVersion": { "const": "enterprise-session.v1alpha1" },
+    "errorCode": {
+      "enum": [
+        "enterprise_identity_handle_invalid",
+        "enterprise_identity_handle_drift",
+        "device_challenge_expired",
+        "device_challenge_replayed",
+        "device_signature_invalid",
+        "device_context_mismatch",
+        "device_not_managed",
+        "device_not_compliant",
+        "permission_denied",
+        "compatibility_incompatible",
+        "access_token_invalid",
+        "access_token_profile_ambiguous",
+        "enterprise_session_unavailable",
+        "enterprise_session_conflict",
+        "internal"
+      ]
+    },
+    "message": { "type": "string", "minLength": 1, "maxLength": 512 },
+    "retryable": { "type": "boolean" },
+    "correlationId": { "$ref": "common.schema.json#/$defs/uuid" }
+  }
+}

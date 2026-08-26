@@ -1,0 +1,8 @@
+{
+  "contractVersion": "v1alpha1",
+  "code": "model_invocation_uncertain",
+  "category": "uncertain",
+  "retryable": false,
+  "safeSummary": "The external outcome cannot be determined safely.",
+  "correlationId": "33000000-0000-4000-8000-000000000004"
+}

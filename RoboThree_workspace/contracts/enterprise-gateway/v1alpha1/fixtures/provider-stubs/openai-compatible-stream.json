@@ -1,0 +1,45 @@
+{
+  "fixtureVersion": "v1alpha1",
+  "protocol": "openai_compatible",
+  "frames": [
+    {
+      "choices": [
+        {
+          "delta": {
+            "role": "assistant"
+          }
+        }
+      ]
+    },
+    {
+      "choices": [
+        {
+          "delta": {
+            "content": "RoboThree "
+          }
+        }
+      ]
+    },
+    {
+      "choices": [
+        {
+          "delta": {
+            "content": "ready"
+          }
+        }
+      ]
+    },
+    {
+      "choices": [
+        {
+          "delta": {},
+          "finish_reason": "stop"
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 8,
+        "completion_tokens": 3
+      }
+    }
+  ]
+}

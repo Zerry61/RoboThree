@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.robothree.central.persistence.mybatis.mapper.EnterpriseSessionPersistenceMapper">
+
+    <resultMap id="challengeBinding"
+               type="com.robothree.central.persistence.mybatis.entity.EnterpriseSessionChallengeBindingEntity">
+        <id property="challengeId" column="challenge_id"/>
+        <result property="verifiedIdentityId" column="verified_identity_id"/>
+        <result property="claimsProfile" column="claims_profile"/>
+        <result property="identitySourceRevision" column="identity_source_revision"/>
+        <result property="currentClientInstanceId" column="current_client_instance_id"/>
+        <result property="audience" column="audience"/>
+        <result property="requiredPermissions" column="required_permissions"
+                typeHandler="com.robothree.central.persistence.mybatis.typehandler.PostgresTextArrayTypeHandler"/>
+        <result property="deviceKeyId" column="device_key_id"/>
+        <result property="correlationId" column="correlation_id"/>
+        <result property="bindingDigest" column="binding_digest"/>
+        <result property="recordDigest" column="record_digest"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <resultMap id="leaseIssuance"
+               type="com.robothree.central.persistence.mybatis.entity.EnterpriseSessionLeaseIssuanceEntity">
+        <id property="tokenId" column="token_id"/>
+        <result property="tokenDigest" column="token_digest"/>
+        <result property="claimsProfile" column="claims_profile"/>
+        <result property="issuer" column="issuer"/>
+        <result property="audience" column="audience"/>
+        <result property="enterpriseId" column="enterprise_id"/>
+        <result property="userId" column="user_id"/>
+        <result property="deviceId" column="device_id"/>
+        <result property="verifiedIdentityId" column="verified_identity_id"/>
+        <result property="identitySourceRevision" column="identity_source_revision"/>
+        <result property="clientInstanceId" column="client_instance_id"/>
+        <result property="permissions" column="permissions"
+                typeHandler="com.robothree.central.persistence.mybatis.typehandler.PostgresTextArrayTypeHandler"/>
+        <result property="identityDigest" column="identity_digest"/>
+        <result property="deviceSourceRevision" column="device_source_revision"/>
+        <result property="deviceRevisionDigest" column="device_revision_digest"/>
+        <result property="permissionRevisionDigest" column="permission_revision_digest"/>
+        <result property="compatibilityRevision" column="compatibility_revision"/>
+        <result property="trustSource" column="trust_source"/>
+        <result property="managedStatus" column="managed_status"/>
+        <result property="complianceStatus" column="compliance_status"/>
+        <result property="issuedAt" column="issued_at"/>
+        <result property="expiresAt" column="expires_at"/>
+        <result property="trustEvaluatedAt" column="trust_evaluated_at"/>
+        <result property="challengeId" column="challenge_id"/>
+        <result property="challengeBindingDigest" column="challenge_binding_digest"/>
+        <result property="sessionAssertionRevision" column="session_assertion_revision"/>
+        <result property="sessionAssertionDigest" column="session_assertion_digest"/>
+        <result property="sessionAssertionJson" column="session_assertion_json"/>
+        <result property="deviceTrustDecisionRevision" column="device_trust_decision_revision"/>
+        <result property="deviceTrustDecisionDigest" column="device_trust_decision_digest"/>
+        <result property="deviceTrustDecisionJson" column="device_trust_decision_json"/>
+        <result property="sourceDecisionDigest" column="source_decision_digest"/>
+        <result property="requestDigest" column="request_digest"/>
+        <result property="recordDigest" column="record_digest"/>
+    </resultMap>
+
+    <sql id="challengeBindingColumns">
+        challenge_id, verified_identity_id, claims_profile,
+        identity_source_revision, current_client_instance_id, audience,
+        required_permissions, device_key_id, correlation_id,
+        binding_digest, record_digest, created_at
+    </sql>
+
+    <sql id="leaseIssuanceColumns">
+        token_id, token_digest, claims_profile, issuer, audience,
+        enterprise_id, user_id, device_id, verified_identity_id,
+        identity_source_revision, client_instance_id, permissions,
+        identity_digest, device_source_revision, device_revision_digest,
+        permission_revision_digest, compatibility_revision, trust_source,
+        managed_status, compliance_status, issued_at, expires_at,
+        trust_evaluated_at, challenge_id, challenge_binding_digest,
+        session_assertion_revision, session_assertion_digest,
+        session_assertion_json, device_trust_decision_revision,
+        device_trust_decision_digest, device_trust_decision_json,
+        source_decision_digest, request_digest, record_digest
+    </sql>
+
+    <insert id="insertChallengeBinding">
+        INSERT INTO enterprise_session_challenge_binding (
+            <include refid="challengeBindingColumns"/>
+        ) VALUES (
+            #{challengeId}, #{verifiedIdentityId}, #{claimsProfile},
+            #{identitySourceRevision}, #{currentClientInstanceId}, #{audience},
+            #{requiredPermissions,jdbcType=ARRAY,typeHandler=com.robothree.central.persistence.mybatis.typehandler.PostgresTextArrayTypeHandler},
+            #{deviceKeyId}, #{correlationId}, #{bindingDigest}, #{recordDigest}, #{createdAt}
+        )
+        ON CONFLICT (challenge_id) DO NOTHING
+    </insert>
+
+    <select id="findChallengeBindingById" resultMap="challengeBinding">
+        SELECT <include refid="challengeBindingColumns"/>
+        FROM enterprise_session_challenge_binding
+        WHERE challenge_id = #{challengeId}
+    </select>
+
+    <select id="findChallengeBindingByIdForUpdate" resultMap="challengeBinding">
+        SELECT <include refid="challengeBindingColumns"/>
+        FROM enterprise_session_challenge_binding
+        WHERE challenge_id = #{challengeId}
+        FOR UPDATE
+    </select>
+
+    <select id="findChallengeBindingByCorrelationId" resultMap="challengeBinding">
+        SELECT <include refid="challengeBindingColumns"/>
+        FROM enterprise_session_challenge_binding
+        WHERE correlation_id = #{correlationId}
+    </select>
+
+    <insert id="insertLeaseIssuance">
+        INSERT INTO enterprise_session_lease_issuance (
+            <include refid="leaseIssuanceColumns"/>
+        ) VALUES (
+            #{tokenId}, #{tokenDigest}, #{claimsProfile}, #{issuer}, #{audience},
+            #{enterpriseId}, #{userId}, #{deviceId}, #{verifiedIdentityId},
+            #{identitySourceRevision}, #{clientInstanceId},
+            #{permissions,jdbcType=ARRAY,typeHandler=com.robothree.central.persistence.mybatis.typehandler.PostgresTextArrayTypeHandler},
+            #{identityDigest}, #{deviceSourceRevision}, #{deviceRevisionDigest},
+            #{permissionRevisionDigest}, #{compatibilityRevision}, #{trustSource},
+            #{managedStatus}, #{complianceStatus}, #{issuedAt}, #{expiresAt},
+            #{trustEvaluatedAt}, #{challengeId}, #{challengeBindingDigest},
+            #{sessionAssertionRevision}, #{sessionAssertionDigest},
+            #{sessionAssertionJson}, #{deviceTrustDecisionRevision},
+            #{deviceTrustDecisionDigest}, #{deviceTrustDecisionJson},
+            #{sourceDecisionDigest}, #{requestDigest}, #{recordDigest}
+        )
+        ON CONFLICT (token_id) DO NOTHING
+    </insert>
+
+    <select id="findLeaseByTokenId" resultMap="leaseIssuance">
+        SELECT <include refid="leaseIssuanceColumns"/>
+        FROM enterprise_session_lease_issuance
+        WHERE token_id = #{tokenId}
+    </select>
+
+    <select id="findLeaseByChallengeIdForUpdate" resultMap="leaseIssuance">
+        SELECT <include refid="leaseIssuanceColumns"/>
+        FROM enterprise_session_lease_issuance
+        WHERE challenge_id = #{challengeId}
+        FOR UPDATE
+    </select>
+</mapper>

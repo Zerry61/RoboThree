@@ -1,0 +1,6 @@
+{
+  "contractVersion": "v1alpha1",
+  "requestId": "30000000-0000-4000-8000-000000000031",
+  "expectedStatusRevision": 1,
+  "reason": "user_requested"
+}

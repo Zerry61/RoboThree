@@ -1,0 +1,7 @@
+{
+  "type": "issue_device_challenge_request",
+  "contractVersion": "v1alpha1",
+  "purpose": "token_issuance",
+  "verifiedIdentityId": "33333333-3333-4333-8333-333333333333",
+  "deviceKeyId": "device-key.fixture-001"
+}

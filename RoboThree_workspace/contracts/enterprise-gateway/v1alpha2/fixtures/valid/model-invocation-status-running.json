@@ -1,0 +1,18 @@
+{
+  "contractVersion": "v1alpha2",
+  "invocationId": "30000000-0000-4000-8000-000000000021",
+  "clientRequestId": "30000000-0000-4000-8000-000000000001",
+  "requestDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "modelId": "model.deepseek.development",
+  "modelRevision": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "configurationRevision": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "runtimeRegistryGeneration": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "status": "running",
+  "statusRevision": 1,
+  "createdAt": "2026-07-30T12:00:00Z",
+  "startedAt": "2026-07-30T12:00:01Z",
+  "lastDurableEventSequence": 2,
+  "durableEventStreamDigest": "2121212121212121212121212121212121212121212121212121212121212121",
+  "durableCursor": "model-invocation:opaque:running"
+}
+

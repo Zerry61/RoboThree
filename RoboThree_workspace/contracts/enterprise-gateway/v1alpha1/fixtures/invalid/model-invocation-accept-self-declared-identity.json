@@ -1,0 +1,43 @@
+{
+  "contractVersion": "v1alpha1",
+  "clientRequestId": "31000000-0000-4000-8000-000000000011",
+  "requestId": "31000000-0000-4000-8000-000000000012",
+  "requestDigest": "1212121212121212121212121212121212121212121212121212121212121212",
+  "audience": "enterprise-model-gateway",
+  "requiredPermission": "model.use",
+  "enterpriseId": "enterprise.untrusted",
+  "userId": "user.untrusted",
+  "modelRequest": {
+    "snapshotId": "31000000-0000-4000-8000-000000000013",
+    "contextSourceDigest": "1313131313131313131313131313131313131313131313131313131313131313",
+    "model": {
+      "modelId": "model.enterprise.general",
+      "modelRevision": "1414141414141414141414141414141414141414141414141414141414141414",
+      "configurationRevision": "1515151515151515151515151515151515151515151515151515151515151515",
+      "runtimeRegistryGeneration": "1616161616161616161616161616161616161616161616161616161616161616"
+    },
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Untrusted identity input."
+          }
+        ]
+      }
+    ],
+    "tools": [],
+    "maxOutputTokens": 128
+  },
+  "admission": {
+    "type": "development_synthetic",
+    "externalTarget": "provider.deepseek.development",
+    "syntheticCaseId": "synthetic.self.declared.identity",
+    "syntheticDataDigest": "1717171717171717171717171717171717171717171717171717171717171717"
+  },
+  "timeoutPolicy": {
+    "providerRequestDeadlineAt": "2026-07-30T12:10:00Z",
+    "providerStreamIdleTimeoutMillis": 30000
+  }
+}

@@ -1,0 +1,48 @@
+# ============================================================================
+# RoboThree 工作空间 — 根级 .gitignore
+# ----------------------------------------------------------------------------
+# 本仓库只对外暴露:
+#   - RoboThree_workspace/                  产品实现 + 测试 + 交付
+#   - robothree-agent-research/             源码研究 + ADR + schemas
+#   - 根元文件:  CLAUDE.md / AGENTS.md / README.md / .claude/
+#
+# 其余一律不入版本控制:
+#   - 用户私人材料 (备注文件/, pm-briefing/, 讨论区/, 结论.md)
+#   - 一次性产物 (deliverables/, qa-reports/, prototype/, 原型文件/)
+#   - 本地工具链 (.DS_Store, .vscode/, .workbuddy/, node_modules/, .pnpm-store/)
+#   - 研究快照 (robothree-agent-research/sources/)
+#   - 机密防御 (.env, *.pem, *.key 等)
+# ============================================================================
+
+# ---- 1. 用户私人 / 备用材料 ----
+备注文件/
+pm-briefing/
+讨论区/
+结论.md
+
+# ---- 2. 一次性产物 / 内部归档 ----
+deliverables/
+qa-reports/
+prototype/
+原型文件/
+
+# ---- 3. 本地工具链 / 编辑器 / OS ----
+.DS_Store
+.vscode/
+.workbuddy/
+node_modules/
+.pnpm-store/
+
+# ---- 4. 研究快照：第三方上游 git 镜像（体积 344MB、部分 LICENSE 不允许再分发） ----
+robothree-agent-research/sources/
+
+# ---- 5. 机密（防御性配置，避免后续误推） ----
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# ---- 6. 防御：嵌套 .git（sources/ 已覆盖；本行仅作兜底） ----
+**/.git

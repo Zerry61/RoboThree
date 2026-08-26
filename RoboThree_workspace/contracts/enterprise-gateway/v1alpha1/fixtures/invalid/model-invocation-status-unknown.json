@@ -1,0 +1,15 @@
+{
+  "contractVersion": "v1alpha1",
+  "invocationId": "31000000-0000-4000-8000-000000000051",
+  "clientRequestId": "31000000-0000-4000-8000-000000000052",
+  "requestDigest": "5151515151515151515151515151515151515151515151515151515151515151",
+  "modelId": "model.deepseek.development",
+  "modelRevision": "5252525252525252525252525252525252525252525252525252525252525252",
+  "configurationRevision": "5353535353535353535353535353535353535353535353535353535353535353",
+  "runtimeRegistryGeneration": "5454545454545454545454545454545454545454545454545454545454545454",
+  "status": "unknown",
+  "statusRevision": 1,
+  "createdAt": "2026-07-30T12:00:00Z",
+  "lastDurableEventSequence": 1,
+  "durableCursor": "model-invocation:opaque:invalid"
+}

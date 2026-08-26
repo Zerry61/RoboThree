@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://robothree.local/contracts/enterprise-gateway/v1alpha1/token.schema.json",
+  "title": "RoboThree Enterprise Access Token Issuance",
+  "oneOf": [
+    { "$ref": "#/$defs/issueAccessTokenRequest" },
+    { "$ref": "#/$defs/tokenResult" }
+  ],
+  "$defs": {
+    "issueAccessTokenRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "contractVersion",
+        "verifiedIdentityId",
+        "clientInstanceId",
+        "deviceProof"
+      ],
+      "properties": {
+        "type": { "const": "issue_access_token_request" },
+        "contractVersion": { "const": "v1alpha1" },
+        "verifiedIdentityId": { "type": "string", "format": "uuid" },
+        "clientInstanceId": { "type": "string", "format": "uuid" },
+        "deviceProof": {
+          "$ref": "./device-challenge.schema.json#/$defs/deviceProof"
+        }
+      }
+    },
+    "tokenResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "contractVersion",
+        "tokenType",
+        "accessToken",
+        "expiresAt"
+      ],
+      "properties": {
+        "type": { "const": "token_result" },
+        "contractVersion": { "const": "v1alpha1" },
+        "tokenType": { "const": "Bearer" },
+        "accessToken": { "type": "string", "minLength": 32, "maxLength": 8192 },
+        "expiresAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

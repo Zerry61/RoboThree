@@ -1,0 +1,11 @@
+{
+  "kind": "model",
+  "id": "model.enterprise-001",
+  "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "capabilities": ["text", "streaming", "tool_calling"],
+  "gatewayEndpoint": "enterprise.model-gateway",
+  "credentialAvailable": true,
+  "enabled": true,
+  "fixedPermissions": ["model.use"]
+}

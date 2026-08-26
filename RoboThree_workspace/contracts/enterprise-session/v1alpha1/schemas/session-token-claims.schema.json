@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://robothree.local/contracts/enterprise-session/v1alpha1/schemas/session-token-claims.schema.json",
+  "title": "RoboThree Enterprise Session Token Claims",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "claimsProfile", "issuer", "audience", "enterpriseId", "userId", "deviceId",
+    "clientInstanceId", "tokenId", "issuedAt", "expiresAt", "permissions",
+    "sessionAssertionDigest", "deviceTrustDecisionDigest", "compatibilityRevision",
+    "sourceDecisionDigest"
+  ],
+  "properties": {
+    "claimsProfile": { "const": "eipc.session-token.v1" },
+    "issuer": { "$ref": "common.schema.json#/$defs/identityId" },
+    "audience": { "$ref": "common.schema.json#/$defs/audience" },
+    "enterpriseId": { "$ref": "common.schema.json#/$defs/identityId" },
+    "userId": { "$ref": "common.schema.json#/$defs/identityId" },
+    "deviceId": { "$ref": "common.schema.json#/$defs/identityId" },
+    "clientInstanceId": { "$ref": "common.schema.json#/$defs/uuid" },
+    "tokenId": { "$ref": "common.schema.json#/$defs/uuid" },
+    "issuedAt": { "$ref": "common.schema.json#/$defs/timestamp" },
+    "expiresAt": { "$ref": "common.schema.json#/$defs/timestamp" },
+    "permissions": { "$ref": "common.schema.json#/$defs/requiredPermissions" },
+    "sessionAssertionDigest": { "$ref": "common.schema.json#/$defs/digest" },
+    "deviceTrustDecisionDigest": { "$ref": "common.schema.json#/$defs/digest" },
+    "compatibilityRevision": { "$ref": "common.schema.json#/$defs/revision" },
+    "sourceDecisionDigest": { "$ref": "common.schema.json#/$defs/digest" }
+  }
+}

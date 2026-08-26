@@ -1,0 +1,11 @@
+{
+  "contractVersion": "v1alpha1",
+  "centralVersion": "0.0.0-cgf.1.0-repair.1",
+  "supportedContractVersions": ["v1alpha1"],
+  "minimumDesktopVersion": "0.0.0-dcf.1.0",
+  "minimumCoreVersion": "0.0.0-dcf.1.0",
+  "features": [],
+  "maintenanceStatus": "available",
+  "configurationSchemaVersions": ["v1alpha1"],
+  "unexpected": true
+}

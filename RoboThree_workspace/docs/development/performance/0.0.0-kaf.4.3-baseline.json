@@ -1,0 +1,121 @@
+{
+  "schemaVersion": "robothree.performance.bundle.v1",
+  "generatedAt": "2026-07-23T06:16:03.698Z",
+  "version": "0.0.0-kaf.4.3",
+  "environment": {
+    "hardware": "Apple M3; 8 logical CPUs; 17179869184 total memory bytes",
+    "os": "darwin 24.4.0",
+    "node": "v24.13.0",
+    "pnpm": "11.11.0",
+    "sqlite": "3.50.4; WAL; busy_timeout=5000; synchronous=FULL"
+  },
+  "measurements": [
+    {
+      "name": "task.reducer",
+      "category": "pure",
+      "samples": 100,
+      "iterationsPerSample": 10,
+      "p50Ms": 0.0087,
+      "p95Ms": 0.01575,
+      "p99Ms": 0.017125,
+      "operationsPerSecond": 99171.983
+    },
+    {
+      "name": "authorization.evaluate",
+      "category": "pure",
+      "samples": 100,
+      "iterationsPerSample": 10,
+      "p50Ms": 0.023683,
+      "p95Ms": 0.064733,
+      "p99Ms": 0.090733,
+      "operationsPerSecond": 35827.257
+    },
+    {
+      "name": "registry.resolveById",
+      "category": "pure",
+      "samples": 100,
+      "iterationsPerSample": 10,
+      "p50Ms": 0.000317,
+      "p95Ms": 0.000492,
+      "p99Ms": 0.000571,
+      "operationsPerSecond": 3206392.264
+    },
+    {
+      "name": "admission.acquire_release",
+      "category": "reliability",
+      "samples": 100,
+      "iterationsPerSample": 10,
+      "p50Ms": 0.000612,
+      "p95Ms": 0.001092,
+      "p99Ms": 0.002008,
+      "operationsPerSecond": 1384895.773
+    },
+    {
+      "name": "cancellation.fake_backend",
+      "category": "reliability",
+      "samples": 100,
+      "iterationsPerSample": 10,
+      "p50Ms": 0.003658,
+      "p95Ms": 0.005679,
+      "p99Ms": 0.013588,
+      "operationsPerSecond": 223451.004
+    },
+    {
+      "name": "sqlite.create_task_commit",
+      "category": "persistence",
+      "samples": 30,
+      "iterationsPerSample": 1,
+      "p50Ms": 0.18025,
+      "p95Ms": 0.328084,
+      "p99Ms": 3.489083,
+      "operationsPerSecond": 3292.738
+    },
+    {
+      "name": "confirmation.lookup_miss",
+      "category": "persistence",
+      "samples": 50,
+      "iterationsPerSample": 10,
+      "p50Ms": 0.003829,
+      "p95Ms": 0.004796,
+      "p99Ms": 0.006833,
+      "operationsPerSecond": 250957.151
+    },
+    {
+      "name": "checkpoint.tail_replay_10000",
+      "category": "recovery",
+      "samples": 20,
+      "iterationsPerSample": 1,
+      "p50Ms": 0.107792,
+      "p95Ms": 0.144791,
+      "p99Ms": 1.430334,
+      "operationsPerSecond": 5791.922
+    },
+    {
+      "name": "outbox.empty_bounded_drain",
+      "category": "reliability",
+      "samples": 30,
+      "iterationsPerSample": 1,
+      "p50Ms": 0.016,
+      "p95Ms": 0.033625,
+      "p99Ms": 0.044167,
+      "operationsPerSecond": 51981.536
+    },
+    {
+      "name": "process_echo.ipc",
+      "category": "adapter",
+      "samples": 10,
+      "iterationsPerSample": 1,
+      "p50Ms": 0.171583,
+      "p95Ms": 0.207209,
+      "p99Ms": 0.207209,
+      "operationsPerSecond": 5774.225
+    }
+  ],
+  "structuralStress": {
+    "admission": "16 active plus 256 queued plus typed overflow; 256 queued cancellations return to zero",
+    "retry": "8 concurrent retry operations; exactly 3 attempts; at most 8 timers pending",
+    "stream": "100000 deltas; subscriber buffer remains 64; disconnect returns total buffered to zero",
+    "recovery": "10000-event tail replay and 20 SQLite restart/preflight cycles",
+    "sqliteTuningChanged": false
+  }
+}

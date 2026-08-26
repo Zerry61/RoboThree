@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://robothree.local/contracts/enterprise-session/v1alpha1/schemas/common.schema.json",
+  "title": "RoboThree Enterprise Session Common Types",
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "identityId": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 160,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "revision": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "verifiedIdentityHandle": {
+      "type": "string",
+      "minLength": 32,
+      "maxLength": 512,
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "audience": {
+      "const": "robothree.enterprise-gateway"
+    },
+    "permission": {
+      "enum": [
+        "configuration.read",
+        "model.use",
+        "tool.use",
+        "agent.use",
+        "skill.use",
+        "knowledge.use",
+        "personal_model.configure"
+      ]
+    },
+    "requiredPermissions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/permission" }
+    },
+    "deviceProof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["challengeId", "deviceKeyId", "algorithm", "signature", "signedAt"],
+      "properties": {
+        "challengeId": { "$ref": "#/$defs/uuid" },
+        "deviceKeyId": { "$ref": "#/$defs/identityId" },
+        "algorithm": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 32,
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]+$"
+        },
+        "signature": {
+          "type": "string",
+          "minLength": 32,
+          "maxLength": 8192,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "signedAt": { "$ref": "#/$defs/timestamp" }
+      }
+    }
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://robothree.local/contracts/enterprise-gateway/v1alpha1/error.schema.json",
+  "title": "Enterprise Gateway Error",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contractVersion",
+    "code",
+    "category",
+    "retryable",
+    "safeSummary",
+    "correlationId"
+  ],
+  "properties": {
+    "contractVersion": { "const": "v1alpha1" },
+    "code": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$"
+    },
+    "category": {
+      "enum": [
+        "validation",
+        "authentication",
+        "authorization",
+        "compatibility",
+        "availability",
+        "rate_limit",
+        "timeout",
+        "cancelled",
+        "conflict",
+        "unknown",
+        "uncertain",
+        "internal"
+      ]
+    },
+    "retryable": { "type": "boolean" },
+    "retryAfterSeconds": { "type": "integer", "minimum": 0, "maximum": 86400 },
+    "safeSummary": { "type": "string", "maxLength": 16384 },
+    "correlationId": { "type": "string", "format": "uuid" }
+  }
+}
