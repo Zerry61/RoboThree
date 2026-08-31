@@ -15,32 +15,20 @@ export type PrimaryNavigationItem = {
 export const primaryNavigationItems = Object.freeze([
   {
     key: "workbench",
-    label: "工作台",
+    label: "新建任务",
     routeName: "workbench",
-    icon: "W",
-  },
-  {
-    key: "tasks",
-    label: "任务",
-    routeName: "tasks",
-    icon: "T",
+    icon: "+",
   },
   {
     key: "intelligence",
     label: "智能中心",
     routeName: "intelligence",
-    icon: "I",
+    icon: "◇",
   },
   {
     key: "knowledge",
     label: "知识中心",
     routeName: "knowledge",
-    icon: "K",
-  },
-  {
-    key: "settings",
-    label: "设置",
-    routeName: "settings",
-    icon: "S",
+    icon: "▤",
   },
 ] satisfies readonly PrimaryNavigationItem[]);

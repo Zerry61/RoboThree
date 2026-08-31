@@ -6,8 +6,8 @@ import {
   type ProviderNeutralMessage,
   type TaskCapabilityLock,
 } from "@robothree/contracts";
-import type { ReadableTaskRuntimeSelection } from
-  "@robothree/contracts/runtime-selection/v1alpha2";
+import type { ReadableTaskRuntimeSelectionV1Alpha4 } from
+  "@robothree/contracts/runtime-selection/v1alpha4";
 
 import { sha256CanonicalJson } from "../persistence/digest.js";
 import {
@@ -19,7 +19,7 @@ import type { ToolSchemaCandidate } from "./context-types.js";
 
 export type DocumentToolContextCandidateInput = Readonly<{
   snapshotId: string;
-  runtimeSelection: ReadableTaskRuntimeSelection;
+  runtimeSelection: ReadableTaskRuntimeSelectionV1Alpha4;
   locks: readonly TaskCapabilityLock[];
   authorization: Readonly<{
     outcome: "allowed" | "denied";

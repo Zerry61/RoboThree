@@ -8,7 +8,7 @@ import {
 const timestamp = "2026-08-16T00:00:00.000Z";
 
 describe("DFE-2B task list model", () => {
-  it("builds a user-facing task list from sessions and latest task status", () => {
+  it("builds one user-facing row per Task while retaining its Session", () => {
     const view = buildTaskListView({
       sessions: [
         session("session:one", "Write report", "2026-08-16T01:00:00.000Z"),
@@ -19,30 +19,34 @@ describe("DFE-2B task list model", () => {
         task("task:new", "session:one", "running", 2, "2026-08-16T03:00:00.000Z"),
         task("task:two", "session:two", "waiting_confirmation", 1, "2026-08-16T02:30:00.000Z"),
       ],
-      pinnedSessionIds: new Set(["session:two"]),
+      pinnedTaskIds: new Set(["task:two"]),
       searchQuery: "",
       statusFilter: "all",
     });
 
     expect(view.summary).toMatchObject({
-      total: 2,
+      total: 3,
       active: 1,
       attention: 1,
+      completed: 1,
     });
     expect(view.items.map((item) => item.title)).toEqual([
       "Review plan",
+      "Write report",
       "Write report",
     ]);
     expect(view.items[0]?.statusLabel).toBe("等待确认");
     expect(view.items[1]?.statusLabel).toBe("执行中");
     expect(view.items[1]?.canDelete).toBe(false);
+    expect(view.items[2]?.task?.taskId).toBe("task:old");
+    expect(view.items[2]?.canDelete).toBe(false);
   });
 
   it("filters by search and status, and exposes delete gates", () => {
     const completed = buildTaskListView({
       sessions: [session("session:one", "Write report")],
       tasks: [task("task:done", "session:one", "completed")],
-      pinnedSessionIds: new Set(),
+      pinnedTaskIds: new Set(),
       searchQuery: "report",
       statusFilter: "completed",
     });
@@ -52,7 +56,7 @@ describe("DFE-2B task list model", () => {
     const filtered = buildTaskListView({
       sessions: [session("session:one", "Write report")],
       tasks: [task("task:done", "session:one", "completed")],
-      pinnedSessionIds: new Set(),
+      pinnedTaskIds: new Set(),
       searchQuery: "missing",
       statusFilter: "completed",
     });

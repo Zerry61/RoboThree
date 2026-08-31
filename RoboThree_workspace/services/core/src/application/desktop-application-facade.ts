@@ -1,3 +1,5 @@
+import { createHash, randomUUID } from "node:crypto";
+
 import {
   AgentProjectionSchema,
   DeleteArtifactSourceFileCommandSchema,
@@ -56,6 +58,7 @@ import {
   SubmitTurnCommandV1Alpha2Schema,
   SubmitTurnReceiptSchema,
   SubmitTurnReceiptV1Alpha2Schema,
+  SubmitTurnReceiptV1Alpha3Schema,
   SubmitTurnStatusQuerySchema,
   SubmitTurnStatusQueryV1Alpha2Schema,
   WorkspaceGrantProjectionSchema,
@@ -123,6 +126,104 @@ import {
   type UserConfirmationProjection,
   type WorkspaceGrantProjection,
 } from "@robothree/contracts";
+import {
+  CompatibilityProjectionV1Alpha4Schema,
+  CompatibilityQueryV1Alpha4Schema,
+  DesktopErrorEnvelopeV1Alpha4Schema,
+  SubmitTurnCommandV1Alpha4Schema,
+  SubmitTurnReceiptV1Alpha4Schema,
+  SubmitTurnStatusQueryV1Alpha4Schema,
+  type CompatibilityProjectionV1Alpha4,
+  type CompatibilityQueryV1Alpha4,
+  type DesktopErrorEnvelopeV1Alpha4,
+  type SubmitTurnCommandV1Alpha4,
+  type SubmitTurnReceiptV1Alpha4,
+  type SubmitTurnStatusQueryV1Alpha4,
+} from "@robothree/contracts/desktop-local/v1alpha4";
+import {
+  CompatibilityProjectionV1Alpha5Schema,
+  CompatibilityQueryV1Alpha5Schema,
+  DesktopErrorEnvelopeV1Alpha5Schema,
+  GetReasoningModePreferenceQueryV1Alpha5Schema,
+  PreviewReasoningModeQueryV1Alpha5Schema,
+  ReasoningModePreferenceProjectionV1Alpha5Schema,
+  ReasoningModePreferenceReceiptV1Alpha5Schema,
+  ReasoningModePreviewV1Alpha5Schema,
+  SubmitTurnCommandV1Alpha5Schema,
+  SubmitTurnReceiptV1Alpha5Schema,
+  SubmitTurnStatusQueryV1Alpha5Schema,
+  UpdateReasoningModePreferenceCommandV1Alpha5Schema,
+  type CompatibilityProjectionV1Alpha5,
+  type CompatibilityQueryV1Alpha5,
+  type DesktopErrorEnvelopeV1Alpha5,
+  type GetReasoningModePreferenceQueryV1Alpha5,
+  type PreviewReasoningModeQueryV1Alpha5,
+  type ReasoningModePreferenceProjectionV1Alpha5,
+  type ReasoningModePreferenceReceiptV1Alpha5,
+  type ReasoningModePreviewV1Alpha5,
+  type SubmitTurnCommandV1Alpha5,
+  type SubmitTurnReceiptV1Alpha5,
+  type SubmitTurnStatusQueryV1Alpha5,
+  type UpdateReasoningModePreferenceCommandV1Alpha5,
+} from "@robothree/contracts/desktop-local/v1alpha5";
+import {
+  GetTaskReasoningModeQueryV1Alpha1Schema,
+  TaskReasoningErrorEnvelopeV1Alpha1Schema,
+  type GetTaskReasoningModeQueryV1Alpha1,
+  type TaskReasoningErrorEnvelopeV1Alpha1,
+  type TaskReasoningModeProjectionV1Alpha1,
+} from "@robothree/contracts/desktop-local/task-reasoning/v1alpha1";
+import {
+  GetPersonalModelQueryV1Alpha1Schema,
+  ListPersonalModelsQueryV1Alpha1Schema,
+  PERSONAL_MODEL_MANAGEMENT_CONTRACT_VERSION_V1ALPHA1,
+  PersonalModelManagementCompatibilityQueryV1Alpha1Schema,
+  PersonalModelManagementErrorEnvelopeV1Alpha1Schema,
+  type GetPersonalModelQueryV1Alpha1,
+  type ListPersonalModelsQueryV1Alpha1,
+  type PersonalModelManagementCompatibilityProjectionV1Alpha1,
+  type PersonalModelManagementCompatibilityQueryV1Alpha1,
+  type PersonalModelManagementErrorEnvelopeV1Alpha1,
+  type PersonalModelPageV1Alpha1,
+  type PersonalModelSafeProjectionV1Alpha1,
+} from "@robothree/contracts/desktop-local/personal-model-management/v1alpha1";
+import {
+  CreatePersonalModelCommandV1Alpha2Schema,
+  DeletePersonalModelCommandV1Alpha2Schema,
+  GetPersonalModelQueryV1Alpha2Schema,
+  ListPersonalModelsQueryV1Alpha2Schema,
+  PERSONAL_MODEL_MANAGEMENT_CONTRACT_VERSION_V1ALPHA2,
+  PersonalModelManagementCompatibilityProjectionV1Alpha2Schema,
+  PersonalModelManagementCompatibilityQueryV1Alpha2Schema,
+  PersonalModelManagementErrorEnvelopeV1Alpha2Schema,
+  PersonalModelPageV1Alpha2Schema,
+  PersonalModelSafeProjectionV1Alpha2Schema,
+  QueryPersonalModelOperationV1Alpha2Schema,
+  RevealPersonalModelKeyCommandV1Alpha2Schema,
+  UpdatePersonalModelCommandV1Alpha2Schema,
+  type PersonalModelManagementErrorEnvelopeV1Alpha2,
+} from "@robothree/contracts/desktop-local/personal-model-management/v1alpha2";
+import {
+  CreateRobotDraftCommandSchema,
+  GetMyRobotDraftQuerySchema,
+  ListMyRobotDraftsQuerySchema,
+  StartRobotDraftTestCommandSchema,
+  SubmitRobotDraftCommandSchema,
+  UpdateRobotDraftCommandSchema,
+  WithdrawRobotSubmissionCommandSchema,
+  type CreateRobotDraftCommand,
+  type BeginRobotDraftTestCommand,
+  type CompleteRobotDraftTestCommand,
+  type GetMyRobotDraftQuery,
+  type ListMyRobotDraftsQuery,
+  type RobotDraftDetail,
+  type RobotDraftPage,
+  type RobotLifecycleMutationReceipt,
+  type StartRobotDraftTestCommand,
+  type SubmitRobotDraftCommand,
+  type UpdateRobotDraftCommand,
+  type WithdrawRobotSubmissionCommand,
+} from "@robothree/contracts/agent-lifecycle/v1alpha1";
 
 import type { Clock } from "../ports/clock.js";
 import { CatalogQueryError } from "../ports/catalog-query.js";
@@ -144,9 +245,31 @@ import type { DesktopTaskProjectionService } from "./desktop-task-projection-ser
 import type { PreparedArtifactSourceFileDeletion } from "./desktop-task-projection-service.js";
 import type { DesktopTaskControlService } from "./desktop-task-control-service.js";
 import type { RuntimeCatalogProjectionService } from "./runtime-selection-service.js";
+import type { ReasoningModePreferenceService } from "./reasoning-mode-preference-service.js";
+import type { ReasoningModePreviewService } from "./reasoning-mode-preview-service.js";
+import type { TaskReasoningModeProjectionService } from
+  "./task-reasoning-mode-projection-service.js";
 import type {
-  SubmitTurnCoordinator,
-  SubmitTurnCoordinatorResult,
+  PersonalModelManagementReadErrorCode,
+  PersonalModelManagementReadService,
+} from "./personal-model-management-read-service.js";
+import type {
+  PersonalModelManagementCommandErrorCode,
+  PersonalModelManagementCommandService,
+} from "./personal-model-management-command-service.js";
+
+type AgentLifecyclePort = Readonly<{
+  listDrafts(input: ListMyRobotDraftsQuery): Promise<RobotDraftPage>;
+  getDraft(input: GetMyRobotDraftQuery): Promise<RobotDraftDetail>;
+  execute(command: CreateRobotDraftCommand | UpdateRobotDraftCommand
+    | SubmitRobotDraftCommand | WithdrawRobotSubmissionCommand
+    | BeginRobotDraftTestCommand | CompleteRobotDraftTestCommand
+  ): Promise<RobotLifecycleMutationReceipt>;
+}>;
+import {
+  projectSubmitTurnReceiptV1Alpha4,
+  type SubmitTurnCoordinator,
+  type SubmitTurnCoordinatorResult,
 } from "./submit-turn-coordinator.js";
 import type { WorkspaceGrantService } from "./workspace-grant-service.js";
 
@@ -157,6 +280,26 @@ export type DesktopApplicationResult<T> =
 export type DesktopApplicationResultV1Alpha2<T> =
   | Readonly<{ ok: true; value: T }>
   | Readonly<{ ok: false; error: DesktopErrorEnvelopeV1Alpha2 }>;
+
+export type DesktopApplicationResultV1Alpha4<T> =
+  | Readonly<{ ok: true; value: T }>
+  | Readonly<{ ok: false; error: DesktopErrorEnvelopeV1Alpha4 }>;
+
+export type DesktopApplicationResultV1Alpha5<T> =
+  | Readonly<{ ok: true; value: T }>
+  | Readonly<{ ok: false; error: DesktopErrorEnvelopeV1Alpha5 }>;
+
+export type DesktopTaskReasoningApplicationResult<T> =
+  | Readonly<{ ok: true; value: T }>
+  | Readonly<{ ok: false; error: TaskReasoningErrorEnvelopeV1Alpha1 }>;
+
+export type DesktopPersonalModelManagementApplicationResult<T> =
+  | Readonly<{ ok: true; value: T }>
+  | Readonly<{ ok: false; error: PersonalModelManagementErrorEnvelopeV1Alpha1 }>;
+
+export type DesktopPersonalModelManagementApplicationResultV1Alpha2<T> =
+  | Readonly<{ ok: true; value: T }>
+  | Readonly<{ ok: false; error: PersonalModelManagementErrorEnvelopeV1Alpha2 }>;
 
 export type DesktopDurableEventPage = Readonly<{
   events: readonly DurableDesktopEventEnvelope[];
@@ -193,6 +336,18 @@ export class DesktopApplicationFacade {
   readonly #workspaceReveal: WorkspaceRevealAuthorityServicePort | undefined;
   readonly #robotCatalog: RobotCatalogQuery | undefined;
   readonly #toolCatalog: ToolCatalogQuery | undefined;
+  readonly #r2dDesktopV1Alpha4Enabled: boolean;
+  readonly #dfi541MaxEnabled: boolean;
+  readonly #dfi541RuntimeReady: () => boolean;
+  readonly #reasoningPreview: ReasoningModePreviewService | undefined;
+  readonly #reasoningPreferences: ReasoningModePreferenceService | undefined;
+  readonly #taskReasoning: TaskReasoningModeProjectionService | undefined;
+  readonly #personalModelManagement: PersonalModelManagementReadService | undefined;
+  readonly #personalModelCommands: PersonalModelManagementCommandService | undefined;
+  readonly #agentLifecycle: AgentLifecyclePort | undefined;
+  readonly #monitoredRobotTestTaskIds = new Set<string>();
+  readonly #registerLifecycleDraft: ((detail: RobotDraftDetail) => void) | undefined;
+  readonly #refreshPublishedAgents: (() => Promise<void>) | undefined;
 
   constructor(input: {
     clock: Clock;
@@ -214,6 +369,17 @@ export class DesktopApplicationFacade {
     workspaceReveal?: WorkspaceRevealAuthorityServicePort;
     robotCatalog?: RobotCatalogQuery;
     toolCatalog?: ToolCatalogQuery;
+    r2dDesktopV1Alpha4Enabled?: boolean;
+    dfi541MaxEnabled?: boolean;
+    dfi541RuntimeReady?: () => boolean;
+    reasoningPreview?: ReasoningModePreviewService;
+    reasoningPreferences?: ReasoningModePreferenceService;
+    taskReasoning?: TaskReasoningModeProjectionService;
+    personalModelManagement?: PersonalModelManagementReadService;
+    personalModelCommands?: PersonalModelManagementCommandService;
+    agentLifecycle?: AgentLifecyclePort;
+    registerLifecycleDraft?: (detail: RobotDraftDetail) => void;
+    refreshPublishedAgents?: () => Promise<void>;
   }) {
     this.#clock = input.clock;
     this.#runtimeInstanceId = input.runtimeInstanceId;
@@ -235,6 +401,216 @@ export class DesktopApplicationFacade {
     this.#workspaceReveal = input.workspaceReveal;
     this.#robotCatalog = input.robotCatalog;
     this.#toolCatalog = input.toolCatalog;
+    this.#r2dDesktopV1Alpha4Enabled = input.r2dDesktopV1Alpha4Enabled ?? false;
+    this.#dfi541MaxEnabled = input.dfi541MaxEnabled ?? false;
+    this.#dfi541RuntimeReady = input.dfi541RuntimeReady ?? (() => false);
+    this.#reasoningPreview = input.reasoningPreview;
+    this.#reasoningPreferences = input.reasoningPreferences;
+    this.#taskReasoning = input.taskReasoning;
+    this.#personalModelManagement = input.personalModelManagement;
+    this.#personalModelCommands = input.personalModelCommands;
+    this.#agentLifecycle = input.agentLifecycle;
+    this.#registerLifecycleDraft = input.registerLifecycleDraft;
+    this.#refreshPublishedAgents = input.refreshPublishedAgents;
+    if (this.#dfi541MaxEnabled
+      && (this.#reasoningPreview === undefined || this.#reasoningPreferences === undefined)) {
+      throw new Error("DFI-5.4.2 enabled graph requires Preview and Preference services");
+    }
+  }
+
+  async getTaskReasoningModeV1Alpha1(
+    input: GetTaskReasoningModeQueryV1Alpha1,
+  ): Promise<DesktopTaskReasoningApplicationResult<TaskReasoningModeProjectionV1Alpha1>> {
+    const parsed = GetTaskReasoningModeQueryV1Alpha1Schema.safeParse(input);
+    if (!parsed.success) {
+      return failTaskReasoning(
+        "contract.invalid",
+        "Task reasoning query is invalid.",
+        input,
+        "validation",
+      );
+    }
+    if (this.#taskReasoning === undefined) {
+      return failTaskReasoning(
+        "contract.feature_unavailable",
+        "Task reasoning projection is unavailable.",
+        input,
+        "availability",
+        true,
+      );
+    }
+    const result = await this.#taskReasoning.get(parsed.data);
+    if (result.ok) return result;
+    return failTaskReasoning(
+      result.code,
+      result.code === "task_reasoning.not_found"
+        ? "Task reasoning summary was not found."
+        : "Task reasoning summary could not be verified.",
+      input,
+      result.code === "task_reasoning.not_found" ? "availability" : "internal",
+    );
+  }
+
+  async personalModelManagementCompatibilityV1Alpha1(
+    input: PersonalModelManagementCompatibilityQueryV1Alpha1,
+  ): Promise<DesktopPersonalModelManagementApplicationResult<
+    PersonalModelManagementCompatibilityProjectionV1Alpha1
+  >> {
+    const parsed = PersonalModelManagementCompatibilityQueryV1Alpha1Schema.safeParse(input);
+    if (!parsed.success || !parsed.data.supportedContractVersions.includes(
+      PERSONAL_MODEL_MANAGEMENT_CONTRACT_VERSION_V1ALPHA1,
+    )) {
+      return failPersonalModelManagement(
+        "personal_model.contract_invalid",
+        "Personal Model compatibility request is invalid.",
+        input,
+        "compatibility",
+      );
+    }
+    if (this.#personalModelManagement === undefined) {
+      return failPersonalModelManagement(
+        "personal_model.feature_unavailable",
+        "Personal Model catalog is unavailable in the current runtime.",
+        parsed.data,
+        "availability",
+        true,
+      );
+    }
+    try {
+      return {
+        ok: true,
+        value: await this.#personalModelManagement.compatibility(this.#runtimeInstanceId),
+      };
+    } catch {
+      return personalModelManagementReadFailure("internal", parsed.data);
+    }
+  }
+
+  async listPersonalModelsV1Alpha1(
+    input: ListPersonalModelsQueryV1Alpha1,
+  ): Promise<DesktopPersonalModelManagementApplicationResult<PersonalModelPageV1Alpha1>> {
+    const parsed = ListPersonalModelsQueryV1Alpha1Schema.safeParse(input);
+    if (!parsed.success) return invalidPersonalModelManagement(input);
+    if (this.#personalModelManagement === undefined) {
+      return unavailablePersonalModelManagement(parsed.data);
+    }
+    try {
+      const result = await this.#personalModelManagement.list({
+        limit: parsed.data.limit,
+        ...(parsed.data.cursor === undefined ? {} : { cursor: parsed.data.cursor }),
+      });
+      return result.ok
+        ? { ok: true, value: result.value }
+        : personalModelManagementReadFailure(result.code, parsed.data);
+    } catch {
+      return personalModelManagementReadFailure("internal", parsed.data);
+    }
+  }
+
+  async getPersonalModelV1Alpha1(
+    input: GetPersonalModelQueryV1Alpha1,
+  ): Promise<DesktopPersonalModelManagementApplicationResult<
+    PersonalModelSafeProjectionV1Alpha1
+  >> {
+    const parsed = GetPersonalModelQueryV1Alpha1Schema.safeParse(input);
+    if (!parsed.success) return invalidPersonalModelManagement(input);
+    if (this.#personalModelManagement === undefined) {
+      return unavailablePersonalModelManagement(parsed.data);
+    }
+    try {
+      const result = await this.#personalModelManagement.get(parsed.data.personalModelId);
+      return result.ok
+        ? { ok: true, value: result.value }
+        : personalModelManagementReadFailure(result.code, parsed.data);
+    } catch {
+      return personalModelManagementReadFailure("internal", parsed.data);
+    }
+  }
+
+  async personalModelManagementCompatibilityV1Alpha2(input: unknown) {
+    const parsed = PersonalModelManagementCompatibilityQueryV1Alpha2Schema.safeParse(input);
+    if (!parsed.success || !parsed.data.supportedContractVersions.includes(
+      PERSONAL_MODEL_MANAGEMENT_CONTRACT_VERSION_V1ALPHA2,
+    )) return invalidPersonalModelManagementV1Alpha2(input);
+    if (this.#personalModelManagement === undefined) return unavailablePersonalModelManagementV1Alpha2(parsed.data);
+    try {
+      const value = await this.#personalModelManagement.compatibility(this.#runtimeInstanceId);
+      return { ok: true as const, value: PersonalModelManagementCompatibilityProjectionV1Alpha2Schema.parse({
+        ...value,
+        contractVersion: PERSONAL_MODEL_MANAGEMENT_CONTRACT_VERSION_V1ALPHA2,
+      }) };
+    } catch {
+      return failPersonalModelManagementV1Alpha2("personal_model.internal", "Personal Model compatibility could not be verified.", parsed.data, "internal");
+    }
+  }
+
+  async listPersonalModelsV1Alpha2(input: unknown) {
+    const parsed = ListPersonalModelsQueryV1Alpha2Schema.safeParse(input);
+    if (!parsed.success) return invalidPersonalModelManagementV1Alpha2(input);
+    if (this.#personalModelManagement === undefined) return unavailablePersonalModelManagementV1Alpha2(parsed.data);
+    const result = await this.#personalModelManagement.list({ limit: parsed.data.limit, ...(parsed.data.cursor === undefined ? {} : { cursor: parsed.data.cursor }) });
+    return result.ok
+      ? { ok: true as const, value: PersonalModelPageV1Alpha2Schema.parse({
+        ...result.value,
+        contractVersion: PERSONAL_MODEL_MANAGEMENT_CONTRACT_VERSION_V1ALPHA2,
+        items: result.value.items.map((item) => ({ ...item, contractVersion: PERSONAL_MODEL_MANAGEMENT_CONTRACT_VERSION_V1ALPHA2 })),
+      }) }
+      : personalModelManagementReadFailureV1Alpha2(result.code, parsed.data);
+  }
+
+  async getPersonalModelV1Alpha2(input: unknown) {
+    const parsed = GetPersonalModelQueryV1Alpha2Schema.safeParse(input);
+    if (!parsed.success) return invalidPersonalModelManagementV1Alpha2(input);
+    if (this.#personalModelManagement === undefined) return unavailablePersonalModelManagementV1Alpha2(parsed.data);
+    const result = await this.#personalModelManagement.get(parsed.data.personalModelId);
+    return result.ok
+      ? { ok: true as const, value: PersonalModelSafeProjectionV1Alpha2Schema.parse({ ...result.value, contractVersion: PERSONAL_MODEL_MANAGEMENT_CONTRACT_VERSION_V1ALPHA2 }) }
+      : personalModelManagementReadFailureV1Alpha2(result.code, parsed.data);
+  }
+
+  async createPersonalModelV1Alpha2(input: unknown) {
+    const parsed = CreatePersonalModelCommandV1Alpha2Schema.safeParse(input);
+    if (!parsed.success) return invalidPersonalModelManagementV1Alpha2(input);
+    return this.#runPersonalModelCommand(parsed.data, (service) => service.create(parsed.data));
+  }
+
+  async updatePersonalModelV1Alpha2(input: unknown) {
+    const parsed = UpdatePersonalModelCommandV1Alpha2Schema.safeParse(input);
+    if (!parsed.success) return invalidPersonalModelManagementV1Alpha2(input);
+    return this.#runPersonalModelCommand(parsed.data, (service) => service.update(parsed.data));
+  }
+
+  async deletePersonalModelV1Alpha2(input: unknown) {
+    const parsed = DeletePersonalModelCommandV1Alpha2Schema.safeParse(input);
+    if (!parsed.success) return invalidPersonalModelManagementV1Alpha2(input);
+    return this.#runPersonalModelCommand(parsed.data, (service) => service.delete(parsed.data));
+  }
+
+  async revealPersonalModelV1Alpha2(input: unknown) {
+    const parsed = RevealPersonalModelKeyCommandV1Alpha2Schema.safeParse(input);
+    if (!parsed.success) return invalidPersonalModelManagementV1Alpha2(input);
+    return this.#runPersonalModelCommand(parsed.data, (service) => service.reveal(parsed.data));
+  }
+
+  async queryPersonalModelOperationV1Alpha2(input: unknown) {
+    const parsed = QueryPersonalModelOperationV1Alpha2Schema.safeParse(input);
+    if (!parsed.success) return invalidPersonalModelManagementV1Alpha2(input);
+    return this.#runPersonalModelCommand(parsed.data, (service) => service.query(parsed.data));
+  }
+
+  async #runPersonalModelCommand<T>(
+    input: { correlationId?: string },
+    run: (service: PersonalModelManagementCommandService) => Promise<
+      { ok: true; value: T } | { ok: false; code: PersonalModelManagementCommandErrorCode }
+    >,
+  ): Promise<DesktopPersonalModelManagementApplicationResultV1Alpha2<T>> {
+    if (this.#personalModelCommands === undefined) return unavailablePersonalModelManagementV1Alpha2(input);
+    try {
+      const result = await run(this.#personalModelCommands);
+      return result.ok ? result : personalModelManagementCommandFailureV1Alpha2(result.code, input);
+    } catch {
+      return failPersonalModelManagementV1Alpha2("personal_model.internal", "Personal Model command could not be verified.", input, "internal");
+    }
   }
 
   get runtimeInstanceId(): string {
@@ -328,6 +704,151 @@ export class DesktopApplicationFacade {
     };
   }
 
+  compatibilityV1Alpha4(
+    input: CompatibilityQueryV1Alpha4,
+  ): DesktopApplicationResultV1Alpha4<CompatibilityProjectionV1Alpha4> {
+    const parsed = CompatibilityQueryV1Alpha4Schema.safeParse(input);
+    if (!parsed.success || !parsed.data.supportedContractVersions.includes("v1alpha4")) {
+      return failV1Alpha4(
+        "contract.unsupported_version",
+        "Desktop v1alpha4 is not supported by this request.",
+        input,
+        "compatibility",
+      );
+    }
+    return {
+      ok: true,
+      value: CompatibilityProjectionV1Alpha4Schema.parse({
+        contractVersion: "v1alpha4",
+        coreVersion: this.#coreVersion,
+        selectedContractVersion: "v1alpha4",
+        runtimeInstanceId: this.#runtimeInstanceId,
+        transportClientInstanceId: "00000000-0000-4000-8000-000000000000",
+        features: [{
+          feature: "r2d_submit_turn_default",
+          state: this.#r2dDesktopV1Alpha4Enabled ? "available" : "unavailable",
+          reasonCode: this.#r2dDesktopV1Alpha4Enabled
+            ? "ready"
+            : "production_gate_disabled",
+        }],
+      }),
+    };
+  }
+
+  compatibilityV1Alpha5(
+    input: CompatibilityQueryV1Alpha5,
+  ): DesktopApplicationResultV1Alpha5<CompatibilityProjectionV1Alpha5> {
+    const parsed = CompatibilityQueryV1Alpha5Schema.safeParse(input);
+    if (!parsed.success || !parsed.data.supportedContractVersions.includes("v1alpha5")) {
+      return failV1Alpha5(
+        "contract.unsupported_version",
+        "Desktop v1alpha5 is not supported by this request.",
+        input,
+        "compatibility",
+      );
+    }
+    return {
+      ok: true,
+      value: CompatibilityProjectionV1Alpha5Schema.parse({
+        contractVersion: "v1alpha5",
+        coreVersion: this.#coreVersion,
+        selectedContractVersion: "v1alpha5",
+        runtimeInstanceId: this.#runtimeInstanceId,
+        transportClientInstanceId: "00000000-0000-4000-8000-000000000000",
+        features: [{
+          feature: "max_reasoning_mode_core",
+          state: this.#dfi541MaxEnabled && this.#dfi541RuntimeReady()
+            ? "available" : "unavailable",
+          reasonCode: !this.#dfi541MaxEnabled
+            ? "production_gate_disabled"
+            : this.#dfi541RuntimeReady()
+              ? "ready"
+              : "runtime_dependencies_unavailable",
+        }],
+      }),
+    };
+  }
+
+  async previewReasoningModeV1Alpha5(
+    input: PreviewReasoningModeQueryV1Alpha5,
+  ): Promise<DesktopApplicationResultV1Alpha5<ReasoningModePreviewV1Alpha5>> {
+    const parsed = PreviewReasoningModeQueryV1Alpha5Schema.safeParse(input);
+    if (!parsed.success) return invalidV1Alpha5(input);
+    if (!this.#dfi541MaxEnabled || this.#reasoningPreview === undefined) {
+      return unavailableV1Alpha5(input);
+    }
+    try {
+      const value = await this.#reasoningPreview.preview({
+        ...parsed.data,
+        contractVersion: "v1alpha3",
+      });
+      return { ok: true, value: ReasoningModePreviewV1Alpha5Schema.parse(value) };
+    } catch {
+      return failV1Alpha5(
+        "reasoning_profile_unavailable",
+        "Max reasoning support is unavailable.",
+        input,
+        "availability",
+      );
+    }
+  }
+
+  async getReasoningModePreferenceV1Alpha5(
+    input: GetReasoningModePreferenceQueryV1Alpha5,
+  ): Promise<DesktopApplicationResultV1Alpha5<ReasoningModePreferenceProjectionV1Alpha5>> {
+    const parsed = GetReasoningModePreferenceQueryV1Alpha5Schema.safeParse(input);
+    if (!parsed.success) return invalidV1Alpha5(input);
+    if (!this.#dfi541MaxEnabled || this.#reasoningPreferences === undefined) {
+      return unavailableV1Alpha5(input);
+    }
+    try {
+      return {
+        ok: true,
+        value: ReasoningModePreferenceProjectionV1Alpha5Schema.parse(
+          await this.#reasoningPreferences.get(parsed.data),
+        ),
+      };
+    } catch {
+      return failV1Alpha5(
+        "reasoning_mode.preference_unavailable",
+        "Reasoning preference is unavailable.",
+        input,
+        "availability",
+      );
+    }
+  }
+
+  async updateReasoningModePreferenceV1Alpha5(
+    input: UpdateReasoningModePreferenceCommandV1Alpha5,
+  ): Promise<DesktopApplicationResultV1Alpha5<ReasoningModePreferenceReceiptV1Alpha5>> {
+    const parsed = UpdateReasoningModePreferenceCommandV1Alpha5Schema.safeParse(input);
+    if (!parsed.success) return invalidV1Alpha5(input);
+    if (!this.#dfi541MaxEnabled || this.#reasoningPreferences === undefined) {
+      return unavailableV1Alpha5(input);
+    }
+    const result = await this.#reasoningPreferences.update({
+      ...parsed.data,
+      contractVersion: "v1alpha3",
+    });
+    if (!result.ok) {
+      return failV1Alpha5(
+        result.error.code,
+        result.error.code === "reasoning_mode.preference_conflict"
+          ? "Reasoning preference changed concurrently."
+          : "Reasoning preference is unavailable.",
+        input,
+        result.error.code === "reasoning_mode.preference_conflict" ? "conflict" : "availability",
+      );
+    }
+    return {
+      ok: true,
+      value: ReasoningModePreferenceReceiptV1Alpha5Schema.parse({
+        ...result.receipt,
+        contractVersion: "v1alpha5",
+      }),
+    };
+  }
+
   async listWorkspaceEntriesV1Alpha2(
     input: ListWorkspaceEntriesQuery,
     signal?: AbortSignal,
@@ -352,6 +873,241 @@ export class DesktopApplicationFacade {
     }
   }
 
+  async listMyRobotDraftsV1Alpha1(input: ListMyRobotDraftsQuery) {
+    const parsed = ListMyRobotDraftsQuerySchema.safeParse(input);
+    if (!parsed.success) return agentLifecycleFailure("agentlifecycle.invalid_request");
+    if (this.#agentLifecycle === undefined) {
+      return agentLifecycleFailure("agentlifecycle.service_unavailable");
+    }
+    try {
+      const value = await this.#agentLifecycle.listDrafts(parsed.data);
+      if (value.items.some((item) => item.testState === "running")) {
+        void this.resumeRobotDraftTestsV1Alpha1();
+      }
+      return { ok: true as const, value };
+    } catch (error) {
+      return agentLifecycleFailure(agentLifecycleErrorCode(error));
+    }
+  }
+
+  async getMyRobotDraftV1Alpha1(input: GetMyRobotDraftQuery) {
+    const parsed = GetMyRobotDraftQuerySchema.safeParse(input);
+    if (!parsed.success) return agentLifecycleFailure("agentlifecycle.invalid_request");
+    if (this.#agentLifecycle === undefined) {
+      return agentLifecycleFailure("agentlifecycle.service_unavailable");
+    }
+    try {
+      const value = await this.#agentLifecycle.getDraft(parsed.data);
+      if (value.testFact?.state === "running" && value.testFact.taskId !== undefined) {
+        this.#startRobotDraftTestMonitor({
+          correlationId: parsed.data.correlationId,
+          robotId: value.robotId,
+          expectedDraftRevision: value.testFact.draftRevision,
+          taskId: value.testFact.taskId,
+        });
+      }
+      return { ok: true as const, value };
+    } catch (error) {
+      return agentLifecycleFailure(agentLifecycleErrorCode(error));
+    }
+  }
+
+  async createRobotDraftV1Alpha1(input: CreateRobotDraftCommand) {
+    return this.#executeAgentLifecycle(CreateRobotDraftCommandSchema, input);
+  }
+
+  async updateRobotDraftV1Alpha1(input: UpdateRobotDraftCommand) {
+    return this.#executeAgentLifecycle(UpdateRobotDraftCommandSchema, input);
+  }
+
+  async submitRobotDraftV1Alpha1(input: SubmitRobotDraftCommand) {
+    return this.#executeAgentLifecycle(SubmitRobotDraftCommandSchema, input);
+  }
+
+  async withdrawRobotSubmissionV1Alpha1(input: WithdrawRobotSubmissionCommand) {
+    return this.#executeAgentLifecycle(WithdrawRobotSubmissionCommandSchema, input);
+  }
+
+  async startRobotDraftTestV1Alpha1(input: StartRobotDraftTestCommand) {
+    const parsed = StartRobotDraftTestCommandSchema.safeParse(input);
+    if (!parsed.success || this.#agentLifecycle === undefined
+      || this.#registerLifecycleDraft === undefined) {
+      return agentLifecycleFailure(parsed.success
+        ? "agentlifecycle.service_unavailable"
+        : "agentlifecycle.invalid_request");
+    }
+    try {
+      const draft = await this.#agentLifecycle.getDraft({
+        contractVersion: "agent-lifecycle.v1alpha1",
+        kind: "get_my_robot_draft",
+        queryId: randomUUID(),
+        correlationId: parsed.data.correlationId,
+        robotId: parsed.data.robotId,
+      });
+      if (draft.draftRevision !== parsed.data.expectedDraftRevision) {
+        throw new Error("agentlifecycle.revision_conflict");
+      }
+      this.#registerLifecycleDraft(draft);
+      const clientInstanceId = lifecycleDerivedId(parsed.data.commandId, "client");
+      const createSessionResult = await this.createSession({
+        contractVersion: "v1alpha1",
+        commandId: lifecycleDerivedId(parsed.data.commandId, "session-command"),
+        correlationId: parsed.data.correlationId,
+        clientInstanceId,
+        type: "create_session",
+        title: `测试：${draft.name}`,
+      });
+      if (!createSessionResult.ok) throw new Error("agentlifecycle.resource_unavailable");
+      const submitResult = await this.submitTurnV1Alpha5({
+        contractVersion: "v1alpha5",
+        commandId: lifecycleDerivedId(parsed.data.commandId, "submit-command"),
+        correlationId: parsed.data.correlationId,
+        clientInstanceId,
+        type: "submit_turn",
+        clientTurnId: `robot-test:${parsed.data.commandId}`,
+        sessionId: createSessionResult.value.sessionId,
+        userInput: parsed.data.testInput,
+        selectionRequest: {
+          agentId: parsed.data.robotId,
+          ...(draft.material.modelRestriction.enabled
+            && draft.material.modelRestriction.selectedReferences[0] !== undefined
+            ? { requestedModelId: draft.material.modelRestriction.selectedReferences[0].modelId }
+            : {}),
+          selectedSkillIds: draft.material.skillRestriction.enabled
+            ? draft.material.skillRestriction.selectedReferences.map((entry) => entry.skillId)
+            : [],
+          selectedKnowledgeIds: [],
+          authorizationPreference: { schemaVersion: "v1alpha1", requestedMode: "manual_review" },
+          reasoningPreference: { requestedMode: "default" },
+        },
+      });
+      if (!submitResult.ok) throw new Error("agentlifecycle.resource_unavailable");
+      const receipt = await this.#agentLifecycle.execute({
+        contractVersion: "agent-lifecycle.v1alpha1",
+        kind: "begin_robot_draft_test",
+        commandId: parsed.data.commandId,
+        correlationId: parsed.data.correlationId,
+        robotId: parsed.data.robotId,
+        expectedDraftRevision: parsed.data.expectedDraftRevision,
+        taskId: submitResult.value.taskId,
+      });
+      this.#startRobotDraftTestMonitor({
+        correlationId: parsed.data.correlationId,
+        robotId: parsed.data.robotId,
+        expectedDraftRevision: parsed.data.expectedDraftRevision,
+        taskId: submitResult.value.taskId,
+      });
+      return {
+        ok: true as const,
+        value: {
+          ...receipt,
+          sessionId: createSessionResult.value.sessionId,
+          taskId: submitResult.value.taskId,
+        },
+      };
+    } catch (error) {
+      return agentLifecycleFailure(agentLifecycleErrorCode(error));
+    }
+  }
+
+  async resumeRobotDraftTestsV1Alpha1(): Promise<void> {
+    if (this.#agentLifecycle === undefined) return;
+    try {
+      const page = await this.#agentLifecycle.listDrafts({
+        contractVersion: "agent-lifecycle.v1alpha1",
+        kind: "list_my_robot_drafts",
+        queryId: randomUUID(),
+        correlationId: randomUUID(),
+      });
+      for (const summary of page.items) {
+        if (summary.testState !== "running") continue;
+        const detail = await this.#agentLifecycle.getDraft({
+          contractVersion: "agent-lifecycle.v1alpha1",
+          kind: "get_my_robot_draft",
+          queryId: randomUUID(),
+          correlationId: randomUUID(),
+          robotId: summary.robotId,
+        });
+        if (detail.testFact?.state !== "running" || detail.testFact.taskId === undefined) continue;
+        this.#startRobotDraftTestMonitor({
+          correlationId: randomUUID(),
+          robotId: detail.robotId,
+          expectedDraftRevision: detail.testFact.draftRevision,
+          taskId: detail.testFact.taskId,
+        });
+      }
+    } catch {
+      // Central remains the source of truth. A later explicit read retries the
+      // lifecycle service; Core startup never fabricates a terminal test fact.
+    }
+  }
+
+  #startRobotDraftTestMonitor(input: Readonly<{
+    correlationId: string;
+    robotId: string;
+    expectedDraftRevision: string;
+    taskId: string;
+  }>): void {
+    if (this.#monitoredRobotTestTaskIds.has(input.taskId)) return;
+    this.#monitoredRobotTestTaskIds.add(input.taskId);
+    void this.#monitorRobotDraftTest(input).finally(() => {
+      this.#monitoredRobotTestTaskIds.delete(input.taskId);
+    });
+  }
+
+  async #executeAgentLifecycle<T>(schema: { safeParse(input: unknown): { success: boolean; data?: T } },
+    input: T) {
+    const parsed = schema.safeParse(input);
+    if (!parsed.success || parsed.data === undefined) {
+      return agentLifecycleFailure("agentlifecycle.invalid_request");
+    }
+    if (this.#agentLifecycle === undefined) {
+      return agentLifecycleFailure("agentlifecycle.service_unavailable");
+    }
+    try {
+      return { ok: true as const, value: await this.#agentLifecycle.execute(parsed.data as never) };
+    } catch (error) {
+      return agentLifecycleFailure(agentLifecycleErrorCode(error));
+    }
+  }
+
+  async #monitorRobotDraftTest(command: Readonly<{
+    correlationId: string;
+    robotId: string;
+    expectedDraftRevision: string;
+    taskId: string;
+  }>): Promise<void> {
+    if (this.#agentLifecycle === undefined) return;
+    for (let attempts = 0; attempts < 1_200; attempts += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      const detail = await this.loadTaskDetail({
+        contractVersion: "v1alpha1",
+        queryId: randomUUID(),
+        correlationId: command.correlationId,
+        clientInstanceId: randomUUID(),
+        type: "task_detail",
+        taskId: command.taskId,
+      });
+      if (!detail.ok) continue;
+      const status = detail.value.summary.displayStatus;
+      if (["completed", "failed", "cancelled", "timed_out", "manual_attention"].includes(status)) {
+        const passed = status === "completed";
+        await this.#agentLifecycle.execute({
+          contractVersion: "agent-lifecycle.v1alpha1",
+          kind: "complete_robot_draft_test",
+          commandId: randomUUID(),
+          correlationId: command.correlationId,
+          robotId: command.robotId,
+          expectedDraftRevision: command.expectedDraftRevision,
+          taskId: command.taskId,
+          result: passed ? "passed" : "failed",
+          ...(passed ? {} : { safeReason: "机器人测试任务未成功完成" }),
+        });
+        return;
+      }
+    }
+  }
+
   async listRobotCatalogV1Alpha2(
     input: ListRobotCatalogQuery,
     signal?: AbortSignal,
@@ -373,6 +1129,7 @@ export class DesktopApplicationFacade {
       return failV1Alpha2("runtime.request_aborted", "Robot catalog request was cancelled.", input, "cancelled");
     }
     try {
+      await this.#refreshPublishedAgents?.();
       const value = await this.#robotCatalog.list(parsed.data);
       if (signal?.aborted) {
         return failV1Alpha2("runtime.request_aborted", "Robot catalog request was cancelled.", parsed.data, "cancelled");
@@ -404,6 +1161,7 @@ export class DesktopApplicationFacade {
       return failV1Alpha2("runtime.request_aborted", "Robot catalog request was cancelled.", input, "cancelled");
     }
     try {
+      await this.#refreshPublishedAgents?.();
       const value = await this.#robotCatalog.get(parsed.data);
       if (signal?.aborted) {
         return failV1Alpha2("runtime.request_aborted", "Robot catalog request was cancelled.", parsed.data, "cancelled");
@@ -630,6 +1388,7 @@ export class DesktopApplicationFacade {
   ): Promise<DesktopApplicationResult<readonly AgentProjection[]>> {
     const parsed = ListAgentsQuerySchema.safeParse(input);
     if (!parsed.success) return invalid(parsed.error.issues[0]?.message, input);
+    await this.#refreshPublishedAgents?.();
     const context = await this.#selectionContexts.resolve();
     if (context === undefined) return runtimeUnavailable(input);
     return {
@@ -941,6 +1700,76 @@ export class DesktopApplicationFacade {
       );
   }
 
+  async submitTurnV1Alpha4(
+    input: SubmitTurnCommandV1Alpha4,
+  ): Promise<DesktopApplicationResultV1Alpha4<SubmitTurnReceiptV1Alpha4>> {
+    const parsed = SubmitTurnCommandV1Alpha4Schema.safeParse(input);
+    if (!parsed.success) {
+      return failV1Alpha4(
+        "contract.invalid",
+        "SubmitTurn command is invalid.",
+        input,
+        "validation",
+      );
+    }
+    if (!this.#r2dDesktopV1Alpha4Enabled) {
+      return failV1Alpha4(
+        "contract.feature_unavailable",
+        "R2D SubmitTurn is unavailable in the current runtime.",
+        input,
+        "availability",
+        true,
+      );
+    }
+    const result = await this.#submitTurns.submitV1Alpha4(parsed.data);
+    if (!result.ok) {
+      return failV1Alpha4(
+        result.error.code,
+        "SubmitTurn could not be completed safely.",
+        input,
+        mapCategoryV1Alpha4(result.error),
+        result.error.retryable,
+      );
+    }
+    const v4 = SubmitTurnReceiptV1Alpha4Schema.safeParse(result.receipt);
+    if (!v4.success) {
+      return failV1Alpha4(
+        "submit_turn.invalid_selection",
+        "SubmitTurn receipt does not match the requested Contract version.",
+        input,
+        "internal",
+      );
+    }
+    return { ok: true, value: v4.data };
+  }
+
+  async submitTurnV1Alpha5(
+    input: SubmitTurnCommandV1Alpha5,
+  ): Promise<DesktopApplicationResultV1Alpha5<SubmitTurnReceiptV1Alpha5>> {
+    const parsed = SubmitTurnCommandV1Alpha5Schema.safeParse(input);
+    if (!parsed.success) return invalidV1Alpha5(input);
+    if (!this.#dfi541MaxEnabled) return unavailableV1Alpha5(input);
+    const result = await this.#submitTurns.submitV1Alpha5(parsed.data);
+    if (!result.ok) {
+      return failV1Alpha5(
+        result.error.code,
+        "SubmitTurn could not be completed safely.",
+        input,
+        mapCategoryV1Alpha5(result.error),
+        result.error.retryable,
+      );
+    }
+    const receipt = SubmitTurnReceiptV1Alpha5Schema.safeParse(result.receipt);
+    return receipt.success
+      ? { ok: true, value: receipt.data }
+      : failV1Alpha5(
+        "submit_turn.invalid_selection",
+        "SubmitTurn receipt does not match the requested Contract version.",
+        input,
+        "internal",
+      );
+  }
+
   async querySubmitTurn(
     input: SubmitTurnStatusQuery,
   ): Promise<DesktopApplicationResult<SubmitTurnReceipt>> {
@@ -1000,6 +1829,78 @@ export class DesktopApplicationFacade {
     return result.success
       ? { ok: true, value: result.data }
       : failV1Alpha2(
+        "submit_turn.invalid_selection",
+        "SubmitTurn receipt belongs to a different Contract version.",
+        input,
+        "internal",
+      );
+  }
+
+  async querySubmitTurnV1Alpha4(
+    input: SubmitTurnStatusQueryV1Alpha4,
+  ): Promise<DesktopApplicationResultV1Alpha4<SubmitTurnReceiptV1Alpha4>> {
+    const parsed = SubmitTurnStatusQueryV1Alpha4Schema.safeParse(input);
+    if (!parsed.success) {
+      return failV1Alpha4(
+        "contract.invalid",
+        "SubmitTurn query is invalid.",
+        input,
+        "validation",
+      );
+    }
+    const receipt = await this.#coordination.loadReceipt(parsed.data.submitTurnCommandId);
+    if (receipt === undefined) {
+      return failV1Alpha4(
+        "submit_turn.not_found",
+        "SubmitTurn receipt is unavailable.",
+        input,
+        "availability",
+      );
+    }
+    const {
+      requestDigest: _requestDigest,
+      completedAt: _completedAt,
+      terminalError: _terminalError,
+      ...publicReceipt
+    } = receipt;
+    const v3 = SubmitTurnReceiptV1Alpha3Schema.safeParse(publicReceipt);
+    if (!v3.success) {
+      return failV1Alpha4(
+        "submit_turn.invalid_selection",
+        "SubmitTurn receipt belongs to a different Contract version.",
+        input,
+        "internal",
+      );
+    }
+    const projected = projectSubmitTurnReceiptV1Alpha4(v3.data);
+    return { ok: true, value: SubmitTurnReceiptV1Alpha4Schema.parse(projected) };
+  }
+
+  async querySubmitTurnV1Alpha5(
+    input: SubmitTurnStatusQueryV1Alpha5,
+  ): Promise<DesktopApplicationResultV1Alpha5<SubmitTurnReceiptV1Alpha5>> {
+    const parsed = SubmitTurnStatusQueryV1Alpha5Schema.safeParse(input);
+    if (!parsed.success) return invalidV1Alpha5(input);
+    if (!this.#dfi541MaxEnabled) return unavailableV1Alpha5(input);
+    const receipt = await this.#coordination.loadReceipt(parsed.data.submitTurnCommandId);
+    if (receipt === undefined) {
+      return failV1Alpha5(
+        "submit_turn.not_found",
+        "SubmitTurn receipt is unavailable.",
+        input,
+        "availability",
+      );
+    }
+    const {
+      requestDigest: _requestDigest,
+      completedAt: _completedAt,
+      terminalError: _terminalError,
+      ...publicReceipt
+    } = receipt;
+    const result = SubmitTurnReceiptV1Alpha5Schema.safeParse(publicReceipt);
+    return result.success
+      ? { ok: true, value: result.data }
+      : failV1Alpha5(
         "submit_turn.invalid_selection",
         "SubmitTurn receipt belongs to a different Contract version.",
         input,
@@ -1149,6 +2050,245 @@ function failV1Alpha2<T>(
       retryable,
       correlationId: validCorrelationId(input.correlationId),
     },
+  };
+}
+
+function failV1Alpha4<T>(
+  code: string,
+  safeSummary: string,
+  input: { correlationId?: string },
+  category: DesktopErrorEnvelopeV1Alpha4["category"] = "validation",
+  retryable = false,
+): DesktopApplicationResultV1Alpha4<T> {
+  return {
+    ok: false,
+    error: DesktopErrorEnvelopeV1Alpha4Schema.parse({
+      contractVersion: "v1alpha4",
+      code,
+      category,
+      safeSummary,
+      retryable,
+      correlationId: validCorrelationId(input.correlationId),
+    }),
+  };
+}
+
+function mapCategoryV1Alpha4(
+  error: RuntimeError,
+): DesktopErrorEnvelopeV1Alpha4["category"] {
+  if (error.code.includes("conflict")) return "conflict";
+  if (error.category === "authorization") return "authorization";
+  if (error.category === "timeout") return "timeout";
+  if (error.category === "cancelled") return "cancelled";
+  if (error.category === "validation") return "validation";
+  if (error.category === "internal") return "internal";
+  return "availability";
+}
+
+function failV1Alpha5<T>(
+  code: string,
+  safeSummary: string,
+  input: { correlationId?: string },
+  category: DesktopErrorEnvelopeV1Alpha5["category"] = "validation",
+  retryable = false,
+): DesktopApplicationResultV1Alpha5<T> {
+  return {
+    ok: false,
+    error: DesktopErrorEnvelopeV1Alpha5Schema.parse({
+      contractVersion: "v1alpha5",
+      code,
+      category,
+      safeSummary,
+      retryable,
+      correlationId: validCorrelationId(input.correlationId),
+    }),
+  };
+}
+
+function invalidV1Alpha5<T>(
+  input: { correlationId?: string },
+): DesktopApplicationResultV1Alpha5<T> {
+  return failV1Alpha5("contract.invalid", "Desktop v1alpha5 request is invalid.", input);
+}
+
+function unavailableV1Alpha5<T>(
+  input: { correlationId?: string },
+): DesktopApplicationResultV1Alpha5<T> {
+  return failV1Alpha5(
+    "contract.feature_unavailable",
+    "Max reasoning is unavailable in the current runtime.",
+    input,
+    "availability",
+    true,
+  );
+}
+
+function failPersonalModelManagement<T>(
+  code: PersonalModelManagementErrorEnvelopeV1Alpha1["code"],
+  safeSummary: string,
+  input: { correlationId?: string },
+  category: PersonalModelManagementErrorEnvelopeV1Alpha1["category"] = "validation",
+  retryable = false,
+): DesktopPersonalModelManagementApplicationResult<T> {
+  return {
+    ok: false,
+    error: PersonalModelManagementErrorEnvelopeV1Alpha1Schema.parse({
+      contractVersion: PERSONAL_MODEL_MANAGEMENT_CONTRACT_VERSION_V1ALPHA1,
+      code,
+      category,
+      safeSummary,
+      retryable,
+      correlationId: validCorrelationId(input.correlationId),
+    }),
+  };
+}
+
+function invalidPersonalModelManagement<T>(
+  input: { correlationId?: string },
+): DesktopPersonalModelManagementApplicationResult<T> {
+  return failPersonalModelManagement(
+    "personal_model.contract_invalid",
+    "Personal Model request is invalid.",
+    input,
+  );
+}
+
+function unavailablePersonalModelManagement<T>(
+  input: { correlationId?: string },
+): DesktopPersonalModelManagementApplicationResult<T> {
+  return failPersonalModelManagement(
+    "personal_model.feature_unavailable",
+    "Personal Model catalog is unavailable in the current runtime.",
+    input,
+    "availability",
+    true,
+  );
+}
+
+function personalModelManagementReadFailure<T>(
+  code: PersonalModelManagementReadErrorCode,
+  input: { correlationId?: string },
+): DesktopPersonalModelManagementApplicationResult<T> {
+  switch (code) {
+    case "personal_model.permission_denied":
+      return failPersonalModelManagement(
+        code,
+        "Personal Model catalog access is not authorized.",
+        input,
+        "authorization",
+      );
+    case "personal_model.not_found":
+      return failPersonalModelManagement(
+        code,
+        "Personal Model was not found.",
+        input,
+        "availability",
+      );
+    case "personal_model.cursor_stale":
+      return failPersonalModelManagement(
+        code,
+        "Personal Model catalog changed. Reload the catalog.",
+        input,
+        "conflict",
+        true,
+      );
+    case "personal_model.feature_unavailable":
+      return unavailablePersonalModelManagement(input);
+    case "internal":
+      return failPersonalModelManagement(
+        "internal",
+        "Personal Model catalog could not be verified.",
+        input,
+        "internal",
+      );
+  }
+}
+
+function failPersonalModelManagementV1Alpha2<T>(
+  code: PersonalModelManagementErrorEnvelopeV1Alpha2["code"],
+  safeSummary: string,
+  input: { correlationId?: string },
+  category: PersonalModelManagementErrorEnvelopeV1Alpha2["category"] = "validation",
+  retryable = false,
+): DesktopPersonalModelManagementApplicationResultV1Alpha2<T> {
+  return { ok: false, error: PersonalModelManagementErrorEnvelopeV1Alpha2Schema.parse({
+    contractVersion: PERSONAL_MODEL_MANAGEMENT_CONTRACT_VERSION_V1ALPHA2,
+    code,
+    category,
+    safeSummary,
+    retryable,
+    correlationId: validCorrelationId(input.correlationId),
+  }) };
+}
+
+function invalidPersonalModelManagementV1Alpha2<T>(input: unknown): DesktopPersonalModelManagementApplicationResultV1Alpha2<T> {
+  const correlationId = typeof input === "object" && input !== null && "correlationId" in input
+    && typeof input.correlationId === "string"
+    ? { correlationId: input.correlationId }
+    : {};
+  return failPersonalModelManagementV1Alpha2("personal_model.contract_invalid", "Personal Model request is invalid.", correlationId);
+}
+
+function unavailablePersonalModelManagementV1Alpha2<T>(input: { correlationId?: string }): DesktopPersonalModelManagementApplicationResultV1Alpha2<T> {
+  return failPersonalModelManagementV1Alpha2("personal_model.feature_unavailable", "Personal Model management is unavailable in the current runtime.", input, "availability", true);
+}
+
+function personalModelManagementReadFailureV1Alpha2<T>(
+  code: PersonalModelManagementReadErrorCode,
+  input: { correlationId?: string },
+): DesktopPersonalModelManagementApplicationResultV1Alpha2<T> {
+  switch (code) {
+    case "personal_model.permission_denied": return failPersonalModelManagementV1Alpha2(code, "Personal Model catalog access is not authorized.", input, "authorization");
+    case "personal_model.not_found": return failPersonalModelManagementV1Alpha2(code, "Personal Model was not found.", input, "availability");
+    case "personal_model.cursor_stale": return failPersonalModelManagementV1Alpha2(code, "Personal Model catalog changed. Reload the catalog.", input, "conflict", true);
+    case "personal_model.feature_unavailable": return unavailablePersonalModelManagementV1Alpha2(input);
+    case "internal": return failPersonalModelManagementV1Alpha2("personal_model.internal", "Personal Model catalog could not be verified.", input, "internal");
+  }
+}
+
+function personalModelManagementCommandFailureV1Alpha2<T>(
+  code: PersonalModelManagementCommandErrorCode,
+  input: { correlationId?: string },
+): DesktopPersonalModelManagementApplicationResultV1Alpha2<T> {
+  const category = code === "personal_model.permission_denied"
+    ? "authorization" as const
+    : code === "personal_model.operation_uncertain" || code === "personal_model.manual_attention"
+      ? "uncertain" as const
+      : code === "personal_model.revision_conflict" || code === "personal_model.operation_in_progress"
+        ? "conflict" as const
+        : code === "personal_model.internal" ? "internal" as const : "availability" as const;
+  return failPersonalModelManagementV1Alpha2(code, "Personal Model operation is unavailable or could not be completed.", input, category, code === "personal_model.operation_in_progress");
+}
+
+function mapCategoryV1Alpha5(
+  error: RuntimeError,
+): DesktopErrorEnvelopeV1Alpha5["category"] {
+  if (error.code.includes("conflict")) return "conflict";
+  if (error.category === "authorization") return "authorization";
+  if (error.category === "timeout") return "timeout";
+  if (error.category === "cancelled") return "cancelled";
+  if (error.category === "validation") return "validation";
+  if (error.category === "internal") return "internal";
+  return "availability";
+}
+
+function failTaskReasoning<T>(
+  code: TaskReasoningErrorEnvelopeV1Alpha1["code"],
+  safeSummary: string,
+  input: { correlationId?: string },
+  category: TaskReasoningErrorEnvelopeV1Alpha1["category"],
+  retryable = false,
+): DesktopTaskReasoningApplicationResult<T> {
+  return {
+    ok: false,
+    error: TaskReasoningErrorEnvelopeV1Alpha1Schema.parse({
+      contractVersion: "task-reasoning.v1alpha1",
+      code,
+      category,
+      safeSummary,
+      retryable,
+      correlationId: validCorrelationId(input.correlationId),
+    }),
   };
 }
 
@@ -1517,6 +2657,36 @@ function parsePrivateWorkspaceArtifactRegistration(input: unknown):
 
 function privateRouteInput(): { correlationId: string } {
   return { correlationId: "00000000-0000-4000-8000-000000000000" };
+}
+
+function agentLifecycleErrorCode(error: unknown): string {
+  if (error instanceof Error && /^agentlifecycle\.[a-z_]+$/u.test(error.message)) {
+    return error.message;
+  }
+  return "agentlifecycle.service_unavailable";
+}
+
+function agentLifecycleFailure(code: string) {
+  return {
+    ok: false as const,
+    error: {
+      contractVersion: "agent-lifecycle.v1alpha1" as const,
+      errorCode: code,
+      safeSummary: code === "agentlifecycle.invalid_request"
+        ? "机器人请求无效"
+        : "机器人服务暂时不可用",
+      correlationId: "00000000-0000-4000-8000-000000000000",
+    },
+  };
+}
+
+function lifecycleDerivedId(commandId: string, purpose: string): string {
+  const bytes = createHash("sha256").update(`robothree.agent-lifecycle.v1:${commandId}:${purpose}`)
+    .digest().subarray(0, 16);
+  bytes[6] = (bytes[6]! & 0x0f) | 0x40;
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+  const hex = bytes.toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 function parseCursor(cursor: string): number {

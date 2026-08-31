@@ -21,20 +21,27 @@ import {
   DOCUMENT_WORKER_PROTOCOL_VERSION,
   DocumentCapabilityHandlerError,
   PPTX_WRITE_CAPABILITY_ID,
+  TEXT_FILE_WRITE_CAPABILITY_ID,
+  TEXT_FILE_WRITE_LIMITS_REVISION,
   XLSX_WRITE_CAPABILITY_ID,
+  computeTextFileWriteRequestDigest,
   computePptxWriteRequestDigest,
   computeXlsxOverwriteRequestDigest,
   computeXlsxWriteRequestDigest,
   encodeDocumentWorkerMessage,
   normalizePptxWriteOptions,
+  normalizeTextFileWriteRequest,
   normalizeXlsxWriteOptions,
   parseDocumentWorkerReady,
   parseDocumentWorkerResult,
   parseDocumentWorkerError,
+  parseDocumentWorkerTextWritePostcondition,
   type DocumentCapabilityId,
   type DocumentWorkerErrorCode,
   type DocumentWorkerInvokeMessage,
   type DocumentWorkerLimits,
+  type DocumentWorkerTextWriteInspectMessage,
+  type DocumentWorkerTextWritePostconditionMessage,
 } from "@robothree/document-worker";
 
 import type { Clock } from "../../ports/clock.js";
@@ -86,16 +93,27 @@ type PendingHandshake = {
   reject: (error: Error) => void;
 };
 
-type PendingRequest = {
+type PendingExecutionRequest = {
+  kind: "execute";
   request: DocumentWorkerInvokeMessage;
   resolve: (observation: Observation) => void;
   reject: (error: Error) => void;
 };
 
+type PendingInspectionRequest = {
+  kind: "inspect";
+  request: DocumentWorkerTextWriteInspectMessage;
+  resolve: (result: DocumentWorkerTextWritePostconditionMessage) => void;
+  reject: (error: Error) => void;
+};
+
+type PendingRequest = PendingExecutionRequest | PendingInspectionRequest;
+
 type DocumentWorkerCoreCapabilityId =
   | DocumentCapabilityId
   | typeof XLSX_WRITE_CAPABILITY_ID
-  | typeof PPTX_WRITE_CAPABILITY_ID;
+  | typeof PPTX_WRITE_CAPABILITY_ID
+  | typeof TEXT_FILE_WRITE_CAPABILITY_ID;
 
 type ParsedDocumentActionPayload = Readonly<{
   workspaceRoot: string;
@@ -119,6 +137,11 @@ type ParsedDocumentActionPayload = Readonly<{
     options: Record<string, unknown>;
     mode: "create_new";
   }
+  | {
+    kind: "text_write";
+    options: Record<string, unknown>;
+    mode: "create_new" | "replace_existing";
+  }
 )>;
 
 const DEFAULT_MAX_FRAME_BYTES = 1024 * 1024;
@@ -132,6 +155,28 @@ const DOCUMENT_CAPABILITY_SET = new Set<string>([
   XLSX_WRITE_CAPABILITY_ID,
   PPTX_WRITE_CAPABILITY_ID,
 ]);
+const TEXT_WRITE_CAPABILITY_SET = new Set<string>([TEXT_FILE_WRITE_CAPABILITY_ID]);
+
+class SharedDocumentWorkerToolHandle implements ToolExecutionBackend {
+  public readonly adapterKind = "tool_execution_backend" as const;
+
+  public constructor(
+    public readonly adapterDescriptorId: string,
+    public readonly adapterDescriptorRevision: string,
+    readonly owner: DocumentWorkerToolBackend,
+    readonly capabilities: ReadonlySet<string>,
+  ) {}
+
+  public execute(request: ToolExecutionRequest, signal: AbortSignal): Promise<Observation> {
+    return this.owner.executeForHandle(
+      request,
+      signal,
+      this.adapterDescriptorId,
+      this.adapterDescriptorRevision,
+      this.capabilities,
+    );
+  }
+}
 
 export class DocumentWorkerToolBackend implements ToolExecutionBackend, RuntimeComponent {
   public readonly adapterKind = "tool_execution_backend" as const;
@@ -186,6 +231,22 @@ export class DocumentWorkerToolBackend implements ToolExecutionBackend, RuntimeC
     return Buffer.byteLength(this.#stderr, "utf8");
   }
 
+  public processIdentity(): number | undefined {
+    return this.#child?.pid;
+  }
+
+  public createTextWriteHandle(input: Readonly<{
+    adapterDescriptorId: string;
+    adapterDescriptorRevision: string;
+  }>): ToolExecutionBackend {
+    return new SharedDocumentWorkerToolHandle(
+      input.adapterDescriptorId,
+      input.adapterDescriptorRevision,
+      this,
+      TEXT_WRITE_CAPABILITY_SET,
+    );
+  }
+
   public async start(): Promise<void> {
     if (this.#state === "ready" && this.#child !== undefined) {
       return;
@@ -235,6 +296,22 @@ export class DocumentWorkerToolBackend implements ToolExecutionBackend, RuntimeC
   }
 
   public async execute(request: ToolExecutionRequest, signal: AbortSignal): Promise<Observation> {
+    return this.executeForHandle(
+      request,
+      signal,
+      this.adapterDescriptorId,
+      this.adapterDescriptorRevision,
+      DOCUMENT_CAPABILITY_SET,
+    );
+  }
+
+  public async executeForHandle(
+    request: ToolExecutionRequest,
+    signal: AbortSignal,
+    descriptorId: string,
+    descriptorRevision: string,
+    capabilities: ReadonlySet<string>,
+  ): Promise<Observation> {
     if (this.#executing) {
       throw new DocumentWorkerBackendError(
         "document_worker.concurrent_execution",
@@ -244,7 +321,33 @@ export class DocumentWorkerToolBackend implements ToolExecutionBackend, RuntimeC
     }
     this.#executing = true;
     try {
-      return await this.#executeSingle(request, signal);
+      return await this.#executeSingle(
+        request,
+        signal,
+        descriptorId,
+        descriptorRevision,
+        capabilities,
+      );
+    } finally {
+      this.#executing = false;
+    }
+  }
+
+  public async inspectTextWritePostcondition(input: Readonly<{
+    request: ToolExecutionRequest;
+    adapterDescriptorId: string;
+    adapterDescriptorRevision: string;
+  }>): Promise<DocumentWorkerTextWritePostconditionMessage> {
+    if (this.#executing) {
+      throw new DocumentWorkerBackendError(
+        "document_worker.concurrent_execution",
+        "Document Worker is single-flight; recovery inspection cannot overlap execution",
+        false,
+      );
+    }
+    this.#executing = true;
+    try {
+      return await this.#inspectTextWritePostcondition(input);
     } finally {
       this.#executing = false;
     }
@@ -303,8 +406,19 @@ export class DocumentWorkerToolBackend implements ToolExecutionBackend, RuntimeC
     }
   }
 
-  async #executeSingle(request: ToolExecutionRequest, signal: AbortSignal): Promise<Observation> {
-    const normalized = validateRequest(request, this.adapterDescriptorId, this.adapterDescriptorRevision);
+  async #executeSingle(
+    request: ToolExecutionRequest,
+    signal: AbortSignal,
+    descriptorId: string,
+    descriptorRevision: string,
+    capabilities: ReadonlySet<string>,
+  ): Promise<Observation> {
+    const normalized = validateRequest(
+      request,
+      descriptorId,
+      descriptorRevision,
+      capabilities,
+    );
     if (signal.aborted) {
       return cancelledObservation(normalized, this.#clock.now());
     }
@@ -359,7 +473,7 @@ export class DocumentWorkerToolBackend implements ToolExecutionBackend, RuntimeC
       options: workerOptions,
       limits: payload.limits,
       deadlineAt: normalized.deadlineAt,
-      ...(payload.kind === "xlsx_write" || payload.kind === "pptx_write" ? {
+      ...(payload.kind === "xlsx_write" || payload.kind === "pptx_write" || payload.kind === "text_write" ? {
         idempotencyKey: normalized.idempotencyKey,
         requestDigest,
       } : {}),
@@ -378,13 +492,17 @@ export class DocumentWorkerToolBackend implements ToolExecutionBackend, RuntimeC
     }));
     const response = new Promise<Observation>((resolveObservation, rejectObservation) => {
       this.#pendingRequest = {
+        kind: "execute",
         request: message,
         resolve: resolveObservation,
         reject: rejectObservation,
       };
     });
     const abort = () => {
-      this.#pendingRequest?.resolve(cancelledObservation(normalized, this.#clock.now()));
+      const pending = this.#pendingRequest;
+      if (pending?.kind === "execute") {
+        pending.resolve(cancelledObservation(normalized, this.#clock.now()));
+      }
       this.#pendingRequest = undefined;
       void this.#terminateChild();
     };
@@ -421,6 +539,73 @@ export class DocumentWorkerToolBackend implements ToolExecutionBackend, RuntimeC
     }
   }
 
+  async #inspectTextWritePostcondition(input: Readonly<{
+    request: ToolExecutionRequest;
+    adapterDescriptorId: string;
+    adapterDescriptorRevision: string;
+  }>): Promise<DocumentWorkerTextWritePostconditionMessage> {
+    const normalized = validateRequest(
+      input.request,
+      input.adapterDescriptorId,
+      input.adapterDescriptorRevision,
+      TEXT_WRITE_CAPABILITY_SET,
+    );
+    await this.start();
+    const child = this.#child;
+    if (this.#state !== "ready" || child === undefined) {
+      throw new DocumentWorkerBackendError("document_worker.not_ready", "Document Worker child is not ready", false);
+    }
+    const payload = parseDocumentActionPayload(
+      normalized.action.kind as DocumentWorkerCoreCapabilityId,
+      normalized.action.payload,
+    );
+    if (payload.kind !== "text_write") {
+      throw new DocumentWorkerBackendError(
+        "document_worker.invalid_request",
+        "Postcondition inspection only accepts the workspace text writer",
+        false,
+      );
+    }
+    const digestMaterial = documentWriteDigestMaterial(normalized, payload);
+    if (digestMaterial.requestDigest === undefined) {
+      throw new DocumentWorkerBackendError(
+        "document_worker.invalid_request",
+        "Text write recovery requires an exact request digest",
+        false,
+      );
+    }
+    const message: DocumentWorkerTextWriteInspectMessage = {
+      type: "inspect_text_write_postcondition",
+      protocolVersion: DOCUMENT_WORKER_PRIVATE_PROTOCOL_VERSION,
+      requestId: randomUUID(),
+      actionId: normalized.action.actionId,
+      effectAttemptId: normalized.effectAttemptId,
+      capabilityId: TEXT_FILE_WRITE_CAPABILITY_ID,
+      workspaceRoot: payload.workspaceRoot,
+      relativePath: payload.relativePath,
+      options: digestMaterial.workerOptions,
+      limits: payload.limits,
+      idempotencyKey: normalized.idempotencyKey,
+      requestDigest: digestMaterial.requestDigest,
+    };
+    const response = new Promise<DocumentWorkerTextWritePostconditionMessage>((resolve, reject) => {
+      this.#pendingRequest = { kind: "inspect", request: message, resolve, reject };
+    });
+    try {
+      await writeFrame(child, encodeDocumentWorkerMessage(message));
+      return await withTimeout(response, this.#requestTimeoutMs, () => {
+        void this.#terminateChild();
+        return new DocumentWorkerBackendError(
+          "document_worker.request_timeout",
+          "Document Worker child did not return a recovery inspection result",
+          true,
+        );
+      });
+    } finally {
+      this.#pendingRequest = undefined;
+    }
+  }
+
   #onStdout(child: ChildProcessWithoutNullStreams, chunk: Buffer): void {
     if (this.#child !== child) {
       return;
@@ -442,7 +627,9 @@ export class DocumentWorkerToolBackend implements ToolExecutionBackend, RuntimeC
         if (pending === undefined) {
           throw new DocumentWorkerBackendError("document_worker.protocol_error", "Received an unsolicited protocol frame", false);
         }
-        const response = parseTerminalFrame(frame);
+        const response = pending.kind === "execute"
+          ? parseTerminalFrame(frame)
+          : parseInspectionFrame(frame);
         if (
           response.requestId !== pending.request.requestId
           || response.actionId !== pending.request.actionId
@@ -455,7 +642,16 @@ export class DocumentWorkerToolBackend implements ToolExecutionBackend, RuntimeC
           );
         }
         this.#pendingRequest = undefined;
-        pending.resolve(observationFromTerminal(pending.request, response, this.#clock.now()));
+        if (pending.kind === "execute") {
+          pending.resolve(observationFromTerminal(
+            pending.request,
+            response as TerminalFrame,
+            this.#clock.now(),
+          ));
+        } else {
+          const inspection = response as DocumentWorkerTextWritePostconditionMessage;
+          pending.resolve(inspection);
+        }
       }
     } catch (error) {
       const normalized = error instanceof DocumentWorkerBackendError
@@ -535,15 +731,36 @@ function parseTerminalFrame(frame: string): TerminalFrame {
   );
 }
 
+function parseInspectionFrame(frame: string): DocumentWorkerTextWritePostconditionMessage {
+  const value = JSON.parse(frame) as { type?: unknown };
+  if (value.type === "text_write_postcondition") {
+    return parseDocumentWorkerTextWritePostcondition(frame);
+  }
+  if (value.type === "error") {
+    const error = parseDocumentWorkerError(frame);
+    throw new DocumentWorkerBackendError(
+      "document_worker.invalid_response",
+      `Document Worker recovery inspection failed: ${error.error.message}`,
+      false,
+    );
+  }
+  throw new DocumentWorkerBackendError(
+    "document_worker.invalid_response",
+    "Expected Document Worker text write postcondition or error frame",
+    true,
+  );
+}
+
 function validateRequest(
   request: ToolExecutionRequest,
   descriptorId: string,
   descriptorRevision: string,
+  capabilities: ReadonlySet<string>,
 ): ToolExecutionRequest {
   const lock = TaskCapabilityLockSchema.parse(request.lock);
   const action = ActionSchema.parse(request.action);
-  if (lock.definitionSnapshot.kind !== "tool" || !DOCUMENT_CAPABILITY_SET.has(action.kind)) {
-    throw new DocumentWorkerBackendError("document_worker.invalid_request", "Document Worker only accepts tool.document.* actions", false);
+  if (lock.definitionSnapshot.kind !== "tool" || !capabilities.has(action.kind)) {
+    throw new DocumentWorkerBackendError("document_worker.invalid_request", "Document Worker handle rejected the Tool capability", false);
   }
   if (action.kind !== lock.definitionSnapshot.capabilityId) {
     throw new DocumentWorkerBackendError("document_worker.invalid_request", "Action kind must match the locked Document capability", false);
@@ -581,21 +798,64 @@ function parseDocumentActionPayload(
   const parsed = JsonObjectSchema.parse(payload);
   const isXlsxWrite = capabilityId === XLSX_WRITE_CAPABILITY_ID;
   const isPptxWrite = capabilityId === PPTX_WRITE_CAPABILITY_ID;
+  const isTextWrite = capabilityId === TEXT_FILE_WRITE_CAPABILITY_ID;
   requireOnlyKeys(
     parsed,
     isXlsxWrite
       ? ["limits", "mode", "options", "overwrite", "relativePath", "workbook", "workspaceRoot"]
       : isPptxWrite
         ? ["limits", "mode", "options", "presentation", "relativePath", "workspaceRoot"]
-      : ["limits", "options", "relativePath", "workspaceRoot"],
-    isXlsxWrite ? ["mode", "options", "overwrite"] : isPptxWrite ? ["mode", "options"] : ["options"],
+        : isTextWrite
+          ? [
+            "content",
+            "expectedPreviousSha256",
+            "limits",
+            "limitsRevision",
+            "mode",
+            "ownedArtifactProofDigest",
+            "relativePath",
+            "workspaceGrantId",
+            "workspaceRoot",
+          ]
+          : ["limits", "options", "relativePath", "workspaceRoot"],
+    isXlsxWrite
+      ? ["mode", "options", "overwrite"]
+      : isPptxWrite
+        ? ["mode", "options"]
+        : isTextWrite
+          ? ["expectedPreviousSha256", "ownedArtifactProofDigest"]
+          : ["options"],
   );
   const workspaceRoot = requireNonEmptyString(parsed.workspaceRoot, "workspaceRoot", 4096);
   const relativePath = requireNonEmptyString(parsed.relativePath, "relativePath", 4096);
+  const limits = parseLimits(parsed.limits);
+  if (isTextWrite) {
+    const mode = parseTextWriteMode(parsed.mode);
+    const limitsRevision = requireNonEmptyString(parsed.limitsRevision, "limitsRevision", 128);
+    if (limitsRevision !== TEXT_FILE_WRITE_LIMITS_REVISION) {
+      throw new DocumentWorkerBackendError(
+        "document_worker.invalid_request",
+        "Text write limits revision is unsupported",
+        false,
+      );
+    }
+    const options: Record<string, unknown> = {
+      content: requireString(parsed.content, "content", limits.maxFileBytes),
+      mode,
+      workspaceGrantId: requireNonEmptyString(parsed.workspaceGrantId, "workspaceGrantId", 512),
+      limitsRevision,
+      ...(parsed.expectedPreviousSha256 === undefined
+        ? {}
+        : { expectedPreviousSha256: requireSha256(parsed.expectedPreviousSha256, "expectedPreviousSha256") }),
+      ...(parsed.ownedArtifactProofDigest === undefined
+        ? {}
+        : { ownedArtifactProofDigest: requireSha256(parsed.ownedArtifactProofDigest, "ownedArtifactProofDigest") }),
+    };
+    return { kind: "text_write", workspaceRoot, relativePath, options, mode, limits };
+  }
   const options = parsed.options === undefined
     ? {}
     : requireObject(parsed.options, "options");
-  const limits = parseLimits(parsed.limits);
   if (isXlsxWrite) {
     const mode = parseXlsxWriteMode(parsed.mode);
     const overwrite = parseXlsxOverwriteForCore(mode, parsed.overwrite);
@@ -632,7 +892,7 @@ function parseDocumentActionPayload(
 }
 
 function workerOptionsForPayload(payload: ParsedDocumentActionPayload): Record<string, unknown> {
-  if (payload.kind === "read") {
+  if (payload.kind === "read" || payload.kind === "text_write") {
     return payload.options;
   }
   if (payload.kind === "pptx_write") {
@@ -660,6 +920,41 @@ function documentWriteDigestMaterial(
   const workerOptions = workerOptionsForPayload(payload);
   if (payload.kind === "read") {
     return { workerOptions };
+  }
+  if (payload.kind === "text_write") {
+    try {
+      const normalized = normalizeTextFileWriteRequest(
+        payload.relativePath,
+        workerOptions,
+        payload.limits,
+      );
+      return {
+        workerOptions,
+        requestDigest: computeTextFileWriteRequestDigest({
+          idempotencyKey: request.idempotencyKey,
+          workspaceGrantId: normalized.options.workspaceGrantId,
+          relativePath: normalized.relativePath,
+          mode: normalized.options.mode,
+          contentSha256: normalized.contentSha256,
+          ...(normalized.options.expectedPreviousSha256 === undefined
+            ? {}
+            : { expectedPreviousSha256: normalized.options.expectedPreviousSha256 }),
+          ...(normalized.options.ownedArtifactProofDigest === undefined
+            ? {}
+            : { ownedArtifactProofDigest: normalized.options.ownedArtifactProofDigest }),
+          limitsRevision: normalized.options.limitsRevision,
+        }),
+      };
+    } catch (error) {
+      if (error instanceof DocumentCapabilityHandlerError) {
+        throw new DocumentWorkerBackendError(
+          "document_worker.invalid_request",
+          error.message,
+          false,
+        );
+      }
+      throw error;
+    }
   }
   if (payload.kind === "pptx_write") {
     try {
@@ -736,6 +1031,15 @@ function parsePptxWriteMode(value: unknown): "create_new" {
   throw new DocumentWorkerBackendError(
     "document_worker.invalid_request",
     "PPTX write mode must be create_new",
+    false,
+  );
+}
+
+function parseTextWriteMode(value: unknown): "create_new" | "replace_existing" {
+  if (value === "create_new" || value === "replace_existing") return value;
+  throw new DocumentWorkerBackendError(
+    "document_worker.invalid_request",
+    "Text write mode must be create_new or replace_existing",
     false,
   );
 }
@@ -1036,6 +1340,28 @@ function requireNonEmptyString(value: unknown, name: string, maxLength: number):
     throw new DocumentWorkerBackendError(
       "document_worker.invalid_request",
       `${name} must be a non-empty string (max ${maxLength} chars)`,
+      false,
+    );
+  }
+  return value;
+}
+
+function requireString(value: unknown, name: string, maxBytes: number): string {
+  if (typeof value !== "string" || Buffer.byteLength(value, "utf8") > maxBytes) {
+    throw new DocumentWorkerBackendError(
+      "document_worker.invalid_request",
+      `${name} must be a UTF-8 string no larger than ${maxBytes} bytes`,
+      false,
+    );
+  }
+  return value;
+}
+
+function requireSha256(value: unknown, name: string): string {
+  if (typeof value !== "string" || !/^sha256:[a-f0-9]{64}$/u.test(value)) {
+    throw new DocumentWorkerBackendError(
+      "document_worker.invalid_request",
+      `${name} must be a sha256: digest`,
       false,
     );
   }

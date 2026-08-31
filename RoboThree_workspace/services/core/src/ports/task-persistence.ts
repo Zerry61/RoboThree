@@ -16,10 +16,22 @@ import type {
   UserConfirmationDecision,
   UserConfirmationRequest,
 } from "@robothree/contracts";
+import type {
+  TaskRuntimeSelectionV1Alpha3,
+} from
+  "@robothree/contracts/runtime-selection/v1alpha3";
+import type { ReadableTaskRuntimeSelectionV1Alpha4, TaskRuntimeSelectionV1Alpha4 } from
+  "@robothree/contracts/runtime-selection/v1alpha4";
+import type { SafeReasoningAdmissionEvidenceV1Alpha5 } from
+  "@robothree/contracts/submit-turn-coordination/v1alpha5";
 import type { ReadableTaskRuntimeSelection } from
   "@robothree/contracts/runtime-selection/v1alpha2";
 
 import type { PersistenceAdapter } from "./persistence.js";
+import type { TaskInstructionBindingV1 } from
+  "../application/instruction-bundle-domain.js";
+import type { ReasoningResolutionEvidenceV1 } from
+  "../application/reasoning-mode-lock-v1alpha2-domain.js";
 
 export type PersistedTask = {
   head: TaskHead;
@@ -75,10 +87,61 @@ export type ReasoningAwareAuthorizationSubmitTurnTaskBundle =
 export type PersistedReasoningAwareAuthorizationSubmitTurnTaskBundle =
   PersistedReasoningAwareSubmitTurnTaskBundle & TaskAuthorizationPersistenceRecord;
 
+export type R2D3SubmitTurnTaskBundle = Readonly<{
+  submitTurnCommandId: string;
+  userMessageId: string;
+  task: PersistedTask;
+  capabilityLocks: readonly TaskCapabilityLock[];
+  runtimeSelection: TaskRuntimeSelectionV1Alpha3;
+  selection: TaskAuthorizationSelection;
+  executionIdentity: TaskExecutionSelectionIdentity;
+  submitTurnBinding: TaskSubmitTurnBinding;
+  taskInstructionBinding: TaskInstructionBindingV1;
+  committedAt: string;
+}>;
+
+export type PersistedR2D3SubmitTurnTaskBundle = Readonly<{
+  binding: TaskSubmitTurnBinding;
+  taskInstructionBinding: TaskInstructionBindingV1;
+  task: PersistedTask;
+  capabilityLocks: readonly TaskCapabilityLock[];
+  runtimeSelection: TaskRuntimeSelectionV1Alpha3;
+  selection: TaskAuthorizationSelection;
+  executionIdentity: TaskExecutionSelectionIdentity;
+}>;
+
+export type Dfi541SubmitTurnTaskBundle = Readonly<{
+  submitTurnCommandId: string;
+  userMessageId: string;
+  task: PersistedTask;
+  capabilityLocks: readonly TaskCapabilityLock[];
+  runtimeSelection: TaskRuntimeSelectionV1Alpha4;
+  selection: TaskAuthorizationSelection;
+  executionIdentity: TaskExecutionSelectionIdentity;
+  submitTurnBinding: TaskSubmitTurnBinding;
+  taskInstructionBinding: TaskInstructionBindingV1;
+  resolutionEvidence?: ReasoningResolutionEvidenceV1;
+  admissionEvidence: SafeReasoningAdmissionEvidenceV1Alpha5;
+  committedAt: string;
+}>;
+
+export type PersistedDfi541SubmitTurnTaskBundle = Readonly<{
+  binding: TaskSubmitTurnBinding;
+  taskInstructionBinding: TaskInstructionBindingV1;
+  task: PersistedTask;
+  capabilityLocks: readonly TaskCapabilityLock[];
+  runtimeSelection: TaskRuntimeSelectionV1Alpha4;
+  selection: TaskAuthorizationSelection;
+  executionIdentity: TaskExecutionSelectionIdentity;
+  resolutionEvidence?: ReasoningResolutionEvidenceV1;
+  admissionEvidence: SafeReasoningAdmissionEvidenceV1Alpha5;
+}>;
+
 export type PersistedExecutableSubmitTurnTaskBundle =
   | PersistedSubmitTurnTaskBundle
   | PersistedAuthorizationAwareSubmitTurnTaskBundle
-  | PersistedReasoningAwareAuthorizationSubmitTurnTaskBundle;
+  | PersistedReasoningAwareAuthorizationSubmitTurnTaskBundle
+  | PersistedDfi541SubmitTurnTaskBundle;
 
 export type TaskAuthorizationMaterializationSnapshot = Readonly<{
   runtimeSelections: readonly TaskRuntimeSelection[];
@@ -175,6 +238,12 @@ export interface TaskPersistence extends PersistenceAdapter {
   commitReasoningAwareSubmitTurnTaskBundle(
     input: ReasoningAwareAuthorizationSubmitTurnTaskBundle,
   ): Promise<PersistenceWriteResult<PersistedReasoningAwareAuthorizationSubmitTurnTaskBundle>>;
+  commitR2D3SubmitTurnTaskBundle(
+    input: R2D3SubmitTurnTaskBundle,
+  ): Promise<PersistenceWriteResult<PersistedR2D3SubmitTurnTaskBundle>>;
+  commitDfi541SubmitTurnTaskBundle(
+    input: Dfi541SubmitTurnTaskBundle,
+  ): Promise<PersistenceWriteResult<PersistedDfi541SubmitTurnTaskBundle>>;
   loadSubmitTurnTaskBundle(
     submitTurnCommandId: string,
   ): Promise<PersistedSubmitTurnTaskBundle | undefined>;
@@ -184,6 +253,12 @@ export interface TaskPersistence extends PersistenceAdapter {
   loadReasoningAwareSubmitTurnTaskBundle(
     submitTurnCommandId: string,
   ): Promise<PersistedReasoningAwareAuthorizationSubmitTurnTaskBundle | undefined>;
+  loadR2D3SubmitTurnTaskBundle(
+    submitTurnCommandId: string,
+  ): Promise<PersistedR2D3SubmitTurnTaskBundle | undefined>;
+  loadDfi541SubmitTurnTaskBundle(
+    submitTurnCommandId: string,
+  ): Promise<PersistedDfi541SubmitTurnTaskBundle | undefined>;
   loadExecutableSubmitTurnTaskBundle(
     submitTurnCommandId: string,
   ): Promise<PersistedExecutableSubmitTurnTaskBundle | undefined>;
@@ -220,7 +295,7 @@ export interface TaskPersistence extends PersistenceAdapter {
   loadTaskRuntimeSelection(taskId: string): Promise<TaskRuntimeSelection | undefined>;
   loadReadableTaskRuntimeSelection(
     taskId: string,
-  ): Promise<ReadableTaskRuntimeSelection | undefined>;
+  ): Promise<ReadableTaskRuntimeSelectionV1Alpha4 | undefined>;
   loadUserConfirmation(confirmationId: string): Promise<PersistedUserConfirmation | undefined>;
   findUserConfirmationByScopeDigest(scopeDigest: string): Promise<PersistedUserConfirmation | undefined>;
   findUserConfirmationByDecisionId(decisionId: string): Promise<PersistedUserConfirmation | undefined>;

@@ -4,7 +4,7 @@ import {
   PersistenceSchemaVersion,
   TaskRunStateSchema,
 } from "@robothree/contracts";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type {
   Action,
   ArtifactLifecycleProjection,
@@ -25,6 +25,10 @@ import {
   projectToolActivityForDesktop,
   DesktopTaskProjectionService,
 } from "../src/application/desktop-task-projection-service.js";
+import { createReasoningModeLockV1Alpha2 } from
+  "../src/application/reasoning-mode-lock-v1alpha2-domain.js";
+import { createTaskRuntimeSelectionV1Alpha4 } from
+  "../src/application/runtime-selection-revisions.js";
 import {
   sha256CanonicalJson,
   type PersistedTask,
@@ -821,6 +825,92 @@ describe("DCF-2A Desktop Task projection safety", () => {
       },
     });
   });
+
+  it("resolves a restarted v1alpha4 Task only through the readable locked runtime selection", async () => {
+    const internalSessionId = id(2);
+    const task = persistedDocumentTask(internalSessionId, "reports/out.xlsx");
+    const toolStep = task.checkpoint.state.runs[0]!.steps[0]!;
+    delete (toolStep.action.payload as Record<string, unknown>).workspaceGrantId;
+    const modelLock = {
+      lockId: id(904),
+      capabilityId: "model.default",
+      lockDigest: `sha256:${"f".repeat(64)}`,
+    };
+    const reasoningModeLock = createReasoningModeLockV1Alpha2({
+      schemaVersion: "v1alpha2",
+      reasoningModeLockId: id(905),
+      taskId: task.head.taskId,
+      modelLockRef: {
+        lockId: modelLock.lockId,
+        lockDigest: modelLock.lockDigest,
+      },
+      lockedAt: "2026-08-05T09:00:00.000Z",
+      requestedMode: "default",
+      resolution: "default_passthrough",
+    });
+    const readableSelection = createTaskRuntimeSelectionV1Alpha4({
+      schemaVersion: "v1alpha4",
+      runtimeSelectionId: id(903),
+      taskId: task.head.taskId,
+      agent: {
+        agentDefinitionId: "agent.general",
+        revision: `sha256:${"e".repeat(64)}`,
+        digest: `sha256:${"e".repeat(64)}`,
+      },
+      agentResourceDecisionDigest: `sha256:${"a".repeat(64)}`,
+      resourceEntitlementSnapshotDigest: `sha256:${"b".repeat(64)}`,
+      modelSelectionSource: "stable_fallback",
+      resolvedModelLock: modelLock,
+      activeSkillRevisions: [],
+      toolLocks: [],
+      knowledgeRevisions: [],
+      reasoningModeLock,
+      workspaceGrantId: "workspace.grant-test",
+      platformPromptRevision: `sha256:${"1".repeat(64)}`,
+      registryRevision: `sha256:${"2".repeat(64)}`,
+      createdAt: "2026-08-05T09:00:00.000Z",
+    });
+    const loadLegacySelection = vi.fn(async () => {
+      throw new Error("legacy selection parser must not run for v1alpha4");
+    });
+    const loadReadableSelection = vi.fn(async () => readableSelection);
+    const tasks = {
+      ...taskPersistence(task),
+      loadTaskRuntimeSelection: loadLegacySelection,
+      loadReadableTaskRuntimeSelection: loadReadableSelection,
+    } as unknown as TaskPersistence;
+    const service = new DesktopTaskProjectionService({
+      tasks,
+      metadata: sessionMetadata(internalSessionId, "session:desktop-a"),
+      deliveries: submitTurnPersistence(),
+      workspaces: workspaceGrantPersistence({
+        status: "active",
+        rootRealPath: "/Users/example/private-root",
+      }),
+      clock: { now: () => "2026-08-06T09:00:00.000Z" },
+      projectionStartedAt: "2026-08-05T09:00:00.000Z",
+    });
+    const detail = await service.loadDetail({
+      desktopTaskId: `task:${task.head.taskId}`,
+    });
+    expect(detail.ok).toBe(true);
+    if (!detail.ok) return;
+
+    const resolved = await service.resolveArtifactFileSource({
+      artifactId: detail.value.artifacts[0]!.artifactId,
+    });
+
+    expect(resolved).toMatchObject({
+      ok: true,
+      value: {
+        taskId: `task:${task.head.taskId}`,
+        relativePath: "reports/out.xlsx",
+        workspaceGrantId: "workspace.grant-test",
+      },
+    });
+    expect(loadReadableSelection).toHaveBeenCalledWith(task.head.taskId);
+    expect(loadLegacySelection).not.toHaveBeenCalled();
+  });
 });
 
 function persistedDocumentTask(
@@ -1033,6 +1123,7 @@ function taskPersistence(
     listUserConfirmationsByTask: async (): Promise<readonly PersistedUserConfirmation[]> => [],
     loadSubmitTurnBindingByTaskId: async () => binding,
     loadTaskRuntimeSelection: async () => selection,
+    loadReadableTaskRuntimeSelection: async () => selection,
     loadEventsAfter: async () => [],
   } as unknown as TaskPersistence;
 }

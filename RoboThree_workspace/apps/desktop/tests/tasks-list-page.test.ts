@@ -1,28 +1,46 @@
 // @vitest-environment happy-dom
 
 import { flushPromises, mount } from "@vue/test-utils";
-import { describe, expect, it, vi } from "vitest";
+import { createMemoryHistory, createRouter } from "vue-router";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   tasksAdapterKey,
   type TasksAdapter,
 } from "../src/renderer/adapters/tasks-adapter.js";
 import {
+  workbenchAdapterKey,
+  type WorkbenchAdapter,
+} from "../src/renderer/adapters/workbench-adapter.js";
+import {
   DesktopTaskWorkspaceAdapterError,
   taskWorkspaceAdapterKey,
   type TaskWorkspaceAdapter,
 } from "../src/renderer/adapters/task-workspace-adapter.js";
+import {
+  createTaskPinStore,
+  taskPinStoreKey,
+} from "../src/renderer/app/task-pin-store.js";
+import type { DesktopRendererEvent } from "../src/shared/foundation-api.js";
+import {
+  clearConversationSelections,
+  rememberConversationSelection,
+} from "../src/renderer/app/conversation-selection-store.js";
 import TasksListPage from "../src/renderer/pages/tasks/TasksListPage.vue";
 
 const timestamp = "2026-08-16T00:00:00.000Z";
 
 describe("DFE-2B tasks list page", () => {
+  beforeEach(() => clearConversationSelections());
+
   it("renders the unified task list with search, local pinning and delete gates", async () => {
     const adapter = createAdapter();
+    const taskPins = createTaskPinStore();
     const wrapper = mount(TasksListPage, {
       global: {
         provide: {
           [tasksAdapterKey as symbol]: adapter,
+          [taskPinStoreKey as symbol]: taskPins,
         },
         stubs: { Teleport: true },
       },
@@ -46,7 +64,8 @@ describe("DFE-2B tasks list page", () => {
     await wrapper.findAll("button")
       .find((button) => button.text() === "置顶")
       ?.trigger("click");
-    expect(wrapper.text()).toContain("本次视图置顶");
+    expect(wrapper.text()).toContain("本次运行置顶");
+    expect(taskPins.isPinned("task:one")).toBe(true);
   });
 
   it("renames and opens tasks through the adapter without exposing paths", async () => {
@@ -63,14 +82,14 @@ describe("DFE-2B tasks list page", () => {
     });
     await flushPromises();
 
-    await wrapper.find("[data-task-action='open']").trigger("click");
-    await flushPromises();
     await wrapper.find("[data-task-action='rename']").trigger("click");
     await flushPromises();
     await wrapper.findAll("input")
       .find((input) => input.attributes("class")?.includes("r3-input"))
       ?.setValue("Renamed task");
     await wrapper.find("[data-dialog-confirm]").trigger("click");
+    await flushPromises();
+    await wrapper.find("[data-task-action='open']").trigger("click");
     await flushPromises();
 
     expect(adapter.openTask).toHaveBeenCalledWith("session:one");
@@ -102,8 +121,9 @@ describe("DFE-2B tasks list page", () => {
     await flushPromises();
 
     expect(wrapper.text()).toContain("等待你的确认");
-    expect(wrapper.text()).toContain("任务进程");
-    expect(wrapper.text()).toContain("工具活动");
+    expect(wrapper.text()).not.toContain("任务进程");
+    expect(wrapper.text()).not.toContain("工具调用");
+    expect(wrapper.find("[data-task-action='follow-up']").exists()).toBe(false);
 
     await wrapper.find("[data-confirmation-action='confirmed']").trigger("click");
     await flushPromises();
@@ -119,6 +139,252 @@ describe("DFE-2B tasks list page", () => {
       }),
       decision: "confirmed",
     });
+    expect(adapter.continueTask).not.toHaveBeenCalled();
+    expect(adapter.provideTaskInput).not.toHaveBeenCalled();
+  });
+
+  it("keeps completed tasks in a continuous same-session conversation", async () => {
+    rememberConversationSelection("session:one", {
+      agentId: "agent:normal",
+      requestedModelId: "model:gpt",
+      selectedSkillIds: ["skill:docs"],
+      selectedKnowledgeIds: [],
+      workspaceGrantId: "workspace:one",
+    });
+    const adapter = createAdapter({
+      tasks: [task("task:done", "session:one", "completed")],
+    });
+    adapter.loadConversation.mockResolvedValue({
+      sessionId: "session:one",
+      sessionRevision: 2,
+      messages: [{
+        messageId: "message:one",
+        sessionId: "session:one",
+        sequence: 1,
+        role: "user",
+        status: "completed",
+        content: "Create report",
+        taskId: "task:done",
+        createdAt: timestamp,
+      }, {
+        messageId: "message:assistant",
+        sessionId: "session:one",
+        sequence: 2,
+        role: "assistant",
+        status: "completed",
+        content: "报告已经生成，可以继续告诉我修改要求。",
+        taskId: "task:done",
+        createdAt: timestamp,
+      }],
+      activeTaskSummaries: [],
+      latestDurableCursor: "cursor:conversation",
+      hasMoreBefore: false,
+    });
+    const workbenchAdapter = createWorkbenchAdapter();
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: "/tasks", name: "tasks", component: TasksListPage },
+      ],
+    });
+    await router.push("/tasks");
+    await router.isReady();
+    const wrapper = mount(TasksListPage, {
+      global: {
+        plugins: [router],
+        provide: {
+          [tasksAdapterKey as symbol]: adapter,
+          [workbenchAdapterKey as symbol]: workbenchAdapter,
+        },
+        stubs: { Teleport: true },
+      },
+    });
+    await flushPromises();
+    await wrapper.find("[data-task-action='open']").trigger("click");
+    await flushPromises();
+
+    expect(wrapper.find("[data-task-action='follow-up']").exists()).toBe(false);
+    expect(wrapper.find("[aria-label='任务对话']").text()).toContain(
+      "报告已经生成，可以继续告诉我修改要求。",
+    );
+    expect(wrapper.find("[aria-label='任务右侧面板']").exists()).toBe(true);
+    const composer = wrapper.find("[data-conversation-composer] textarea");
+    expect(composer.exists()).toBe(true);
+    await composer.setValue("请继续优化这份报告");
+    await composer.trigger("keydown", { key: "Enter", shiftKey: true });
+    expect(workbenchAdapter.submitTask).not.toHaveBeenCalled();
+    await composer.trigger("keydown", { key: "Enter" });
+    await flushPromises();
+
+    expect(workbenchAdapter.submitTask).toHaveBeenCalledWith({
+      sessionId: "session:one",
+      sessionTitle: "Write report",
+      userInput: "请继续优化这份报告",
+      agentId: "agent:normal",
+      requestedModelId: "model:gpt",
+      selectedSkillIds: ["skill:docs"],
+      selectedKnowledgeIds: [],
+      workspaceGrantId: "workspace:one",
+      attachments: [],
+    });
+    expect(adapter.continueTask).not.toHaveBeenCalled();
+    expect(adapter.provideTaskInput).not.toHaveBeenCalled();
+    expect(router.currentRoute.value.name).toBe("tasks");
+    expect(router.currentRoute.value.query).toEqual({
+      sessionId: "session:one",
+      taskId: "task:next",
+    });
+  });
+
+  it("fails closed instead of dropping specialist resources after Renderer restart", async () => {
+    const adapter = createAdapter({
+      tasks: [task("task:done", "session:one", "completed")],
+    });
+    const workbenchAdapter = createWorkbenchAdapter();
+    const wrapper = mount(TasksListPage, {
+      global: {
+        provide: {
+          [tasksAdapterKey as symbol]: adapter,
+          [workbenchAdapterKey as symbol]: workbenchAdapter,
+        },
+        stubs: { Teleport: true },
+      },
+    });
+    await flushPromises();
+    await wrapper.find("[data-task-action='open']").trigger("click");
+    await flushPromises();
+
+    const composer = wrapper.find("[data-conversation-composer] textarea");
+    await composer.setValue("继续修改");
+    await composer.trigger("keydown", { key: "Enter" });
+    await flushPromises();
+
+    expect(workbenchAdapter.submitTask).not.toHaveBeenCalled();
+    expect(wrapper.text()).toContain("缺少可安全复用的机器人资源");
+  });
+
+  it("shows streaming and committed Core replies without requiring a confirmation card", async () => {
+    const adapter = createAdapter({
+      tasks: [task("task:one", "session:one", "running")],
+    });
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: "/tasks", name: "tasks", component: TasksListPage }],
+    });
+    await router.push("/tasks");
+    await router.isReady();
+    const wrapper = mount(TasksListPage, {
+      global: {
+        plugins: [router],
+        provide: { [tasksAdapterKey as symbol]: adapter },
+        stubs: { Teleport: true },
+      },
+    });
+    await flushPromises();
+    await wrapper.find("[data-task-action='open']").trigger("click");
+    await flushPromises();
+
+    adapter.emit({
+      contractVersion: "v1alpha1",
+      eventId: "00000000-0000-4000-8000-000000000010",
+      deliveryKind: "ephemeral",
+      runtimeInstanceId: "runtime:one",
+      emittedAt: timestamp,
+      payload: {
+        type: "assistant_token_delta",
+        sessionId: "session:one",
+        messageId: "message:stream",
+        deltaSequence: 0,
+        delta: "正在生成真实回复",
+      },
+    });
+    await flushPromises();
+    expect(wrapper.find("[aria-label='任务对话']").text()).toContain("正在生成真实回复");
+
+    adapter.loadConversation.mockResolvedValueOnce({
+      sessionId: "session:one",
+      sessionRevision: 2,
+      messages: [{
+        messageId: "message:stream",
+        sessionId: "session:one",
+        sequence: 2,
+        role: "assistant",
+        status: "completed",
+        content: "这是 Core 持久化后的回复。",
+        taskId: "task:one",
+        createdAt: timestamp,
+      }],
+      activeTaskSummaries: [],
+      latestDurableCursor: "cursor:two",
+      hasMoreBefore: false,
+    });
+    adapter.emit({
+      contractVersion: "v1alpha1",
+      eventId: "00000000-0000-4000-8000-000000000011",
+      deliveryKind: "durable",
+      durableCursor: "cursor:two",
+      runtimeInstanceId: "runtime:one",
+      emittedAt: timestamp,
+      payload: {
+        type: "message_committed",
+        sessionId: "session:one",
+        messageId: "message:stream",
+        messageRevision: 1,
+        status: "completed",
+        queryRef: "query:conversation",
+      },
+    });
+    await flushPromises();
+
+    const conversation = wrapper.find("[aria-label='任务对话']").text();
+    expect(conversation).toContain("这是 Core 持久化后的回复。");
+    expect(conversation).not.toContain("正在生成真实回复");
+  });
+
+  it("keeps workspace-source execution details out of the product conversation", async () => {
+    const adapter = createAdapter({
+      tasks: [task("task:done", "session:one", "completed")],
+    });
+    const detail = taskDetail("task:done");
+    adapter.loadTaskDetail.mockResolvedValueOnce({
+      ...detail,
+      toolActivities: [{
+        ...detail.toolActivities[0]!,
+        activityId: "activity:read",
+        toolName: "adapter.tool.document-worker",
+        operationType: "tool.document.docx.read",
+        status: "completed",
+        endedAt: timestamp,
+      }, {
+        ...detail.toolActivities[0]!,
+        activityId: "activity:write",
+        toolName: "adapter.tool.document-worker",
+        operationType: "tool.document.pptx.write",
+        status: "completed",
+        endedAt: timestamp,
+      }],
+      artifacts: [{
+        ...detail.artifacts[0]!,
+        displayName: "资料汇报.pptx",
+        kind: "document",
+        mediaType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        metadata: { capabilityId: "tool.document.pptx.write" },
+      }],
+    });
+    const wrapper = mount(TasksListPage, {
+      global: {
+        provide: { [tasksAdapterKey as symbol]: adapter },
+        stubs: { Teleport: true },
+      },
+    });
+    await flushPromises();
+
+    await wrapper.find("[data-task-action='open']").trigger("click");
+    await flushPromises();
+
+    expect(wrapper.find("[aria-label='任务步骤']").exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("任务进程");
+    expect(wrapper.text()).not.toContain("工具调用");
   });
 
   it("renders the right artifact panel and uses pathless preview/open/export actions", async () => {
@@ -138,7 +404,7 @@ describe("DFE-2B tasks list page", () => {
     await wrapper.find("[data-task-action='open']").trigger("click");
     await flushPromises();
 
-    expect(wrapper.text()).toContain("右侧面板");
+    expect(wrapper.find("select[aria-label='面板内容']").exists()).toBe(true);
     expect(wrapper.text()).toContain("report.md");
     expect(wrapper.text()).toContain("工作空间文件");
 
@@ -182,9 +448,7 @@ describe("DFE-2B tasks list page", () => {
 
     await wrapper.find("[data-task-action='open']").trigger("click");
     await flushPromises();
-    await wrapper.findAll("[role='tab']")
-      .find((tab) => tab.text() === "工作空间文件")
-      ?.trigger("click");
+    await wrapper.find("select[aria-label='面板内容']").setValue("workspace");
     await flushPromises();
 
     expect(wrapper.text()).toContain("src");
@@ -238,9 +502,7 @@ describe("DFE-2B tasks list page", () => {
 
     await wrapper.find("[data-task-action='open']").trigger("click");
     await flushPromises();
-    await wrapper.findAll("[role='tab']")
-      .find((tab) => tab.text() === "工作空间文件")
-      ?.trigger("click");
+    await wrapper.find("select[aria-label='面板内容']").setValue("workspace");
     await flushPromises();
 
     expect(wrapper.text()).toContain("工作空间文件不可用");
@@ -272,8 +534,15 @@ describe("DFE-2B tasks list page", () => {
         });
       }),
     });
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: "/tasks", name: "tasks", component: { template: "<div />" } }],
+    });
+    await router.push("/tasks");
+    await router.isReady();
     const wrapper = mount(TasksListPage, {
       global: {
+        plugins: [router],
         provide: {
           [tasksAdapterKey as symbol]: adapter,
           [taskWorkspaceAdapterKey as symbol]: workspaceAdapter,
@@ -285,15 +554,14 @@ describe("DFE-2B tasks list page", () => {
 
     await wrapper.find("[data-task-action='open']").trigger("click");
     await flushPromises();
-    await wrapper.findAll("[role='tab']")
-      .find((tab) => tab.text() === "工作空间文件")
-      ?.trigger("click");
+    await wrapper.find("select[aria-label='面板内容']").setValue("workspace");
     await flushPromises();
-    await wrapper.findAll("[data-task-action='open']")[1]?.trigger("click");
+    await router.push({
+      name: "tasks",
+      query: { sessionId: "session:two", taskId: "task:done" },
+    });
     await flushPromises();
-    await wrapper.findAll("[role='tab']")
-      .find((tab) => tab.text() === "工作空间文件")
-      ?.trigger("click");
+    await wrapper.find("select[aria-label='面板内容']").setValue("workspace");
     releaseFirst?.(directoryProjection({
       entries: [fileEntry("stale.xlsx")],
     }));
@@ -334,9 +602,7 @@ describe("DFE-2B tasks list page", () => {
 
     await wrapper.find("[data-task-action='open']").trigger("click");
     await flushPromises();
-    await wrapper.findAll("[role='tab']")
-      .find((tab) => tab.text() === "工作空间文件")
-      ?.trigger("click");
+    await wrapper.find("select[aria-label='面板内容']").setValue("workspace");
     await flushPromises();
     await wrapper.find("[data-workspace-action='load-more']").trigger("click");
     await flushPromises();
@@ -344,6 +610,25 @@ describe("DFE-2B tasks list page", () => {
     expect(wrapper.text()).toContain("目录已刷新");
     expect(wrapper.text()).toContain("refreshed.xlsx");
     expect(rootLoads).toBe(2);
+  });
+
+  it("explains irreversible task-message deletion without implying artifact deletion", async () => {
+    const adapter = createAdapter({
+      tasks: [task("task:done", "session:one", "completed")],
+    });
+    const wrapper = mount(TasksListPage, {
+      global: {
+        provide: { [tasksAdapterKey as symbol]: adapter },
+        stubs: { Teleport: true },
+      },
+    });
+    await flushPromises();
+
+    await wrapper.findAll("button").find((button) => button.text() === "删除")?.trigger("click");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("任务消息将被永久删除且无法恢复");
+    expect(wrapper.text()).toContain("成果文件和工作空间文件不会被删除");
   });
 });
 
@@ -353,6 +638,7 @@ function createAdapter(
   overrides: Partial<Awaited<ReturnType<TasksAdapter["loadTasks"]>>> = {},
 ) {
   const session = sessionSummary("session:one", "Write report");
+  let handler: ((event: DesktopRendererEvent) => void) | undefined;
   return {
     loadTasks: vi.fn(async () => ({
       sessions: [session],
@@ -375,6 +661,11 @@ function createAdapter(
       activeTaskSummaries: [],
       latestDurableCursor: "cursor:conversation",
       hasMoreBefore: false,
+    })),
+    loadTaskReasoning: vi.fn(async (taskId: string) => ({
+      state: "legacy" as const,
+      taskId,
+      safeSummary: "该任务创建时未记录 Max 推理摘要" as const,
     })),
     loadTaskDetail: vi.fn(async (taskId: string) => taskDetail(taskId)),
     openTask: vi.fn(async () => session),
@@ -433,7 +724,75 @@ function createAdapter(
       exported: true,
       fileName: "report.md",
     })),
-    subscribe: vi.fn(() => () => {}),
+    subscribe: vi.fn((nextHandler: (event: DesktopRendererEvent) => void) => {
+      handler = nextHandler;
+      return () => { handler = undefined; };
+    }),
+    emit(event: DesktopRendererEvent): void {
+      handler?.(event);
+    },
+  };
+}
+
+function createWorkbenchAdapter(): WorkbenchAdapter {
+  const revision = "c".repeat(64);
+  return {
+    loadWorkbenchData: vi.fn(async () => ({
+      workspaces: [],
+      sessions: [sessionSummary("session:one", "Write report")],
+      agents: [{
+        agentId: "agent:normal",
+        revision,
+        name: "Normal Agent",
+        identity: "Normal",
+        goal: "Help",
+        defaultModelId: "model:gpt",
+        allowModelOverride: true,
+        eligibleModels: [{
+          modelId: "model:gpt",
+          revision,
+          name: "GPT",
+          source: "official" as const,
+          capabilities: ["text", "tool_calling"] as const,
+          available: true,
+        }],
+        requiredModelCapabilities: ["text"] as const,
+        skills: [{
+          id: "skill:docs",
+          revision,
+          name: "Docs",
+          available: true,
+        }],
+        tools: [],
+        knowledge: [],
+        runnable: true,
+      }],
+      models: [{
+        modelId: "model:gpt",
+        revision,
+        name: "GPT",
+        source: "official" as const,
+        capabilities: ["text", "tool_calling"] as const,
+        available: true,
+      }],
+      recentTasks: [],
+      recentArtifacts: [],
+    })),
+    createWorkspaceGrant: vi.fn(async () => undefined),
+    pickWorkspaceAttachment: vi.fn(async () => undefined),
+    submitTask: vi.fn(async () => ({
+      session: sessionSummary("session:one", "Write report"),
+      receipt: {
+        submitTurnCommandId: "00000000-0000-4000-8000-000000000001",
+        clientTurnId: "turn:00000000-0000-4000-8000-000000000002",
+        userMessageId: "message:next",
+        taskId: "task:next",
+        runtimeSelectionId: "runtime:next",
+        status: "accepted" as const,
+        acceptedAt: timestamp,
+      },
+    })),
+    recoverReasoningSubmit: vi.fn(),
   };
 }
 

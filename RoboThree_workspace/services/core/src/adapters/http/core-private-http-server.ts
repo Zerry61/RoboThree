@@ -22,6 +22,36 @@ import {
 export const CORE_PRIVATE_ORIGIN = "robothree://desktop-main";
 
 export const CORE_PRIVATE_ROUTES = Object.freeze({
+  listMyRobotDraftsV1Alpha1: "/agent-lifecycle/v1alpha1/drafts/list",
+  getMyRobotDraftV1Alpha1: "/agent-lifecycle/v1alpha1/drafts/detail",
+  createRobotDraftV1Alpha1: "/agent-lifecycle/v1alpha1/drafts/create",
+  updateRobotDraftV1Alpha1: "/agent-lifecycle/v1alpha1/drafts/update",
+  startRobotDraftTestV1Alpha1: "/agent-lifecycle/v1alpha1/drafts/test",
+  submitRobotDraftV1Alpha1: "/agent-lifecycle/v1alpha1/drafts/submit",
+  withdrawRobotSubmissionV1Alpha1: "/agent-lifecycle/v1alpha1/drafts/withdraw",
+  personalModelManagementCompatibilityV1Alpha2:
+    "/personal-model-management/v1alpha2/compatibility",
+  listPersonalModelsV1Alpha2: "/personal-model-management/v1alpha2/list",
+  getPersonalModelV1Alpha2: "/personal-model-management/v1alpha2/detail",
+  createPersonalModelV1Alpha2: "/personal-model-management/v1alpha2/create",
+  updatePersonalModelV1Alpha2: "/personal-model-management/v1alpha2/update",
+  deletePersonalModelV1Alpha2: "/personal-model-management/v1alpha2/delete",
+  revealPersonalModelV1Alpha2: "/personal-model-management/v1alpha2/reveal",
+  queryPersonalModelOperationV1Alpha2: "/personal-model-management/v1alpha2/operation",
+  personalModelManagementCompatibilityV1Alpha1:
+    "/personal-model-management/v1alpha1/compatibility",
+  listPersonalModelsV1Alpha1: "/personal-model-management/v1alpha1/list",
+  getPersonalModelV1Alpha1: "/personal-model-management/v1alpha1/detail",
+  getTaskReasoningModeV1Alpha1: "/task-reasoning/v1alpha1/get",
+  compatibilityV1Alpha5: "/v1alpha5/control/compatibility",
+  previewReasoningModeV1Alpha5: "/v1alpha5/reasoning/preview",
+  getReasoningModePreferenceV1Alpha5: "/v1alpha5/reasoning/preference/get",
+  updateReasoningModePreferenceV1Alpha5: "/v1alpha5/reasoning/preference/update",
+  submitTurnV1Alpha5: "/v1alpha5/turns/submit",
+  submitTurnStatusV1Alpha5: "/v1alpha5/turns/status",
+  compatibilityV1Alpha4: "/v1alpha4/control/compatibility",
+  submitTurnV1Alpha4: "/v1alpha4/turns/submit",
+  submitTurnStatusV1Alpha4: "/v1alpha4/turns/status",
   compatibilityV1Alpha2: "/v1alpha2/control/compatibility",
   listRobotCatalogV1Alpha2: "/v1alpha2/catalog/robots/list",
   getRobotCatalogV1Alpha2: "/v1alpha2/catalog/robots/detail",
@@ -66,6 +96,10 @@ export const CORE_PRIVATE_ROUTES = Object.freeze({
 const MAX_REQUEST_BYTES = 1024 * 1024;
 const MAX_V1ALPHA2_WORKSPACE_REQUEST_BYTES = 16 * 1024;
 const MAX_V1ALPHA2_CATALOG_REQUEST_BYTES = 16 * 1024;
+const MAX_V1ALPHA5_CONTROL_REQUEST_BYTES = 16 * 1024;
+const MAX_V1ALPHA5_SUBMIT_REQUEST_BYTES = 160 * 1024;
+const MAX_TASK_REASONING_REQUEST_BYTES = 16 * 1024;
+const MAX_PERSONAL_MODEL_MANAGEMENT_REQUEST_BYTES = 16 * 1024;
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 
 export type CorePrivateHttpResourceSnapshot = Readonly<{
@@ -233,9 +267,20 @@ export class CorePrivateHttpServer implements RuntimeComponent {
         || url.pathname === CORE_PRIVATE_ROUTES.getRobotCatalogV1Alpha2
         || url.pathname === CORE_PRIVATE_ROUTES.listToolCatalogV1Alpha2
         || url.pathname === CORE_PRIVATE_ROUTES.getToolCatalogV1Alpha2;
+      const isV1Alpha5 = url.pathname.startsWith("/v1alpha5/");
+      const isPersonalModelManagement =
+        url.pathname.startsWith("/personal-model-management/");
       const input = await readJsonBody(
         request,
-        isCatalogV1Alpha2
+        isPersonalModelManagement
+          ? MAX_PERSONAL_MODEL_MANAGEMENT_REQUEST_BYTES
+          : url.pathname === CORE_PRIVATE_ROUTES.getTaskReasoningModeV1Alpha1
+          ? MAX_TASK_REASONING_REQUEST_BYTES
+          : url.pathname === CORE_PRIVATE_ROUTES.submitTurnV1Alpha5
+          ? MAX_V1ALPHA5_SUBMIT_REQUEST_BYTES
+          : isV1Alpha5
+            ? MAX_V1ALPHA5_CONTROL_REQUEST_BYTES
+            : isCatalogV1Alpha2
           ? MAX_V1ALPHA2_CATALOG_REQUEST_BYTES
           : isWorkspaceV1Alpha2
             ? MAX_V1ALPHA2_WORKSPACE_REQUEST_BYTES
@@ -244,6 +289,8 @@ export class CorePrivateHttpServer implements RuntimeComponent {
       const controller = new AbortController();
       const deadlineMs = isCatalogV1Alpha2
         ? 5_000
+        : isPersonalModelManagement
+          ? 5_000
         : url.pathname === CORE_PRIVATE_ROUTES.workspaceEntriesV1Alpha2
           ? 5_000
           : url.pathname === CORE_PRIVATE_ROUTES.workspaceRevealAuthorityV1Alpha2
@@ -289,6 +336,62 @@ export class CorePrivateHttpServer implements RuntimeComponent {
     signal?: AbortSignal,
   ): Promise<{ ok: boolean; value?: unknown; error?: unknown } | undefined> {
     switch (path) {
+      case CORE_PRIVATE_ROUTES.listMyRobotDraftsV1Alpha1:
+        return this.#facade.listMyRobotDraftsV1Alpha1(input as never);
+      case CORE_PRIVATE_ROUTES.getMyRobotDraftV1Alpha1:
+        return this.#facade.getMyRobotDraftV1Alpha1(input as never);
+      case CORE_PRIVATE_ROUTES.createRobotDraftV1Alpha1:
+        return this.#facade.createRobotDraftV1Alpha1(input as never);
+      case CORE_PRIVATE_ROUTES.updateRobotDraftV1Alpha1:
+        return this.#facade.updateRobotDraftV1Alpha1(input as never);
+      case CORE_PRIVATE_ROUTES.startRobotDraftTestV1Alpha1:
+        return this.#facade.startRobotDraftTestV1Alpha1(input as never);
+      case CORE_PRIVATE_ROUTES.submitRobotDraftV1Alpha1:
+        return this.#facade.submitRobotDraftV1Alpha1(input as never);
+      case CORE_PRIVATE_ROUTES.withdrawRobotSubmissionV1Alpha1:
+        return this.#facade.withdrawRobotSubmissionV1Alpha1(input as never);
+      case CORE_PRIVATE_ROUTES.personalModelManagementCompatibilityV1Alpha2:
+        return this.#facade.personalModelManagementCompatibilityV1Alpha2(input);
+      case CORE_PRIVATE_ROUTES.listPersonalModelsV1Alpha2:
+        return this.#facade.listPersonalModelsV1Alpha2(input);
+      case CORE_PRIVATE_ROUTES.getPersonalModelV1Alpha2:
+        return this.#facade.getPersonalModelV1Alpha2(input);
+      case CORE_PRIVATE_ROUTES.createPersonalModelV1Alpha2:
+        return this.#facade.createPersonalModelV1Alpha2(input);
+      case CORE_PRIVATE_ROUTES.updatePersonalModelV1Alpha2:
+        return this.#facade.updatePersonalModelV1Alpha2(input);
+      case CORE_PRIVATE_ROUTES.deletePersonalModelV1Alpha2:
+        return this.#facade.deletePersonalModelV1Alpha2(input);
+      case CORE_PRIVATE_ROUTES.revealPersonalModelV1Alpha2:
+        return this.#facade.revealPersonalModelV1Alpha2(input);
+      case CORE_PRIVATE_ROUTES.queryPersonalModelOperationV1Alpha2:
+        return this.#facade.queryPersonalModelOperationV1Alpha2(input);
+      case CORE_PRIVATE_ROUTES.personalModelManagementCompatibilityV1Alpha1:
+        return this.#facade.personalModelManagementCompatibilityV1Alpha1(input as never);
+      case CORE_PRIVATE_ROUTES.listPersonalModelsV1Alpha1:
+        return this.#facade.listPersonalModelsV1Alpha1(input as never);
+      case CORE_PRIVATE_ROUTES.getPersonalModelV1Alpha1:
+        return this.#facade.getPersonalModelV1Alpha1(input as never);
+      case CORE_PRIVATE_ROUTES.getTaskReasoningModeV1Alpha1:
+        return this.#facade.getTaskReasoningModeV1Alpha1(input as never);
+      case CORE_PRIVATE_ROUTES.compatibilityV1Alpha5:
+        return this.#facade.compatibilityV1Alpha5(input as never);
+      case CORE_PRIVATE_ROUTES.previewReasoningModeV1Alpha5:
+        return this.#facade.previewReasoningModeV1Alpha5(input as never);
+      case CORE_PRIVATE_ROUTES.getReasoningModePreferenceV1Alpha5:
+        return this.#facade.getReasoningModePreferenceV1Alpha5(input as never);
+      case CORE_PRIVATE_ROUTES.updateReasoningModePreferenceV1Alpha5:
+        return this.#facade.updateReasoningModePreferenceV1Alpha5(input as never);
+      case CORE_PRIVATE_ROUTES.submitTurnV1Alpha5:
+        return this.#facade.submitTurnV1Alpha5(input as never);
+      case CORE_PRIVATE_ROUTES.submitTurnStatusV1Alpha5:
+        return this.#facade.querySubmitTurnV1Alpha5(input as never);
+      case CORE_PRIVATE_ROUTES.compatibilityV1Alpha4:
+        return this.#facade.compatibilityV1Alpha4(input as never);
+      case CORE_PRIVATE_ROUTES.submitTurnV1Alpha4:
+        return this.#facade.submitTurnV1Alpha4(input as never);
+      case CORE_PRIVATE_ROUTES.submitTurnStatusV1Alpha4:
+        return this.#facade.querySubmitTurnV1Alpha4(input as never);
       case CORE_PRIVATE_ROUTES.compatibilityV1Alpha2:
         return this.#facade.compatibilityV1Alpha2(input as never);
       case CORE_PRIVATE_ROUTES.listRobotCatalogV1Alpha2:

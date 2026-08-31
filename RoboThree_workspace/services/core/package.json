@@ -1,6 +1,6 @@
 {
   "name": "@robothree/core",
-  "version": "0.0.0-r2d.3.2",
+  "version": "0.0.0-mvp.workspace.1",
   "private": true,
   "type": "module",
   "exports": {

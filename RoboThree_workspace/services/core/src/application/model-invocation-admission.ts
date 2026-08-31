@@ -11,8 +11,8 @@ import type {
   UserConfirmationDecision,
   UserConfirmationRequest,
 } from "@robothree/contracts";
-import type { ReadableTaskRuntimeSelection } from
-  "@robothree/contracts/runtime-selection/v1alpha2";
+import type { ReadableTaskRuntimeSelectionV1Alpha4 } from
+  "@robothree/contracts/runtime-selection/v1alpha4";
 
 import type { Clock } from "../ports/clock.js";
 import type { IdGenerator } from "../ports/id-generator.js";
@@ -50,7 +50,7 @@ export class ModelInvocationAdmissionRejected extends Error {
 export interface ModelInvocationLiveAuthorizer {
   assertAllowed(input: Readonly<{
     taskId: string;
-    runtimeSelection: ReadableTaskRuntimeSelection;
+    runtimeSelection: ReadableTaskRuntimeSelectionV1Alpha4;
     modelLock: TaskCapabilityLock;
   }>): Promise<void>;
 }
@@ -81,7 +81,7 @@ export class ModelInvocationAdmission {
     runId: string;
     stepId: string;
     actionId: string;
-    runtimeSelection: ReadableTaskRuntimeSelection;
+    runtimeSelection: ReadableTaskRuntimeSelectionV1Alpha4;
     modelLock: TaskCapabilityLock;
     externalTarget: string;
     dataCategories: readonly ModelExternalDataCategory[];
@@ -146,7 +146,7 @@ export class ModelInvocationAdmission {
 
 function assertExactModelLock(input: Readonly<{
   taskId: string;
-  runtimeSelection: ReadableTaskRuntimeSelection;
+  runtimeSelection: ReadableTaskRuntimeSelectionV1Alpha4;
   modelLock: TaskCapabilityLock;
   externalTarget?: string;
 }>): void {

@@ -1,13 +1,17 @@
+import { createHash } from "node:crypto";
+
 import { JsonValueSchema } from "@robothree/contracts";
 import type {
-  AgentDefinitionRevision,
   ConversationMessage,
   TaskCapabilityLock,
 } from "@robothree/contracts";
 import {
   TaskRuntimeSelectionV1Alpha2Schema,
-  type ReadableTaskRuntimeSelection,
 } from "@robothree/contracts/runtime-selection/v1alpha2";
+import {
+  TaskRuntimeSelectionV1Alpha4Schema,
+  type ReadableTaskRuntimeSelectionV1Alpha4,
+} from "@robothree/contracts/runtime-selection/v1alpha4";
 
 import type {
   AgentLoopStarter,
@@ -18,7 +22,6 @@ import type { ConversationPersistence } from "../ports/conversation-persistence.
 import type { IdGenerator } from "../ports/id-generator.js";
 import type { SubmitTurnPersistence } from "../ports/submit-turn-persistence.js";
 import type { TaskPersistence } from "../ports/task-persistence.js";
-import type { TrustedAgentRepository } from "../ports/trusted-runtime-catalog.js";
 import { sha256CanonicalJson } from "../persistence/digest.js";
 import type { AgentLoopCoordinator } from "./agent-loop-coordinator.js";
 import type { ContextPipeline } from "./context-pipeline.js";
@@ -31,6 +34,11 @@ import type { TaskLockedModelProviderResolver } from
 import { RuntimeAdapterTaskLockedModelProviderResolver } from
   "./task-locked-model-provider-resolution.js";
 import type { ModelInvocationAdmission } from "./model-invocation-admission.js";
+import type {
+  ModelInvocationLink,
+  ModelInvocationLinkPersistence,
+} from "../ports/model-invocation-link-persistence.js";
+import type { AgentLoopRecoverySeed } from "./agent-loop-coordinator.js";
 import { ModelInvocationAdmissionPending } from "./model-invocation-admission.js";
 import type { ModelContextProvenanceClassifier } from "./model-context-provenance-classifier.js";
 import type {
@@ -79,8 +87,26 @@ import {
   type DynamicRequestFactsRuntime,
   type DynamicRequestFactsV1,
 } from "./dynamic-request-facts.js";
+import type { ReadableAgentDefinitionRevision } from "./agent-definition-v1alpha2.js";
+
+export interface ExecutionAgentRevisionRepository {
+  loadAgentRevision(
+    agentDefinitionId: string,
+    revision: string,
+  ): Promise<ReadableAgentDefinitionRevision | undefined>;
+}
 
 type StartInput = Parameters<AgentLoopStarter["start"]>[0];
+
+type StartupRecoverySeed = AgentLoopRecoverySeed & Readonly<{
+  runId: string;
+  stepId: string;
+  actionId: string;
+  runtimeSelectionDigest: string;
+  modelRequestId: string;
+  modelRequestDigest: string;
+  providerRequestDeadlineAt: string;
+}>;
 
 export type CompactionRecoveryFaultPoint =
   | "compaction.admission_authorized_before_request"
@@ -96,7 +122,7 @@ export class DurableAgentLoopStarter implements AgentLoopStarter {
   readonly #ids: IdGenerator;
   readonly #conversation: ConversationPersistence;
   readonly #tasks: TaskPersistence;
-  readonly #agents: TrustedAgentRepository;
+  readonly #agents: ExecutionAgentRevisionRepository;
   readonly #loop: AgentLoopCoordinator;
   readonly #taskRuntime: DurableTaskRuntime;
   readonly #coordination: SubmitTurnPersistence | undefined;
@@ -108,6 +134,7 @@ export class DurableAgentLoopStarter implements AgentLoopStarter {
   readonly #contextPreparation: ContextPreparationCoordinator;
   readonly #instructionRuntime: TaskLockedInstructionRuntimeResolver | undefined;
   readonly #dynamicRequestFacts: DynamicRequestFactsRuntime | undefined;
+  readonly #modelInvocationLinks: ModelInvocationLinkPersistence | undefined;
   readonly #compactionRecoveryFaultInjector:
     | ((point: CompactionRecoveryFaultPoint) => void)
     | undefined;
@@ -120,7 +147,7 @@ export class DurableAgentLoopStarter implements AgentLoopStarter {
     ids: IdGenerator;
     conversation: ConversationPersistence;
     tasks: TaskPersistence;
-    agents: TrustedAgentRepository;
+    agents: ExecutionAgentRevisionRepository;
     snapshots: TurnSnapshotBuilder;
     context: ContextPipeline;
     loop: AgentLoopCoordinator;
@@ -134,6 +161,7 @@ export class DurableAgentLoopStarter implements AgentLoopStarter {
     localPersonalTimeoutPolicy?: ModelInvocationTimeoutPolicy;
     instructionRuntimeResolver?: TaskLockedInstructionRuntimeResolver;
     dynamicRequestFactsRuntime?: DynamicRequestFactsRuntime;
+    modelInvocationLinks?: ModelInvocationLinkPersistence;
     compactionRecoveryFaultInjector?: (point: CompactionRecoveryFaultPoint) => void;
   }) {
     this.#clock = input.clock;
@@ -154,6 +182,7 @@ export class DurableAgentLoopStarter implements AgentLoopStarter {
     this.#localPersonalTimeoutPolicy = input.localPersonalTimeoutPolicy;
     this.#instructionRuntime = input.instructionRuntimeResolver;
     this.#dynamicRequestFacts = input.dynamicRequestFactsRuntime;
+    this.#modelInvocationLinks = input.modelInvocationLinks;
     this.#compactionRecoveryFaultInjector = input.compactionRecoveryFaultInjector;
     this.#contextPreparation = new ContextPreparationCoordinator({
       conversation: input.conversation,
@@ -190,9 +219,88 @@ export class DurableAgentLoopStarter implements AgentLoopStarter {
     });
   }
 
+  async resumeFromStartup(taskId: string): Promise<void> {
+    await this.#enqueue(`startup-recovery:${taskId}`, async () => {
+      const recovery = await this.#buildStartupRecovery(taskId);
+      await this.#start(recovery.input, true, recovery.seed);
+    });
+  }
+
+  async #buildStartupRecovery(taskId: string): Promise<Readonly<{
+    input: StartInput;
+    seed: StartupRecoverySeed;
+  }>> {
+    if (this.#modelInvocationLinks === undefined) {
+      throw new Error("Agent Loop startup recovery link authority is unavailable");
+    }
+    const binding = await this.#tasks.loadSubmitTurnBindingByTaskId(taskId);
+    const task = await this.#tasks.loadTask(taskId);
+    const state = task?.checkpoint.state;
+    if (
+      binding === undefined
+      || state === undefined
+      || state.status !== "running"
+      || state.sessionId === undefined
+    ) throw new Error("Agent Loop startup recovery Task is not eligible");
+    const run = state.runs.find((candidate) =>
+      candidate.runId === state.activeRunId
+      && candidate.status === "running");
+    const step = run?.steps.find((candidate) =>
+      candidate.stepId === run.activeStepId
+      && candidate.status === "running"
+      && candidate.action.kind === "model.generate");
+    if (run === undefined || step === undefined) {
+      throw new Error("Agent Loop startup recovery active execution is unavailable");
+    }
+    const matches = (await this.#modelInvocationLinks.listIncomplete(1_000)).filter((link) =>
+      link.taskId === taskId
+      && link.runId === run.runId
+      && link.stepId === step.stepId
+      && link.actionId === step.action.actionId);
+    if (matches.length !== 1) {
+      throw new Error("Agent Loop startup recovery invocation identity is ambiguous");
+    }
+    const link = matches[0]!;
+    if (
+      link.invocationId === undefined
+      || link.messageCommittedAt !== undefined
+      || link.outputStartedAt !== undefined
+      || link.providerRequestDeadlineAt === undefined
+    ) throw new Error("Agent Loop startup recovery invocation is outside the safe window");
+    const head = await this.#conversation.loadSession(state.sessionId);
+    if (head === undefined) throw new Error("Agent Loop startup recovery Session is unavailable");
+    const messages = await loadMessages(this.#conversation, state.sessionId);
+    const evidence = head.messageSequence === 0 ? []
+      : await this.#conversation.listToolCallBatchEvidenceBySessionRange(
+        state.sessionId,
+        1,
+        head.messageSequence,
+      );
+    const seed = buildAgentLoopStartupRecoverySeed({
+      taskId,
+      runId: run.runId,
+      stepId: step.stepId,
+      actionId: step.action.actionId,
+      link,
+      messages,
+      evidence,
+    });
+    return Object.freeze({
+      input: Object.freeze({
+        submitTurnCommandId: binding.submitTurnCommandId,
+        taskId,
+        runtimeSelectionId: binding.runtimeSelectionId,
+        sessionId: state.sessionId,
+        userMessageId: binding.userMessageId,
+      }),
+      seed,
+    });
+  }
+
   async #start(
     input: StartInput,
     forceContinuation: boolean,
+    recoverySeed?: StartupRecoverySeed,
   ): Promise<AgentLoopStartResult> {
     const identityDigest = sha256CanonicalJson(JsonValueSchema.parse(input));
     const existingIdentity = this.#identities.get(input.submitTurnCommandId);
@@ -213,6 +321,10 @@ export class DurableAgentLoopStarter implements AgentLoopStarter {
     ) {
       throw new Error("Agent Loop start identity does not match the durable Task bundle");
     }
+    if (
+      recoverySeed !== undefined
+      && bundle.runtimeSelection.selectionDigest !== recoverySeed.runtimeSelectionDigest
+    ) throw new Error("Agent Loop recovery Runtime Selection digest drifted");
     const agent = await this.#agents.loadAgentRevision(
       bundle.runtimeSelection.agent.agentDefinitionId,
       bundle.runtimeSelection.agent.revision,
@@ -235,7 +347,9 @@ export class DurableAgentLoopStarter implements AgentLoopStarter {
     }
     const reasoningSelection = bundle.runtimeSelection.schemaVersion === "v1alpha2"
       ? TaskRuntimeSelectionV1Alpha2Schema.parse(bundle.runtimeSelection)
-      : undefined;
+      : bundle.runtimeSelection.schemaVersion === "v1alpha4"
+        ? TaskRuntimeSelectionV1Alpha4Schema.parse(bundle.runtimeSelection)
+        : undefined;
     const reasoningMaterializer = reasoningSelection === undefined
       ? undefined
       : new TaskReasoningRequestMaterializer();
@@ -306,6 +420,14 @@ export class DurableAgentLoopStarter implements AgentLoopStarter {
     const externalTarget = resolvedModel?.externalTarget
       ?? modelLock.adapterDescriptorSnapshot.implementationRef;
     let execution = await this.#ensureTaskExecution(input.taskId);
+    if (
+      recoverySeed !== undefined
+      && (
+        execution.runId !== recoverySeed.runId
+        || execution.stepId !== recoverySeed.stepId
+        || execution.actionId !== recoverySeed.actionId
+      )
+    ) throw new Error("Agent Loop recovery active execution drifted");
     if (this.#activeRuns.has(input.taskId)) {
       throw new Error("Agent Loop already has an active execution for this Task");
     }
@@ -507,6 +629,7 @@ export class DurableAgentLoopStarter implements AgentLoopStarter {
         runId: execution.runId,
         signal: abort.signal,
         now: () => this.#clock.now(),
+        ...(recoverySeed === undefined ? {} : { recoverySeed }),
         createAssistantMessageId: () => this.#ids.next(),
         onTextDelta: ({ messageId, deltaSequence, delta }) => {
           if (messageId === undefined) return;
@@ -521,6 +644,15 @@ export class DurableAgentLoopStarter implements AgentLoopStarter {
         buildRequest: async (round) => {
           execution = await this.#ensureTaskExecution(input.taskId);
           roundExecutions.set(round, execution);
+          const requestIdentity = [
+            input.taskId,
+            execution.runId,
+            execution.stepId,
+            execution.actionId,
+            String(round),
+          ].join(":");
+          let snapshotOrdinal = 0;
+          let requestOrdinal = 0;
           const dynamicRequestFacts = this.#dynamicRequestFacts === undefined
             ? undefined
             : model === undefined
@@ -540,8 +672,16 @@ export class DurableAgentLoopStarter implements AgentLoopStarter {
               });
           const prepared = await this.#contextPreparation.prepare({
             sessionId: input.sessionId,
-            snapshotId: () => this.#ids.next(),
-            requestId: () => this.#ids.next(),
+            snapshotId: () => {
+              this.#ids.next();
+              snapshotOrdinal += 1;
+              return stableUuid(requestIdentity, `turn-snapshot:${snapshotOrdinal}`);
+            },
+            requestId: () => {
+              this.#ids.next();
+              requestOrdinal += 1;
+              return stableUuid(requestIdentity, `model-request:${requestOrdinal}`);
+            },
             createdAt: () => this.#clock.now(),
             pipelineInput: (facts) => ({
               phase: round === 1 ? "pre_call" : "mid_turn",
@@ -640,6 +780,14 @@ export class DurableAgentLoopStarter implements AgentLoopStarter {
               ? {}
               : { dynamicRequestFacts }),
           });
+          if (
+            recoverySeed !== undefined
+            && round === recoverySeed.activeRound
+            && (
+              finalized.request.requestId !== recoverySeed.modelRequestId
+              || finalized.request.requestDigest !== recoverySeed.modelRequestDigest
+            )
+          ) throw new Error("Agent Loop recovery Model Request digest drifted");
           return finalized.request;
         },
         buildInvocation: async (request, round, assistantMessageId) => {
@@ -654,7 +802,10 @@ export class DurableAgentLoopStarter implements AgentLoopStarter {
               taskId: input.taskId,
               round,
             }));
-            const timeout = this.#invocationTimeout(resolvedModel?.authority);
+            const timeout = recoverySeed !== undefined
+              && round === recoverySeed.activeRound
+              ? { deadlineAt: recoverySeed.providerRequestDeadlineAt }
+              : this.#invocationTimeout(resolvedModel?.authority);
             return {
               sessionId: input.sessionId,
               taskId: input.taskId,
@@ -721,7 +872,10 @@ export class DurableAgentLoopStarter implements AgentLoopStarter {
             dataCategories: classified.dataCategories,
             dataScopeDigest: classified.dataScopeDigest,
           });
-          const timeout = this.#invocationTimeout(resolvedModel?.authority);
+          const timeout = recoverySeed !== undefined
+            && round === recoverySeed.activeRound
+            ? { deadlineAt: recoverySeed.providerRequestDeadlineAt }
+            : this.#invocationTimeout(resolvedModel?.authority);
           return {
             sessionId: input.sessionId,
             taskId: input.taskId,
@@ -1086,7 +1240,7 @@ export class DurableAgentLoopStarter implements AgentLoopStarter {
 }
 
 function legacyInstructionRuntime(
-  agent: AgentDefinitionRevision,
+  agent: ReadableAgentDefinitionRevision,
 ): TaskLockedInstructionRuntimeMaterial {
   const instruction = [
     `Identity: ${agent.identity}`,
@@ -1122,7 +1276,7 @@ function cpcSafeSummary(code: CpcInstructionFoundationError["code"]): string {
 function instructionContext(
   runtime: TaskLockedInstructionRuntimeMaterial,
   snapshotId: string,
-  agent: AgentDefinitionRevision,
+  agent: ReadableAgentDefinitionRevision,
 ): Pick<
   ContextPipelineInput,
   "instructions" | "lockedInstructionBundle"
@@ -1156,9 +1310,9 @@ function instructionContext(
 
 function toolSchemaCandidates(input: {
   snapshotId: string;
-  runtimeSelection: ReadableTaskRuntimeSelection;
+  runtimeSelection: ReadableTaskRuntimeSelectionV1Alpha4;
   toolLocks: readonly {
-    reference: ReadableTaskRuntimeSelection["toolLocks"][number];
+    reference: ReadableTaskRuntimeSelectionV1Alpha4["toolLocks"][number];
     lock: TaskCapabilityLock;
   }[];
 }): readonly ToolSchemaCandidate[] {
@@ -1218,6 +1372,116 @@ function terminalAssistant(
     message.envelope.taskId === taskId
     && message.message.role === "assistant"
     && message.message.toolCalls.length === 0);
+}
+
+function stableUuid(identity: string, label: string): string {
+  const bytes = createHash("sha256")
+    .update(`${identity}:${label}`)
+    .digest()
+    .subarray(0, 16);
+  bytes[6] = (bytes[6]! & 0x0f) | 0x40;
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+  const hex = bytes.toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+export function buildAgentLoopStartupRecoverySeed(input: Readonly<{
+  taskId: string;
+  runId: string;
+  stepId: string;
+  actionId: string;
+  link: ModelInvocationLink;
+  messages: readonly ConversationMessage[];
+  evidence: Awaited<ReturnType<ConversationPersistence["listToolCallBatchEvidenceBySessionRange"]>>;
+}>): StartupRecoverySeed {
+  if (
+    input.link.taskId !== input.taskId
+    || input.link.runId !== input.runId
+    || input.link.stepId !== input.stepId
+    || input.link.actionId !== input.actionId
+    || input.link.invocationId === undefined
+    || input.link.messageCommittedAt !== undefined
+    || input.link.outputStartedAt !== undefined
+    || input.link.providerRequestDeadlineAt === undefined
+  ) throw new Error("Agent Loop startup recovery link does not match the active execution");
+  if (input.messages.some((message) =>
+    message.envelope.messageId === input.link.assistantMessageId)) {
+    throw new Error("Agent Loop startup recovery Assistant Message is already durable");
+  }
+  const byMessageId = new Map(input.messages.map((message) => [
+    message.envelope.messageId,
+    message,
+  ]));
+  if (byMessageId.size !== input.messages.length) {
+    throw new Error("Agent Loop startup recovery Message identity is ambiguous");
+  }
+  const completed = input.evidence
+    .filter(({ batch }) => batch.taskId === input.taskId && batch.runId === input.runId)
+    .sort((left, right) =>
+      left.batch.assistantMessageSequence - right.batch.assistantMessageSequence);
+  if (completed.length !== input.link.round - 1) {
+    throw new Error("Agent Loop startup recovery completed round count drifted");
+  }
+  const priorToolResults: Array<Extract<ConversationMessage["message"], { role: "tool" }>> = [];
+  for (const { batch, dispositions } of completed) {
+    const assistant = byMessageId.get(batch.assistantMessageId);
+    if (
+      assistant === undefined
+      || assistant.message.role !== "assistant"
+      || assistant.envelope.taskId !== input.taskId
+      || assistant.envelope.sequence !== batch.assistantMessageSequence
+      || assistant.envelope.messageDigest !== batch.assistantMessageDigest
+      || assistant.message.toolCalls.length !== batch.callCount
+      || dispositions.length !== batch.callCount
+    ) throw new Error("Agent Loop startup recovery Tool batch is inconsistent");
+    const ordered = [...dispositions].sort((left, right) => left.ordinal - right.ordinal);
+    for (let ordinal = 0; ordinal < ordered.length; ordinal += 1) {
+      const disposition = ordered[ordinal]!;
+      const call = assistant.message.toolCalls[ordinal];
+      const result = disposition.resultMessageId === undefined
+        ? undefined
+        : byMessageId.get(disposition.resultMessageId);
+      if (
+        call === undefined
+        || disposition.ordinal !== ordinal
+        || disposition.disposition !== "result_committed"
+        || disposition.toolCallId !== call.toolCallId
+        || disposition.actionId !== call.actionId
+        || disposition.resultDigest === undefined
+        || result === undefined
+        || result.message.role !== "tool"
+        || result.envelope.taskId !== input.taskId
+        || result.envelope.sequence <= assistant.envelope.sequence
+        || result.message.taskId !== input.taskId
+        || result.message.toolCallId !== call.toolCallId
+        || result.message.actionId !== call.actionId
+        || result.message.resultDigest !== disposition.resultDigest
+        || result.envelope.messageDigest
+          !== sha256CanonicalJson(JsonValueSchema.parse(result.message))
+      ) throw new Error("Agent Loop startup recovery Tool Result is not exact");
+      priorToolResults.push(result.message);
+    }
+  }
+  if (
+    new Set(priorToolResults.map((result) => result.toolCallId)).size
+      !== priorToolResults.length
+  ) throw new Error("Agent Loop startup recovery Tool Result identity is duplicated");
+  return Object.freeze({
+    completedRoundCount: input.link.round - 1,
+    activeRound: input.link.round,
+    activeAssistantMessageId: input.link.assistantMessageId,
+    priorToolResults: Object.freeze(priorToolResults.map((result) => ({
+      ...result,
+      content: result.content.map((part) => ({ ...part })),
+    }))),
+    runId: input.runId,
+    stepId: input.stepId,
+    actionId: input.actionId,
+    runtimeSelectionDigest: input.link.runtimeSelectionDigest,
+    modelRequestId: input.link.modelRequestId,
+    modelRequestDigest: input.link.modelRequestDigest,
+    providerRequestDeadlineAt: input.link.providerRequestDeadlineAt,
+  });
 }
 
 async function exactAssistantProvenance(
@@ -1292,7 +1556,7 @@ async function verifyCompactionSummaryProvenance(input: Readonly<{
   taskId: string;
   runId: string;
   round: number;
-  runtimeSelection: ReadableTaskRuntimeSelection;
+  runtimeSelection: ReadableTaskRuntimeSelectionV1Alpha4;
   modelLock: TaskCapabilityLock;
   externalTarget: string;
   persistence: ConversationPersistence;

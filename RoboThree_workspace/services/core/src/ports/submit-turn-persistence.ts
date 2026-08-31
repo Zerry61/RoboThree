@@ -4,12 +4,16 @@ import type {
   SubmitTurnRecord,
   SubmitTurnRecordV1Alpha2,
 } from "@robothree/contracts";
-import type {
-  ReadablePersistedSubmitTurnReceipt,
-  ReadableSubmitTurnRecord,
-} from "@robothree/contracts/submit-turn-coordination/v1alpha3";
+import type { ReadablePersistedSubmitTurnReceiptV1Alpha5 as ReadablePersistedSubmitTurnReceipt } from
+  "@robothree/contracts/submit-turn-coordination/v1alpha5";
+import type { ReadableSubmitTurnRecordV1Alpha5 as ReadableSubmitTurnRecord } from
+  "@robothree/contracts/submit-turn-coordination/v1alpha5";
 
 import type { PersistenceAdapter } from "./persistence.js";
+import type { PersistedR2D3CoordinationEnvelopeV1 } from
+  "../application/r2d3-durable-acceptance.js";
+import type { PersistedDfi541CoordinationEnvelopeV1 } from
+  "../application/dfi541-durable-acceptance.js";
 
 export type SubmitTurnWriteResult<T> =
   | { ok: true; replayed: boolean; value: T }
@@ -38,12 +42,24 @@ export interface SubmitTurnPersistence extends PersistenceAdapter {
   prepareAccepted(
     record: ReadableSubmitTurnRecord,
   ): Promise<SubmitTurnWriteResult<ReadableSubmitTurnRecord>>;
+  prepareAcceptedR2D3(
+    envelope: PersistedR2D3CoordinationEnvelopeV1,
+  ): Promise<SubmitTurnWriteResult<ReadableSubmitTurnRecord>>;
+  prepareAcceptedDfi541(
+    envelope: PersistedDfi541CoordinationEnvelopeV1,
+  ): Promise<SubmitTurnWriteResult<ReadableSubmitTurnRecord>>;
   loadRecord(
     submitTurnCommandId: string,
   ): Promise<ReadableSubmitTurnRecord | undefined>;
   loadRecordByClientTurnId(
     clientTurnId: string,
   ): Promise<ReadableSubmitTurnRecord | undefined>;
+  loadR2D3Envelope(
+    submitTurnCommandId: string,
+  ): Promise<PersistedR2D3CoordinationEnvelopeV1 | undefined>;
+  loadDfi541Envelope(
+    submitTurnCommandId: string,
+  ): Promise<PersistedDfi541CoordinationEnvelopeV1 | undefined>;
   loadReceipt(
     submitTurnCommandId: string,
   ): Promise<ReadablePersistedSubmitTurnReceipt | undefined>;

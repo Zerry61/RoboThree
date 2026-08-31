@@ -7,7 +7,6 @@ import {
   OutboxRecordSchema,
   TaskHeadSchema,
   TaskCapabilityLockSchema,
-  TaskSubmitTurnBindingSchema,
   TaskRuntimeSelectionSchema,
   TaskAuthorizationSelectionSchema,
   TaskExecutionSelectionIdentitySchema,
@@ -26,8 +25,8 @@ import type {
   TaskRuntimeSelection,
   PersistedUserConfirmation,
 } from "@robothree/contracts";
-import type { ReadableTaskRuntimeSelection } from
-  "@robothree/contracts/runtime-selection/v1alpha2";
+import type { ReadableTaskRuntimeSelectionV1Alpha4 } from
+  "@robothree/contracts/runtime-selection/v1alpha4";
 
 import type { Clock } from "../../ports/clock.js";
 import type {
@@ -43,6 +42,10 @@ import type {
   PersistedAuthorizationAwareSubmitTurnTaskBundle,
   PersistedReasoningAwareAuthorizationSubmitTurnTaskBundle,
   PersistedReasoningAwareSubmitTurnTaskBundle,
+  PersistedR2D3SubmitTurnTaskBundle,
+  R2D3SubmitTurnTaskBundle,
+  Dfi541SubmitTurnTaskBundle,
+  PersistedDfi541SubmitTurnTaskBundle,
   ReasoningAwareAuthorizationSubmitTurnTaskBundle,
   TaskAuthorizationMaterializationCommit,
   TaskAuthorizationMaterializationResult,
@@ -65,9 +68,23 @@ import {
   validateTaskCreation,
   validateTaskCapabilityLock,
 } from "../../persistence/validation.js";
-import { parseReadableTaskRuntimeSelection } from
+import { parseReadableTaskRuntimeSelectionV1Alpha4 } from
   "../../application/runtime-selection-revisions.js";
 import { validateSubmitTurnTaskBundle } from "../../persistence/submit-turn-bundle-validation.js";
+import { validateR2D3SubmitTurnTaskBundle } from
+  "../../persistence/r2d3-task-bundle-validation.js";
+import { validateDfi541SubmitTurnTaskBundle } from
+  "../../persistence/dfi541-task-bundle-validation.js";
+import {
+  parsePersistedTaskBindingValue,
+  validateR2D3TaskBundleBindingEnvelopeV1,
+  type PersistedR2D3TaskBundleBindingEnvelopeV1,
+} from "../../application/r2d3-durable-acceptance.js";
+import {
+  PersistedDfi541TaskBundleEnvelopeV1Schema,
+  validateDfi541TaskBundleEnvelopeV1,
+  type PersistedDfi541TaskBundleEnvelopeV1,
+} from "../../application/dfi541-durable-acceptance.js";
 import { sha256CanonicalJson } from "../../persistence/digest.js";
 import { parsePersistedTaskCheckpoint, parsePersistedTaskEvent } from "../../persistence/contract-upgrade.js";
 import { configureSqlite, migrateAndPreflight } from "./schema-preflight.js";
@@ -291,6 +308,186 @@ export class SqliteTaskPersistence implements TaskPersistence {
       );
   }
 
+  async commitR2D3SubmitTurnTaskBundle(
+    input: R2D3SubmitTurnTaskBundle,
+  ): Promise<PersistenceWriteResult<PersistedR2D3SubmitTurnTaskBundle>> {
+    const validated = validateR2D3SubmitTurnTaskBundle(input);
+    if ("ok" in validated) return validated;
+    const database = this.#requireDatabase();
+    try {
+      return withTransaction(database, () => {
+        const existing = selectR2D3TaskBindingEnvelope(
+          database,
+          validated.binding.submitTurnCommandId,
+        );
+        if (existing !== undefined) {
+          if (existing.submitTurnBinding.bundleDigest
+            !== validated.binding.bundleDigest) {
+            return failure(
+              "r2d.task_bundle_conflict",
+              "SubmitTurn command already owns another R2D3 Task bundle",
+            );
+          }
+          const replay = loadR2D3SubmitTurnTaskBundle(database, existing);
+          return replay === undefined
+            ? failure("r2d.task_bundle_invalid", "Persisted R2D3 Task bundle is invalid")
+            : { ok: true, replayed: true, value: replay };
+        }
+        if (selectSubmitTurnBinding(
+          database,
+          validated.binding.submitTurnCommandId,
+        ) !== undefined) {
+          return failure(
+            "r2d.task_bundle_conflict",
+            "SubmitTurn command is already bound to a legacy Task bundle",
+          );
+        }
+        const { task, capabilityLocks, runtimeSelection } = validated.input;
+        if (
+          selectHead(database, task.head.taskId) !== undefined
+          || selectCheckpoint(database, task.checkpoint.checkpointId) !== undefined
+          || selectTaskRuntimeSelection(database, task.head.taskId) !== undefined
+          || selectTaskAuthorizationRecord(database, task.head.taskId) !== undefined
+          || database.prepare(`
+            SELECT 1 AS present FROM task_authorization_selections
+            WHERE runtime_selection_id = ?
+          `).get(runtimeSelection.runtimeSelectionId) !== undefined
+          || database.prepare(`
+            SELECT 1 AS present FROM task_submit_turn_bindings
+            WHERE task_id = ? OR user_message_id = ? OR runtime_selection_id = ?
+          `).get(
+            task.head.taskId,
+            validated.binding.userMessageId,
+            runtimeSelection.runtimeSelectionId,
+          ) !== undefined
+        ) return failure("r2d.task_bundle_conflict", "R2D3 Task identity already exists");
+        for (const lock of capabilityLocks) {
+          if (database.prepare(
+            "SELECT 1 AS present FROM task_capability_locks WHERE lock_id = ?",
+          ).get(lock.lockId) !== undefined
+            || selectTaskCapabilityLock(
+              database,
+              lock.taskId,
+              lock.definitionSnapshot.capabilityId,
+            ) !== undefined) {
+            return failure("r2d.task_bundle_conflict", "R2D3 lock identity already exists");
+          }
+        }
+        insertHead(database, task.head);
+        insertCheckpoint(database, task.checkpoint);
+        for (const lock of capabilityLocks) insertTaskCapabilityLock(database, lock);
+        insertTaskRuntimeSelection(database, runtimeSelection);
+        insertTaskAuthorizationRecord(database, {
+          selection: validated.input.selection,
+          executionIdentity: validated.input.executionIdentity,
+        });
+        insertR2D3TaskBindingEnvelope(database, validated.bindingEnvelope);
+        const persisted = loadR2D3SubmitTurnTaskBundle(
+          database,
+          validated.bindingEnvelope,
+        );
+        return persisted === undefined
+          ? failure("r2d.task_bundle_invalid", "Committed R2D3 Task bundle is invalid")
+          : { ok: true, replayed: false, value: persisted };
+      });
+    } catch (error) {
+      return sqliteFailure(error);
+    }
+  }
+
+  async loadR2D3SubmitTurnTaskBundle(
+    submitTurnCommandId: string,
+  ): Promise<PersistedR2D3SubmitTurnTaskBundle | undefined> {
+    const database = this.#requireDatabase();
+    const envelope = selectR2D3TaskBindingEnvelope(
+      database,
+      submitTurnCommandId,
+    );
+    return envelope === undefined
+      ? undefined
+      : loadR2D3SubmitTurnTaskBundle(database, envelope);
+  }
+
+  async commitDfi541SubmitTurnTaskBundle(
+    input: Dfi541SubmitTurnTaskBundle,
+  ): Promise<PersistenceWriteResult<PersistedDfi541SubmitTurnTaskBundle>> {
+    const validated = validateDfi541SubmitTurnTaskBundle(input);
+    if ("ok" in validated) return validated;
+    const database = this.#requireDatabase();
+    try {
+      return withTransaction(database, () => {
+        const existing = selectDfi541TaskBundleEnvelope(
+          database,
+          validated.binding.submitTurnCommandId,
+        );
+        if (existing !== undefined) {
+          if (existing.submitTurnBinding.bundleDigest
+            !== validated.binding.bundleDigest) {
+            return failure("dfi541.task_bundle_conflict",
+              "SubmitTurn command already owns another DFI-5.4.1 Task bundle");
+          }
+          const replay = loadDfi541SubmitTurnTaskBundle(database, existing);
+          return replay === undefined
+            ? failure("dfi541.task_bundle_invalid",
+              "Persisted DFI-5.4.1 Task bundle is invalid")
+            : { ok: true, replayed: true, value: replay };
+        }
+        if (selectSubmitTurnBinding(database,
+          validated.binding.submitTurnCommandId) !== undefined) {
+          return failure("dfi541.task_bundle_conflict",
+            "SubmitTurn command is already bound to another Task bundle");
+        }
+        const { task, capabilityLocks, runtimeSelection } = validated.input;
+        if (
+          selectHead(database, task.head.taskId) !== undefined
+          || selectCheckpoint(database, task.checkpoint.checkpointId) !== undefined
+          || selectTaskRuntimeSelection(database, task.head.taskId) !== undefined
+          || selectTaskAuthorizationRecord(database, task.head.taskId) !== undefined
+        ) return failure("dfi541.task_bundle_conflict",
+          "DFI-5.4.1 Task identity already exists");
+        for (const lock of capabilityLocks) {
+          if (database.prepare(
+            "SELECT 1 AS present FROM task_capability_locks WHERE lock_id = ?",
+          ).get(lock.lockId) !== undefined
+            || selectTaskCapabilityLock(database, lock.taskId,
+              lock.definitionSnapshot.capabilityId) !== undefined) {
+            return failure("dfi541.task_bundle_conflict",
+              "DFI-5.4.1 lock identity already exists");
+          }
+        }
+        insertHead(database, task.head);
+        insertCheckpoint(database, task.checkpoint);
+        for (const lock of capabilityLocks) insertTaskCapabilityLock(database, lock);
+        insertTaskRuntimeSelection(database, runtimeSelection);
+        insertTaskAuthorizationRecord(database, {
+          selection: validated.input.selection,
+          executionIdentity: validated.input.executionIdentity,
+        });
+        insertDfi541TaskBundleEnvelope(database, validated.bindingEnvelope);
+        const persisted = loadDfi541SubmitTurnTaskBundle(
+          database,
+          validated.bindingEnvelope,
+        );
+        return persisted === undefined
+          ? failure("dfi541.task_bundle_invalid",
+            "Committed DFI-5.4.1 Task bundle is invalid")
+          : { ok: true, replayed: false, value: persisted };
+      });
+    } catch (error) {
+      return sqliteFailure(error);
+    }
+  }
+
+  async loadDfi541SubmitTurnTaskBundle(
+    submitTurnCommandId: string,
+  ): Promise<PersistedDfi541SubmitTurnTaskBundle | undefined> {
+    const database = this.#requireDatabase();
+    const envelope = selectDfi541TaskBundleEnvelope(database, submitTurnCommandId);
+    return envelope === undefined
+      ? undefined
+      : loadDfi541SubmitTurnTaskBundle(database, envelope);
+  }
+
   async #commitReadableAuthorizationAwareSubmitTurnTaskBundle(
     input: ReadableAuthorizationAwareSubmitTurnTaskBundle,
   ): Promise<PersistenceWriteResult<ReadablePersistedAuthorizationAwareSubmitTurnTaskBundle>> {
@@ -432,6 +629,8 @@ export class SqliteTaskPersistence implements TaskPersistence {
   }
 
   async loadExecutableSubmitTurnTaskBundle(submitTurnCommandId: string) {
+    const dfi541 = await this.loadDfi541SubmitTurnTaskBundle(submitTurnCommandId);
+    if (dfi541 !== undefined) return dfi541;
     const database = this.#requireDatabase();
     const binding = selectSubmitTurnBinding(database, submitTurnCommandId);
     if (binding === undefined) return undefined;
@@ -582,7 +781,7 @@ export class SqliteTaskPersistence implements TaskPersistence {
     `).get(taskId) as Record<string, unknown> | undefined;
     return row === undefined
       ? undefined
-      : TaskSubmitTurnBindingSchema.parse(
+      : parseStoredSubmitTurnBinding(
         JSON.parse(requireString(row.binding_json, "binding_json")),
       );
   }
@@ -1479,7 +1678,7 @@ function selectTaskCapabilityLocks(
 }
 
 function selectionReferencesExactLocks(
-  selection: ReadableTaskRuntimeSelection,
+  selection: ReadableTaskRuntimeSelectionV1Alpha4,
   locks: readonly TaskCapabilityLock[],
 ): boolean {
   const locksById = new Map(locks.map((lock) => [lock.lockId, lock]));
@@ -1496,14 +1695,14 @@ function selectionReferencesExactLocks(
 function selectTaskRuntimeSelection(
   database: DatabaseSync,
   taskId: string,
-): ReadableTaskRuntimeSelection | undefined {
+): ReadableTaskRuntimeSelectionV1Alpha4 | undefined {
   const row = database.prepare(`
     SELECT runtime_selection_id, selection_digest, agent_definition_id,
            agent_revision, registry_revision, selection_json
     FROM task_runtime_selections WHERE task_id = ?
   `).get(taskId) as Record<string, unknown> | undefined;
   if (row === undefined) return undefined;
-  const selection = parseReadableTaskRuntimeSelection(
+  const selection = parseReadableTaskRuntimeSelectionV1Alpha4(
     JSON.parse(requireString(row.selection_json, "selection_json")),
   );
   if (
@@ -1518,7 +1717,7 @@ function selectTaskRuntimeSelection(
 
 function insertTaskRuntimeSelection(
   database: DatabaseSync,
-  selection: ReadableTaskRuntimeSelection,
+  selection: ReadableTaskRuntimeSelectionV1Alpha4,
 ): void {
   database.prepare(`
     INSERT INTO task_runtime_selections (
@@ -1582,17 +1781,22 @@ function selectAllTaskAuthorizationRecords(
            execution_selection_digest, created_at, record_json
     FROM task_authorization_selections ORDER BY task_id
   `).all() as Record<string, unknown>[];
-  return rows.map((row) => {
+  return rows.flatMap((row) => {
     const taskId = requireString(row.task_id, "task_id");
+    const readableSelection = selectTaskRuntimeSelection(database, taskId);
+    if (readableSelection === undefined) {
+      throw new Error("Authorization record references missing Runtime Selection");
+    }
+    if (readableSelection.schemaVersion !== "v1alpha1") return [];
     const runtimeSelection = runtimeByTask.get(taskId);
     if (runtimeSelection === undefined) {
       throw new Error("Authorization record references missing Runtime Selection");
     }
     const record = parseTaskAuthorizationRow(database, row);
-    return validateTaskAuthorizationRecordAgainstRuntimeSelection(
+    return [validateTaskAuthorizationRecordAgainstRuntimeSelection(
       record,
       runtimeSelection,
-    );
+    )];
   });
 }
 
@@ -1667,9 +1871,19 @@ function selectSubmitTurnBinding(
   `).get(submitTurnCommandId) as Record<string, unknown> | undefined;
   return row === undefined
     ? undefined
-    : TaskSubmitTurnBindingSchema.parse(
+    : parseStoredSubmitTurnBinding(
       JSON.parse(requireString(row.binding_json, "binding_json")),
     );
+}
+
+function parseStoredSubmitTurnBinding(input: unknown): TaskSubmitTurnBinding {
+  if (typeof input === "object" && input !== null
+    && Reflect.get(input, "schemaVersion") === "dfi541_task_bundle_envelope_v1") {
+    return validateDfi541TaskBundleEnvelopeV1(
+      PersistedDfi541TaskBundleEnvelopeV1Schema.parse(input),
+    ).submitTurnBinding;
+  }
+  return parsePersistedTaskBindingValue(input).submitTurnBinding;
 }
 
 function insertSubmitTurnBinding(
@@ -1690,6 +1904,207 @@ function insertSubmitTurnBinding(
     binding.committedAt,
     JSON.stringify(binding),
   );
+}
+
+function selectR2D3TaskBindingEnvelope(
+  database: DatabaseSync,
+  submitTurnCommandId: string,
+): PersistedR2D3TaskBundleBindingEnvelopeV1 | undefined {
+  const row = database.prepare(`
+    SELECT submit_turn_command_id, task_id, user_message_id,
+           runtime_selection_id, bundle_digest, committed_at, binding_json
+    FROM task_submit_turn_bindings WHERE submit_turn_command_id = ?
+  `).get(submitTurnCommandId) as Record<string, unknown> | undefined;
+  if (row === undefined) return undefined;
+  const parsed = parsePersistedTaskBindingValue(
+    JSON.parse(requireString(row.binding_json, "binding_json")),
+  );
+  if (parsed.envelope === undefined) return undefined;
+  const envelope = validateR2D3TaskBundleBindingEnvelopeV1(parsed.envelope);
+  const binding = envelope.submitTurnBinding;
+  if (
+    binding.submitTurnCommandId !== row.submit_turn_command_id
+    || binding.taskId !== row.task_id
+    || binding.userMessageId !== row.user_message_id
+    || binding.runtimeSelectionId !== row.runtime_selection_id
+    || binding.bundleDigest !== row.bundle_digest
+    || binding.committedAt !== row.committed_at
+  ) throw new Error("R2D3 Task binding indexed fields are invalid");
+  return envelope;
+}
+
+function insertR2D3TaskBindingEnvelope(
+  database: DatabaseSync,
+  rawEnvelope: PersistedR2D3TaskBundleBindingEnvelopeV1,
+): void {
+  const envelope = validateR2D3TaskBundleBindingEnvelopeV1(rawEnvelope);
+  const binding = envelope.submitTurnBinding;
+  database.prepare(`
+    INSERT INTO task_submit_turn_bindings (
+      submit_turn_command_id, task_id, user_message_id,
+      runtime_selection_id, bundle_digest, committed_at, binding_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    binding.submitTurnCommandId,
+    binding.taskId,
+    binding.userMessageId,
+    binding.runtimeSelectionId,
+    binding.bundleDigest,
+    binding.committedAt,
+    JSON.stringify(envelope),
+  );
+}
+
+function selectDfi541TaskBundleEnvelope(
+  database: DatabaseSync,
+  submitTurnCommandId: string,
+): PersistedDfi541TaskBundleEnvelopeV1 | undefined {
+  const row = database.prepare(`
+    SELECT submit_turn_command_id, task_id, user_message_id,
+           runtime_selection_id, bundle_digest, committed_at, binding_json
+    FROM task_submit_turn_bindings WHERE submit_turn_command_id = ?
+  `).get(submitTurnCommandId) as Record<string, unknown> | undefined;
+  if (row === undefined) return undefined;
+  const raw = JSON.parse(requireString(row.binding_json, "binding_json"));
+  if (typeof raw !== "object" || raw === null
+    || Reflect.get(raw, "schemaVersion") !== "dfi541_task_bundle_envelope_v1") {
+    return undefined;
+  }
+  const envelope = validateDfi541TaskBundleEnvelopeV1(
+    PersistedDfi541TaskBundleEnvelopeV1Schema.parse(raw),
+  );
+  const binding = envelope.submitTurnBinding;
+  if (
+    binding.submitTurnCommandId !== row.submit_turn_command_id
+    || binding.taskId !== row.task_id
+    || binding.userMessageId !== row.user_message_id
+    || binding.runtimeSelectionId !== row.runtime_selection_id
+    || binding.bundleDigest !== row.bundle_digest
+    || binding.committedAt !== row.committed_at
+  ) throw new Error("DFI-5.4.1 Task binding indexed fields are invalid");
+  return envelope;
+}
+
+function insertDfi541TaskBundleEnvelope(
+  database: DatabaseSync,
+  rawEnvelope: PersistedDfi541TaskBundleEnvelopeV1,
+): void {
+  const envelope = validateDfi541TaskBundleEnvelopeV1(rawEnvelope);
+  const binding = envelope.submitTurnBinding;
+  database.prepare(`
+    INSERT INTO task_submit_turn_bindings (
+      submit_turn_command_id, task_id, user_message_id,
+      runtime_selection_id, bundle_digest, committed_at, binding_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    binding.submitTurnCommandId,
+    binding.taskId,
+    binding.userMessageId,
+    binding.runtimeSelectionId,
+    binding.bundleDigest,
+    binding.committedAt,
+    JSON.stringify(envelope),
+  );
+}
+
+function loadDfi541SubmitTurnTaskBundle(
+  database: DatabaseSync,
+  rawEnvelope: PersistedDfi541TaskBundleEnvelopeV1,
+): PersistedDfi541SubmitTurnTaskBundle | undefined {
+  try {
+    const envelope = validateDfi541TaskBundleEnvelopeV1(rawEnvelope);
+    const binding = envelope.submitTurnBinding;
+    const head = selectHead(database, binding.taskId);
+    const selection = selectTaskRuntimeSelection(database, binding.taskId);
+    const authorization = selectTaskAuthorizationRecord(database, binding.taskId);
+    if (head === undefined || selection?.schemaVersion !== "v1alpha4"
+      || authorization === undefined) return undefined;
+    const task = loadRequired(database, head);
+    const locksById = new Map(selectTaskCapabilityLocks(database, binding.taskId)
+      .map((lock) => [lock.lockId, lock]));
+    const locks = [selection.resolvedModelLock, ...selection.toolLocks]
+      .map((reference) => locksById.get(reference.lockId));
+    if (locks.some((lock) => lock === undefined)) return undefined;
+    const validated = validateDfi541SubmitTurnTaskBundle({
+      submitTurnCommandId: binding.submitTurnCommandId,
+      userMessageId: binding.userMessageId,
+      task,
+      capabilityLocks: locks as TaskCapabilityLock[],
+      runtimeSelection: selection,
+      selection: authorization.selection,
+      executionIdentity: authorization.executionIdentity,
+      submitTurnBinding: binding,
+      taskInstructionBinding: envelope.taskInstructionBinding,
+      admissionEvidence: envelope.admissionEvidence,
+      ...(envelope.resolutionEvidence === undefined
+        ? {}
+        : { resolutionEvidence: envelope.resolutionEvidence }),
+      committedAt: binding.committedAt,
+    });
+    if ("ok" in validated) return undefined;
+    return {
+      binding: validated.binding,
+      taskInstructionBinding: validated.input.taskInstructionBinding,
+      task: validated.input.task,
+      capabilityLocks: validated.input.capabilityLocks,
+      runtimeSelection: validated.input.runtimeSelection,
+      selection: validated.input.selection,
+      executionIdentity: validated.input.executionIdentity,
+      admissionEvidence: validated.input.admissionEvidence,
+      ...(validated.input.resolutionEvidence === undefined
+        ? {}
+        : { resolutionEvidence: validated.input.resolutionEvidence }),
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function loadR2D3SubmitTurnTaskBundle(
+  database: DatabaseSync,
+  rawEnvelope: PersistedR2D3TaskBundleBindingEnvelopeV1,
+): PersistedR2D3SubmitTurnTaskBundle | undefined {
+  try {
+    const envelope = validateR2D3TaskBundleBindingEnvelopeV1(rawEnvelope);
+    const binding = envelope.submitTurnBinding;
+    const head = selectHead(database, binding.taskId);
+    const selection = selectTaskRuntimeSelection(database, binding.taskId);
+    const authorization = selectTaskAuthorizationRecord(database, binding.taskId);
+    if (head === undefined || selection?.schemaVersion !== "v1alpha3"
+      || authorization === undefined) return undefined;
+    const task = loadRequired(database, head);
+    const locksById = new Map(
+      selectTaskCapabilityLocks(database, binding.taskId)
+        .map((lock) => [lock.lockId, lock]),
+    );
+    const locks = [selection.resolvedModelLock, ...selection.toolLocks]
+      .map((reference) => locksById.get(reference.lockId));
+    if (locks.some((lock) => lock === undefined)) return undefined;
+    const validated = validateR2D3SubmitTurnTaskBundle({
+      submitTurnCommandId: binding.submitTurnCommandId,
+      userMessageId: binding.userMessageId,
+      task,
+      capabilityLocks: locks as TaskCapabilityLock[],
+      runtimeSelection: selection,
+      selection: authorization.selection,
+      executionIdentity: authorization.executionIdentity,
+      submitTurnBinding: binding,
+      taskInstructionBinding: envelope.taskInstructionBinding,
+      committedAt: binding.committedAt,
+    });
+    if ("ok" in validated) return undefined;
+    return {
+      binding: validated.binding,
+      taskInstructionBinding: validated.input.taskInstructionBinding,
+      task: validated.input.task,
+      capabilityLocks: validated.input.capabilityLocks,
+      runtimeSelection: validated.input.runtimeSelection,
+      selection: validated.input.selection,
+      executionIdentity: validated.input.executionIdentity,
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 function loadSubmitTurnTaskBundle(

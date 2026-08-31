@@ -137,7 +137,7 @@ final class Alignment2aSchemaConformance {
         new JdbcTemplate(dataSource).update("""
                 UPDATE robothree_schema_version
                 SET script_digest = repeat('0', 64)
-                WHERE version = 10
+                WHERE version = 12
                 """);
         assertThatThrownBy(() -> installer.installFresh(dataSource))
                 .isInstanceOf(PersistenceConflictException.class)
@@ -217,7 +217,7 @@ final class Alignment2aSchemaConformance {
         jdbc.update("""
                 UPDATE robothree_schema_version
                 SET script_digest = repeat('0', 64)
-                WHERE version = 10
+                WHERE version = 12
                 """);
         assertThatThrownBy(() -> validate(dataSource))
                 .isInstanceOf(PersistenceIntegrityException.class)

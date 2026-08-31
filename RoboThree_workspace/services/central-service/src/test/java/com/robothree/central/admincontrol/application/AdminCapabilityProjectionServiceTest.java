@@ -59,7 +59,14 @@ class AdminCapabilityProjectionServiceTest {
                 .extracting(AdminCapability::state)
                 .containsOnly(AdminCapabilityState.READY);
         assertThat(projection.capabilities())
-                .filteredOn(capability -> !capability.key().endsWith(".read"))
+                .filteredOn(capability -> capability.key().equals("admin.model.write")
+                        || capability.key().equals("admin.robot.write"))
+                .extracting(AdminCapability::state)
+                .containsOnly(AdminCapabilityState.READY);
+        assertThat(projection.capabilities())
+                .filteredOn(capability -> !capability.key().endsWith(".read")
+                        && !capability.key().equals("admin.model.write")
+                        && !capability.key().equals("admin.robot.write"))
                 .extracting(AdminCapability::state)
                 .containsOnly(AdminCapabilityState.GATED);
     }

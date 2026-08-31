@@ -24,9 +24,10 @@ import {
 import {
   createAgentResourceDecisionV1,
   EntitledToolRefV1Schema,
-  hasValidTaskResourceEntitlementSnapshotV1,
+  parseAndNormalizeTaskResourceEntitlementSnapshot,
   type AgentResourceDecisionV1,
-  type TaskResourceEntitlementSnapshotV1,
+  type NormalizedTaskResourceEntitlementSnapshot,
+  type ReadableTaskResourceEntitlementSnapshot,
 } from "./task-resource-entitlement.js";
 
 export type AgentResourceDecisionPlannerErrorCode =
@@ -49,9 +50,18 @@ export class AgentResourceDecisionPlannerError extends Error {
   }
 }
 
+export const R2DModelCapabilityFactsSchema = ModelCapabilityFactsSchema
+  .omit({ contextWindow: true })
+  .extend({
+    contextWindow: z.union([
+      z.number().int().positive(),
+      z.object({ state: z.literal("unknown") }).strict(),
+    ]),
+  }).strict();
+
 const RegistryModelFactSchema = z.object({
   ref: AgentModelRestrictionRefV1Alpha2Schema,
-  capabilities: ModelCapabilityFactsSchema,
+  capabilities: R2DModelCapabilityFactsSchema,
   available: z.boolean(),
 }).strict();
 const RegistrySkillFactSchema = z.object({
@@ -133,7 +143,7 @@ export type AcceptedResourceSelectionV1 = z.infer<
 export type AgentResourceDecisionPlanInput = Readonly<{
   taskId: string;
   exactAgent: ReadableAgentDefinitionRevision;
-  exactEntitlementSnapshot: TaskResourceEntitlementSnapshotV1;
+  exactEntitlementSnapshot: ReadableTaskResourceEntitlementSnapshot;
   acceptedSelectionRequest: AcceptedResourceSelectionV1;
   exactUserModelPreference?: AgentModelRestrictionRefV1Alpha2;
   registrySnapshot: AgentResourceRegistrySnapshotV1;
@@ -202,8 +212,12 @@ export class AgentResourceDecisionPlanner {
   #parse(input: AgentResourceDecisionPlanInput) {
     try {
       const agent = parseReadableAgentDefinitionRevision(input.exactAgent);
-      const entitlement = input.exactEntitlementSnapshot;
-      if (!hasValidTaskResourceEntitlementSnapshotV1(entitlement)) {
+      let entitlement: NormalizedTaskResourceEntitlementSnapshot;
+      try {
+        entitlement = parseAndNormalizeTaskResourceEntitlementSnapshot(
+          input.exactEntitlementSnapshot,
+        );
+      } catch {
         throw new AgentResourceDecisionPlannerError("selection.entitlement_invalid");
       }
       const request = AcceptedResourceSelectionV1Schema.parse(input.acceptedSelectionRequest);
@@ -233,7 +247,7 @@ export class AgentResourceDecisionPlanner {
 function selectModel(
   requestedModelId: string | undefined,
   preference: AgentModelRestrictionRefV1Alpha2 | undefined,
-  eligible: readonly TaskResourceEntitlementSnapshotV1["models"][number][],
+  eligible: readonly NormalizedTaskResourceEntitlementSnapshot["models"][number][],
 ) {
   if (requestedModelId !== undefined) {
     const match = eligible.find((entry) => entry.modelId === requestedModelId);
@@ -256,7 +270,7 @@ function selectModel(
 function selectSkills(
   requested: readonly AgentSkillRestrictionRefV1Alpha2[],
   restriction: ReturnType<ReadableAgentDefinitionInterpreter["interpret"]>["skillRestriction"],
-  entitlement: TaskResourceEntitlementSnapshotV1["skills"],
+  entitlement: NormalizedTaskResourceEntitlementSnapshot["skills"],
   registry: AgentResourceRegistrySnapshotV1["skills"],
   permissions: ExactResourcePermissionsV1["skills"],
 ): AgentSkillRestrictionRefV1Alpha2[] {
@@ -284,7 +298,7 @@ function selectSkills(
 function selectKnowledge(
   requested: readonly AgentKnowledgeRestrictionRefV1Alpha2[],
   restriction: ReturnType<ReadableAgentDefinitionInterpreter["interpret"]>["knowledgeRestriction"],
-  entitlement: TaskResourceEntitlementSnapshotV1["knowledge"],
+  entitlement: NormalizedTaskResourceEntitlementSnapshot["knowledge"],
   registry: AgentResourceRegistrySnapshotV1["knowledge"],
   permissions: ExactResourcePermissionsV1["knowledge"],
   providerReady: boolean,
@@ -314,9 +328,9 @@ function selectKnowledge(
 }
 
 function selectTools(
-  candidates: readonly TaskResourceEntitlementSnapshotV1["tools"][number][],
+  candidates: readonly NormalizedTaskResourceEntitlementSnapshot["tools"][number][],
   restriction: ReturnType<ReadableAgentDefinitionInterpreter["interpret"]>["toolRestriction"],
-  entitlement: TaskResourceEntitlementSnapshotV1["tools"],
+  entitlement: NormalizedTaskResourceEntitlementSnapshot["tools"],
   registry: AgentResourceRegistrySnapshotV1["tools"],
   permissions: ExactResourcePermissionsV1["tools"],
 ): AgentToolRestrictionRefV1Alpha2[] {
@@ -349,7 +363,7 @@ function restrictionAllowsModel(
 }
 
 function satisfiesCapabilities(
-  actual: z.infer<typeof ModelCapabilityFactsSchema>,
+  actual: z.infer<typeof R2DModelCapabilityFactsSchema>,
   required: RequiredModelCapabilities,
   toolsSelected: boolean,
 ): boolean {
@@ -358,7 +372,8 @@ function satisfiesCapabilities(
     && (!required.supportsStreaming || actual.supportsStreaming)
     && (!(required.supportsToolCalling || toolsSelected) || actual.supportsToolCalling)
     && (required.minimumContextWindow === undefined
-      || actual.contextWindow >= required.minimumContextWindow);
+      || typeof actual.contextWindow === "number"
+        && actual.contextWindow >= required.minimumContextWindow);
 }
 
 function exactModelRef(ref: AgentModelRestrictionRefV1Alpha2) {
@@ -398,7 +413,7 @@ function compareAscii(left: string, right: string) {
 }
 
 function requireRegistryExactness(
-  entitlement: TaskResourceEntitlementSnapshotV1,
+  entitlement: NormalizedTaskResourceEntitlementSnapshot,
   registry: AgentResourceRegistrySnapshotV1,
 ): void {
   const drifted = entitlement.models.some((ref) => {

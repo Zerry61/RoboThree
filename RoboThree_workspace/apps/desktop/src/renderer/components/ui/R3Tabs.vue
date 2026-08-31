@@ -37,26 +37,33 @@ defineEmits<{
 <style scoped>
 .r3-tabs {
   display: inline-flex;
-  gap: 2px;
-  padding: 3px;
-  border: 1px solid var(--r3-color-border);
-  border-radius: var(--r3-radius-md);
-  background: var(--r3-color-surface-hover);
+  gap: 20px;
+  border-bottom: 1px solid var(--r3-color-border);
 }
 
 .r3-tabs__item {
-  min-height: 28px;
+  min-height: 36px;
+  position: relative;
   border: 0;
-  border-radius: var(--r3-radius-sm);
-  padding: 0 12px;
+  padding: 0 1px;
   background: transparent;
   color: var(--r3-color-text-secondary);
   cursor: pointer;
 }
 
 .r3-tabs__item--active {
-  background: var(--r3-color-surface);
   color: var(--r3-color-text);
-  box-shadow: 0 1px 2px rgba(26, 29, 46, 0.08);
+  font-weight: 680;
+}
+
+.r3-tabs__item--active::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--r3-color-primary);
 }
 </style>

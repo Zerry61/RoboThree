@@ -12,12 +12,23 @@ import {
   TaskRuntimeSelectionV1Alpha2Schema,
   type TaskRuntimeSelectionV1Alpha2,
 } from "@robothree/contracts/runtime-selection/v1alpha2";
+import {
+  TaskRuntimeSelectionV1Alpha4Schema,
+  type TaskRuntimeSelectionV1Alpha4,
+} from "@robothree/contracts/runtime-selection/v1alpha4";
 
 import { sha256CanonicalJson } from "../persistence/digest.js";
 import type { ContextAssemblyReceipt } from "./context-types.js";
 import { createModelRequestV1Alpha2 } from "./model-request-revisions.js";
 import { validateReasoningModeLock } from "./reasoning-mode-lock-domain.js";
-import { hasValidTaskRuntimeSelectionV1Alpha2 } from "./runtime-selection-revisions.js";
+import { validateReasoningModeLockV1Alpha2 } from
+  "./reasoning-mode-lock-v1alpha2-domain.js";
+import {
+  hasValidTaskRuntimeSelectionV1Alpha2,
+  hasValidTaskRuntimeSelectionV1Alpha4,
+} from "./runtime-selection-revisions.js";
+
+type ReasoningRuntimeSelection = TaskRuntimeSelectionV1Alpha2 | TaskRuntimeSelectionV1Alpha4;
 
 export type ReasoningAwareContextRequest = Readonly<{
   request: ModelRequestV1Alpha2;
@@ -27,12 +38,17 @@ export type ReasoningAwareContextRequest = Readonly<{
 export class TaskReasoningRequestMaterializer {
   materialize(input: Readonly<{
     baseRequest: ModelRequest;
-    runtimeSelection: TaskRuntimeSelectionV1Alpha2;
+    runtimeSelection: ReasoningRuntimeSelection;
     modelLock: TaskCapabilityLock;
   }>): ModelRequestV1Alpha2 {
     const base = ModelRequestSchema.parse(input.baseRequest);
-    const selection = TaskRuntimeSelectionV1Alpha2Schema.parse(input.runtimeSelection);
-    if (!hasValidTaskRuntimeSelectionV1Alpha2(selection)) {
+    const selection = input.runtimeSelection.schemaVersion === "v1alpha2"
+      ? TaskRuntimeSelectionV1Alpha2Schema.parse(input.runtimeSelection)
+      : TaskRuntimeSelectionV1Alpha4Schema.parse(input.runtimeSelection);
+    const selectionValid = selection.schemaVersion === "v1alpha2"
+      ? hasValidTaskRuntimeSelectionV1Alpha2(selection)
+      : hasValidTaskRuntimeSelectionV1Alpha4(selection);
+    if (!selectionValid) {
       throw new ReasoningRequestMaterializationError(
         "reasoning_lock_integrity_invalid",
         "Task Runtime Selection digest is invalid",
@@ -50,10 +66,15 @@ export class TaskReasoningRequestMaterializer {
         "Model lock does not match the exact Runtime Selection",
       );
     }
-    const lock = validateReasoningModeLock(selection.reasoningModeLock, {
-      taskId: selection.taskId,
-      modelLockRef: selection.resolvedModelLock,
-    });
+    const lock = selection.schemaVersion === "v1alpha2"
+      ? validateReasoningModeLock(selection.reasoningModeLock, {
+        taskId: selection.taskId,
+        modelLockRef: selection.resolvedModelLock,
+      })
+      : validateReasoningModeLockV1Alpha2(selection.reasoningModeLock, {
+        taskId: selection.taskId,
+        modelLockRef: selection.resolvedModelLock,
+      });
     const reasoning: ModelReasoningV1Alpha2 = lock.resolution === "max_applied"
       ? {
         mode: "locked_max_strategy",
@@ -88,7 +109,7 @@ export class ReasoningAwareContextRequestFinalizer {
   finalize(input: Readonly<{
     request: ModelRequest;
     receipt: ContextAssemblyReceipt;
-    runtimeSelection: TaskRuntimeSelectionV1Alpha2;
+    runtimeSelection: ReasoningRuntimeSelection;
     modelLock: TaskCapabilityLock;
   }>): ReasoningAwareContextRequest {
     const request = this.#materializer.materialize({

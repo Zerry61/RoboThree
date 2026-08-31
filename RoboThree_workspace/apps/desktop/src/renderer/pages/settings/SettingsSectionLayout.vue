@@ -16,8 +16,8 @@ defineOptions({ name: "RoboThreeSettingsSectionLayout" });
 <style scoped>
 .settings-section-layout {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
-  gap: 18px;
+  grid-template-columns: 196px minmax(0, 1fr);
+  gap: 20px;
   align-items: start;
 }
 
@@ -33,7 +33,7 @@ defineOptions({ name: "RoboThreeSettingsSectionLayout" });
   gap: 12px;
 }
 
-@media (max-width: 980px) {
+@media (max-width: 759px) {
   .settings-section-layout {
     grid-template-columns: minmax(0, 1fr);
   }

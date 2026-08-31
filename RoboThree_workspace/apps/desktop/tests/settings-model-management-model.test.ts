@@ -19,7 +19,7 @@ describe("DFE-5A.1 settings model management view model", () => {
 
     expect(row.displayName).toBe("DeepSeek-V4");
     expect(row.modelId).toBe("model.deepseek");
-    expect(row.statusHelp).toContain("粗粒度可用性");
+    expect(row.statusHelp).toContain("基础可用性");
     expect(JSON.stringify(row)).not.toContain("模型标识");
   });
 

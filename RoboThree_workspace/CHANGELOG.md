@@ -6,6 +6,752 @@ RoboThree 的重要工程变更记录。格式参考 [Keep a Changelog](https://
 
 ## [Unreleased]
 
+- WFW-1 独立聚焦代码 QA 已由用户正式接受，WFW-1 进入 `PASS/CLOSED`；非阻断 Desktop workspace 全量门禁外部 blocker 保留为历史欠账，不建立 WFW repair。新增 WFW-2 docs-only 详细实施方案：使用独立 `query_then_retry` descriptor 但与既有 Document Tools 共享同一个 Document Worker child，以 additive private inspect message 接入既有 EffectCoordinator；Replace authority 只从同一 durable Session 的唯一 terminal WFW Artifact revision 推导，缺失、分叉、重复摘要、删除或非 WFW 来源全部 fail-closed；成功结果继续由 Observation 自动投影既有 Artifact，不新增 Contract、migration、依赖、lockfile 或第二套状态机。WFW-2 当前仍 `PLAN DOCUMENT REVIEW PASS / USER ACCEPTANCE PENDING / CODING GATED`，WFW-3/WFW-H1 继续 GATED。
+
+- Document Worker `0.0.0-wfw.1` 完成 WFW-1 私有 UTF-8 文本 Writer：只在私有 v1alpha2 协议接受精确
+  `tool.workspace.file.write_text`，支持既有父目录内的 `create_new`、带 exact prior digest 与 owned Artifact 私有证明的
+  `replace_existing`、同目录临时文件 fsync、no-clobber/atomic publication 和一层 `.prev`。路径、symlink、hard-link、
+  UTF-8 字节上限、request digest 与四个崩溃窗口均 fail-closed，发布后不确定状态由 postcondition inspector 区分
+  `safe_retry / recovered_success / unknown`。本批没有激活 Core Registry、没有 Renderer 消费者，也未新增 Contract、
+  migration、依赖或 lockfile 变化；WFW-2/WFW-3 继续 GATED。
+
+- WFW-0 docs-only 方案推进至精简 Revision 1.1：保留 `tool.workspace.file.write_text`、UTF-8 create、带摘要 CAS 的
+  replace、一层 `.prev`、Workspace 路径安全、Policy/Approval、EffectCoordinator、Artifact、四个关键崩溃窗口和
+  uncertain 语义；父目录创建、parent fsync/断电级 durability、穷尽 fault matrix 与扩展平台矩阵后移至 WFW-H1。
+  v1 replace 仅接受 Core 从 durable WFW Artifact 证明的 exact revision，按 `routine_file` 允许 Policy 自动放行，
+  不通过确认覆盖任意既有用户文件；外部编辑器最终 digest-check/rename 竞争窗口明确为 best-effort residual risk。
+  WFW-3 增加真实 Windows 本地 NTFS create/replace/`.prev`/restart 冒烟，完整平台矩阵继续后移。总工期保持
+  3～5 个集中工程日；WFW-1～WFW-3 仍 CODING GATED。
+
+- Desktop DFE-9 repair.10 修复客户端导航与 Max 接入：知识中心使用直接 RouterLink，用户菜单设置通过显式路由跳转，
+  避免弹层关闭与导航处理竞争；通用机器人在 Max 预览边界解析为既有 `agent.general`，可真实调用 v1alpha5
+  preview/preference 接口并保存 Max 选择。机器人失效恢复态继续 fail-closed，不新增接口或前端假状态。
+
+- Desktop DFE-9 repair.9 在 Core durable Task 状态确认 `cancelled` 后，于当前对话显示“任务已终止”，并恢复继续输入；
+  receipt 接受到终态确认之间仍显示“正在终止”，不伪造取消成功。未显式选择工作区时，页面统一显示“RoboThree 默认
+  工作区”，Renderer 继续省略 `workspaceGrantId`，由既有 Main 默认授权绑定 `~/.robothree`。
+
+- RSL-1 repair.1 接通本地试运行的真实机器人生命周期服务：显式 test/internal-trial Central 组合现在同时提供 Model
+  Gateway 与 Agent Lifecycle PostgreSQL v12 路径，并使用短期、仅含 `agent.manage` 的 Main/Core 私有内存 Token。
+  Robot 创建页与智能中心在真实可用性检查成功前保持 fail-closed，失败时明确提示并提供“重新连接”，不使用 Fake、
+  LocalStorage 或乐观成功代替 Central。真实 Electron 联合 E2E 已完成两次草稿 revision、真实 Task 测试、提交、Admin
+  审核、Catalog 刷新、Workbench 使用和 Core `SIGKILL` 后 exact Agent lock 恢复；未修改公共 Contract、migration、依赖
+  或 lockfile，submission identity P1 继续独立保留。真实 Central 组合与 Central + Electron 联合 E2E 已由 Claude
+  Code 独立复跑 PASS，用户已正式接受，RSL-1 repair.1 当前为 `PASS/CLOSED`；workspace 全量门禁外部 blocker 作为
+  非阻断 P3 保留，不建立本批 repair。
+
+- Desktop DFE-9 repair.8 为长任务补充真实执行反馈：对话流显示 Core Task 当前状态和动态已处理时长，非终态任务把
+  发送按钮替换为终止按钮；终止操作复用既有 `cancel_task` 并携带 exact task revision，等待 durable 状态确认，
+  不在 Renderer 伪造进度百分比或取消成功。新增页面级回归锁定执行态反馈、按钮切换和真实取消命令。
+
+- Central `0.0.0-mvp.multiturn.1` 修复真实多轮会话在第二/第三轮停止回复的两处根因：SSE 投影现在一次排空已到达的
+  `started/text_delta` 事件后再投影 durable terminal，避免快速 Provider 的 `completed` 抢在文本前结束 Core 消费；
+  Prompt Cache 静态前缀不再纳入每个请求都会变化的 `core.request-context.v1` 和每个 Task 都会变化的
+  `core.instruction-bundle.v1`，同时继续校验真正静态的 system/tool material。新增同一 Session 连续 5 轮真实
+  Electron → Main/Preload → Core child → Central HTTP/SSE 回归，五轮均产生 durable Assistant 回复；未修改公共
+  Contract、migration、Desktop API、生产部署图、依赖或 lockfile。
+
+- MVP Workspace Output 修复默认与显式工作区写入：用户未选择工作区时，privileged Main 在首次提交前创建并复用
+  `~/.robothree` 的真实 `read_write` WorkspaceGrant，真实路径不进入 Renderer；用户已选择工作区时原 exact grant 保持
+  优先，不会被默认目录覆盖。Core 同时允许 code-owned `agent.general` 使用现有 DOCX/XLSX/PDF/PPTX Document Tool
+  候选，修复“选了文件夹但通用机器人仍无法创建 PPTX”。未新增 Contract、migration、依赖、状态机或文件平台。
+
+- DFE-9 repair.7 修复多轮会话错误锁定：Workbench 现在按真实 Task 状态判断是否可接收下一条消息，`waiting_input`、
+  `completed`、`failed`、`cancelled` 与 `timed_out` 允许同一 Session 继续提交，运行中、等待确认、恢复及人工处理状态
+  仍 fail-closed。新增页面级三轮连续发送回归，验证第三条消息沿用原 Session、Agent、Model 和显式 Skill；同时修正
+  空输入时发送按钮的禁用判断。本批未修改 Core、Contract、Main、Preload、migration、依赖或 lockfile。
+
+- MVP-RSL-1 完成机器人生命周期最短真实闭环：Desktop 用户创建并测试个人机器人草稿，提交 immutable revision，
+  Admin 审核后由 Central 发布企业机器人，Desktop Catalog 随后消费同一 exact Agent revision 并在 Core `SIGKILL`
+  后从原 SQLite 恢复。新增 consumer-driven `agent-lifecycle/v1alpha1` 与 Central PostgreSQL v12 deployment set，
+  复用既有 Task/Agent Loop/Runtime Selection/Entitlement，不建设第二套运行时。Main 仅以内存 `Buffer` 保留
+  internal-trial `agent.manage` Token 供 Core restart，并在退出时清零；Root/Core/Contracts/Desktop/Admin 版本推进至
+  `0.0.0-mvp.rsl.1`。当前为 `PASS/CLOSED — CODE_QA_PASS / USER ACCEPTED`，不代表 production ready，也不解锁
+  Skill Lifecycle、Knowledge、TGM、Personal Model 或 SSO/RBAC。
+
+- DFE-9 repair.6 移除可达的中央任务管理页面：`/tasks` 只兼容重定向到 Workbench，侧栏历史项直接打开同一个对话工作台。
+  最近列表按 Session 聚合，仅展示每个会话最新 Task，避免多轮消息在左侧形成多条记录。Desktop Shell 固定为视口高度，
+  Workbench 消息区独立滚动、输入框固定在底部；历史会话继续使用首页相同的资源、Model、Max 和发送组件。本批确认
+  `agent.general` 在 Core 中为 `supportsToolCalling: false`，且不存在 HTML/网页写入 Tool；因此未伪造网页 Artifact 或
+  Tool Activity，该能力需后续独立后端批次交付。
+
+- DFE-9 repair.5 将首次提交和连续对话统一到同一个 Workbench：首次 SubmitTurn 后不再跳转任务管理页，中央区域直接展示
+  真实 Conversation Snapshot 与流式 Assistant 回复，底部持续复用同一个资源、Model、Max 和发送输入框；后续消息复用
+  同一 Session 及首轮真实选择，避免第二轮因选择重建触发 runtime capability unavailable。右侧成果面板改为右上角按钮
+  控制的动态区域；旧任务详情隐藏成功状态、刷新、时间/成果计数/推理摘要、内部模型标识、任务进程和 Tool 调用等工程字段。
+  侧栏“新建任务”在当前路由内也会显式开启空白会话，最近任务在提交和状态变化后实时刷新。本批不改 Main、Preload、
+  Contract、Core、Central、migration、依赖或 lockfile。
+
+- DFE-9 repair.4 修复连续对话与新建任务的 Renderer 状态串用：首轮成功提交后在本次应用运行内保留同一 Session 的
+  Agent、Model、Skill、Knowledge 和 Workspace 安全标识，后续消息复用这些真实选择，不再因 Skill 丢失触发
+  runtime capability unavailable；重新进入“新建任务”会清空旧 Session，只创建新会话。侧栏最近任务在提交后的
+  Task 路由变化时自动同步；首页删除空输入提示和“本次推理模式”回执卡片。
+
+- DFE-9 repair.3 修复持续会话页不显示普通模型回复的问题：消息流不再错误依赖“存在确认卡片”，流式 Assistant
+  delta 与 durable Conversation Snapshot 分别刷新，Task Detail 暂时不可用也不会阻断已持久化消息更新。任务详情态
+  同时从旧任务管理卡片改为全高对话工作台，中间消息区和底部输入框保持固定，右侧成果/工作空间面板可收起、展开和
+  软件内全屏；同一 Session 后续发送仍创建独立 durable Task，不伪造 Assistant 内容。
+
+- DFE-9 repair.2 将任务详情改为持续会话工作台：中央消息区展示同一 Session 的完整持久消息与实时回复，底部
+  输入框固定可连续发送；每轮仍通过既有 SubmitTurn 创建独立可恢复 Task，并在当前页面切换到新 Task，不再跳回
+  新建任务。右侧成果/工作空间面板保留展开、收起和软件内全屏；每轮提交前重新校验当前 Agent/Model Catalog，
+  不新增 Contract、IPC、Core 状态、持久化或 Renderer 假回复。
+
+- DFE-9 repair.1 将 Workbench 收敛为真实对话语义：默认对话不要求 WorkspaceGrant，Enter 发送、Shift+Enter 换行；
+  SubmitTurn 接收后直接进入任务对话详情并由真实 Core 事件/快照展示回复，不再显示“已进入本地运行队列”。删除初始
+  通用机器人提示，模型浮窗只列 available Model Projection 名称，internal-trial 模型显示为 `DeepSeek-V4`。附件仍
+  必须使用受控 WorkspaceGrant；未新增 Contract、IPC、migration、持久化或 secret 路径。
+
+- Desktop `0.0.0-dfe.9` 将新建任务输入框收敛为两个真实浮窗：单一“+”入口管理文件、机器人、技能与知识，
+  模型按钮管理真实 Model 选择与 Max；发送按钮固定在输入工具栏，删除“手动复核”“已选资源”及旧智能调度表单。
+  新增 `pnpm run trial:desktop:deepseek`，以 test/internal-trial-only Central 在进程内消费一次 DeepSeek Key 并打开
+  真实 Electron，关闭后清理临时状态。未新增 Contract、IPC、migration、production graph、依赖或 lockfile 变化。
+
+- Root/Core/Contracts/Desktop/Admin 推进至 `0.0.0-mvp.admin.vs1`，Central 推进至
+  `0.0.0-mvp.admin.vs1-SNAPSHOT`：新增 additive `admin-control/v1alpha2`、Central PostgreSQL v0011
+  managed model/default/audit/immutable Gateway binding、AES-GCM Credential、五个精确 Admin 模型 command、
+  internal-trial 安全 discovery，以及 Desktop exact model consumption。真实 Electron 受控 E2E 已验证 Admin 默认
+  模型发现、专项 Agent/Skill、Gateway HTTP/SSE、PPTX 与 Core `SIGKILL` 后 SQLite 恢复；原 VS1 E2E 回归 PASS。
+  lockfile 仅恢复 Admin 既有 `@robothree/contracts: workspace:*` importer（`c47641ac…` → `5b15ae01…`），没有新增
+  registry 包。
+  独立联合代码 QA 为 `CODE_QA_PASS`（P0=0、P1=0、P2=0、P3=1），用户已接受并正式关闭
+  ADMIN-MVP-VS1；P3 Desktop workspace 全量门禁历史 blocker 作为非阻断外部欠账保留，不建立 ADMIN repair
+  批次。本次关闭不代表公网 Provider、production identity/SSO/RBAC 或 production ready，且不自动解锁下游。详见
+  [联合实施报告](./docs/development/ADMIN-MVP-VS1-JOINT-IMPLEMENTATION-REPORT.md)。
+- DFE-8A/8B 按通过产品聚焦复核的
+  [DFE-8.0 本地演示登录与设置原型对齐方案](./docs/development/frontend/DFE-8.0-DESKTOP-DEMO-LOGIN-SETTINGS-PROTOTYPE-ALIGNMENT-PLAN.md)
+  完成 Renderer 实现：只有显式 `local_demo` 注册公开演示账号 `admin/123456` 的内存入口；设置固定为模型管理、
+  个性化、个人记忆和问题反馈四页。模型页消费既有企业/平台与个人模型只读 Projection，不建设 mutation/Key 表单；
+  个性化和记忆只在演示模式本页预览并随离页清除；正式反馈不读取附件也不伪造提交。Repair.1 修复 680px 窄窗
+  隐藏整个用户菜单的问题：紧凑侧栏始终保留头像入口，设置与退出登录均可操作，菜单向内容区展开且不产生水平溢出；
+  focused 更新为 11 files / 42 tests，并用显式 `local_demo` 打包态入口完成复验。当前为
+  `PRODUCT RE-ACCEPTANCE PASS / USER ACCEPTED / INDEPENDENT QA PENDING / NOT CLOSED`，未修改 Main、
+  Preload、Contract、Core、Central、migration、依赖或 lockfile。
+- Admin Console 在 package version 保持 `0.0.0-afe.6c`、lockfile 不变的前提下完成 MVP VS1 模型管理前端接线并经用户接受关闭：新增
+  `admin-control/v1alpha2` managed model Adapter 读取与 5 个模型写方法消费，落地模型列表、搜索、生命周期筛选、
+  详情、新建、编辑、连接校验、启停和设为默认入口。访问密钥仅显示 `已配置 / 未配置`，创建/替换只经受控
+  Adapter 提交；删除、供应商插件、用户范围、其他模块 mutation、TGM 和 production identity 继续 GATED。
+  独立代码 QA 结论为 `CODE_QA_PASS`（P0=0、P1=0、P2=0、P3=1，P3 为非 Admin 范围外部 blocker），用户已接受
+  ADMIN-MVP-VS1 Frontend 子批 `PASS/CLOSED`；联合 VS1 仍等待 AM1-B 后端与端到端 E2E。详见
+  [实施报告](./docs/development/ADMIN-MVP-VS1-FRONTEND-MODEL-MANAGEMENT-IMPLEMENTATION-REPORT.md)与
+  [独立代码 QA 报告](./docs/development/qa/admin-mvp-vs1-frontend-code-claude-qa.md)。
+- Central `0.0.0-dr.2-repair.3-SNAPSHOT` 修复实际 OpenAI-compatible Provider 的 Tool 往返协议：流式 Tool
+  arguments 保留合法空白片段，第二轮请求恢复 `assistant.tool_calls` 与 `tool.tool_call_id`，不向 Provider 泄漏
+  RoboThree 私有 digest/outcome 字段。DeepSeek 首轮 Tool Call、PPTX Tool Result 后的第二轮请求不再因错误 wire
+  shape 返回 4xx。Provider focused、Central online/offline 各 442 tests 和受控 Electron 两轮模型调用/PPTX/重启
+  恢复均 PASS；2026-08-30 真实 DeepSeek 最终复跑进一步取得
+  `MVP_VERTICAL_SLICE_1_E2E_CONFORMANT`，真实生成 72,242-byte PPTX，并在 Core `SIGKILL` 后恢复 Assistant、
+  Artifact 与 Tool Activity。本批不修改公共 Contract、migration、Main、Preload、Renderer、production graph、
+  依赖或 lockfile；用户已接受真实验证结果，DR-2 正式 `PASS/CLOSED`，但不代表 production-ready。
+- Root/Desktop `0.0.0-mvp.vs3` 完成“已完成任务继续修改 / 成果修订版”垂直闭环：Task 页从 durable completed
+  detail 进入同 Session 新 SubmitTurn，Renderer one-shot intent 不持久化；旧 Agent/Model 仅经当前 Catalog
+  exact validation 后作为候选，Workspace/Skill/Knowledge 由用户显式重新选择。真实 Electron E2E 已创建两个
+  Task 和两份不互相覆盖的 PPTX，并在第二次 Core `SIGKILL`、新 runtime identity 与原 SQLite reopen 后分别恢复
+  preview。没有新增 Contract、Core/Main/Preload 生产接缝、migration、依赖或成果版本平台；独立 QA
+  `P0=0/P1=0/P2=0/P3=0` 已由用户接受，VS3 正式 `PASS/CLOSED`，最高 outcome
+  `MVP_VS3_COMPLETED_TASK_FOLLOW_UP_E2E_CONFORMANT` 已接受。本次关闭不代表 production ready，Personal Model、
+  Admin mutation、TGM、Knowledge Provider 与 Agent Lifecycle 继续 GATED。详见[方案](./docs/development/MVP-VS3-COMPLETED-TASK-FOLLOW-UP-ARTIFACT-REVISION-DEVELOPMENT-PLAN.md)
+  与[实施报告](./docs/development/MVP-VS3-COMPLETED-TASK-FOLLOW-UP-ARTIFACT-REVISION-IMPLEMENTATION-REPORT.md)。
+- Root/Core `0.0.0-mvp.vs2.3` 完成 VS2.3 repair.3 Tool-generated Artifact Preview Authority：focused proof
+  证明真实 v1alpha4 Task 在 Tool payload 无 `workspaceGrantId` 时被 legacy-only selection loader 拒绝；仅将 Artifact
+  source authority 切换为既有 readable union，并补充 v1alpha4 restart regression。未修改 Main/Preload/Renderer
+  production routing、公开 Contract、migration、依赖或 lockfile。同一真实 Electron E2E 现已通过 Core SIGKILL、
+  SQLite reopen、DOCX read、PPTX write、Task 两段业务步骤与恢复后 PPTX HTML preview。独立 QA P0～P3 全 0
+  已由用户接受，repair.3、父 VS2.3 与 MVP-VS2 正式 `PASS/CLOSED`；最高结论仅为
+  `MVP_VS2_WORKSPACE_SOURCE_TO_ARTIFACT_E2E_CONFORMANT`，不自动解锁下游。
+- VS2.3 repair.2 已按用户选择的方案 A 完成 internal legacy/V2 invocation deadline authority：两种 strict record
+  均 additive 接受可选 deadline，统一纳入 record digest 与 prepared-link 四态比较；historical 缺字段可读，active
+  recovery 缺字段 fail-closed。聚焦 `6 files / 73 tests` 与 Core/Desktop typecheck PASS。恢复同一真实 Electron E2E
+  后，一次 accept、两次 SSE subscription、DOCX read、PPTX write、round-3 与 Task completed 均成立；最终 PPTX
+  HTML 预览在 Artifact source 解析返回 `task.not_found`。按 VS2.3 停手条件，不修改 Core/Main production logic，
+  父批继续 paused，等待极小预览来源 authority 评审。repair.2 独立代码 QA P0～P3 全 0 已由用户正式接受，
+  子批现为 `PASS/CLOSED`，不自动关闭父 VS2.3。
+- Desktop `0.0.0-dfe.run.1.repair.2` 将新建任务页重构为居中式对话工作台：任务描述、工作区、资料、审批提示、
+  智能调度和发送按钮进入同一 composer，高级机器人/模型/Max/资源选择按需展开；快捷能力收敛为轻量标签与任务行。
+  智能中心机器人、技能和工具详情改为独立子路由页面，列表页不再内嵌详情面板；侧栏无内容时不展示置顶/空间空区块。
+  本批只调整 Renderer、测试及 Desktop 治理基线，不新增后端接口、Contract、IPC、持久化、依赖或 lockfile 变化；
+  当前为开发者验证通过、产品复验与独立 QA 待执行。
+- Root/Core/Desktop `0.0.0-mvp.vs2.2` 完成 Workbench 资料附件与 durable file selection：用户只可从当前
+  active/read-write Workspace 添加 DOCX/XLSX/PDF，Renderer 仅获得安全相对路径；提交前 Main 重新计算文件身份并
+  复用既有 manual Artifact/SQLite registration，文件漂移时以 `artifact.source_changed` 在 Session/Task 创建前
+  fail-closed。Document read Tool 在 execution build 与 effect dispatch 前再次核对持久化 SHA-256/size。
+  SubmitTurn v1alpha5、公开 Contracts、migration、依赖、lockfile 和既有任务状态机不变；VS2.3 恢复/真实 Electron
+  联合 E2E 尚未关闭。独立 QA P0～P3 全 0 已由用户正式接受，VS2.2 现为 `PASS/CLOSED`；Desktop foundation
+  smoke 的 `fixtureOnly:true` 继续只作为 fixture 冒烟，不冒充真实 Electron E2E。VS2.3 docs-only Revision 1
+  修正 round-2 为相同 `clientRequestId` 的新 transport accept；按正常 read/write/final 三轮加一次 round-2 重发，
+  请求计数为 1/2/1、总计 4；禁止生产 barrier/错误 seam，并把 focused QA 从
+  48 项收缩为 24 项。用户随后正式接受 Revision 1 并授权编码；Task 页 pure projection 与 focused tests 已完成，
+  但真实 Electron E2E 发现 Main 把含 `workspaceGrantId` 的 picker 扩展命令原样传入 frozen strict base command，
+  导致“添加资料”返回 `contract.invalid`。该问题必须修改 Main production logic，已按授权边界停手；VS2.3 当前为
+  `IMPLEMENTATION STOP / CODING PAUSED`，等待最小 command narrowing 聚焦修复授权。
+- Root/Core `0.0.0-mvp.vs2.1` 完成 VS2.1 Workspace Source Read：`agent.presentation` 从单一 PPTX write 扩展为
+  DOCX read、XLSX read、PDF text read 与 PPTX write 四项 exact Tool allowlist；internal-trial Registry、
+  Entitlement、permissions、acceptance lease、Tool Policy 与 Capability Lock 支持多 Tool refs。真实 focused
+  integration 已证明工作空间 DOCX 正文经 Tool Observation 进入下一轮模型请求，随后生成 PPTX，并在 Task detail
+  同时留下读取和生成活动。本批不新增 Contract、migration、依赖、Renderer 或第二套状态机；独立 QA 与用户接受
+  已完成，VS2.1 正式 `PASS/CLOSED`。
+- 用户更正 VS1 Demo Readiness 不属于产品开发主线：Root 版本恢复为 `0.0.0-mvp.vs1.3`，无密钥预检命令和
+  external-gateway E2E 模式作为可选辅助工具保留，不要求彩排、演示版本冻结或真实 Provider 冒烟先于后续开发。
+  下一条产品主线转为 VS2 工作空间资料读取到成果：先让已授权工作空间中的 DOCX/XLSX/PDF read Tool 进入真实
+  Agent selection/lock/execution，再接客户端附件选择，不新增通用文件平台、第二套任务状态机或下游治理能力。
+- 用户正式接受 MVP-VS1.3 Electron launch-environment 最终聚焦 re-QA：VS1.2、VS1.3 与 MVP-VS1 engineering
+  conformance 现为 `PASS/CLOSED`，确认 `MVP_VERTICAL_SLICE_1_E2E_CONFORMANT`。受控 Gateway fixture 不冒充实际
+  Central + 真实模型演示就绪；`MVP_VERTICAL_SLICE_1_USABLE`、签名安装包和 production ready 均未声明，下游继续 GATED。
+- 修复 Electron 启动环境污染：VS1 E2E、Desktop 产品 Main 与 Preload smoke 启动命令显式清除
+  `ELECTRON_RUN_AS_NODE`，避免 QA/父 shell 把 Electron 误切为普通 Node；当前 ESM 入口使用 Electron named imports，
+  真实 Electron E2E 与 production Preload smoke 已复跑通过。
+- Root/Core/Desktop `0.0.0-mvp.vs1.3` 完成 VS1.3 真实 Desktop 垂直闭环：Electron Main 精确消费并删除
+  internal-trial deployment/Token 环境值，以 privileged memory lease 支持 Core 自动重启；真实 Renderer 工作台选择
+  专项 Agent、企业 Model 与显式 Skill 后，经两轮 Gateway HTTP/SSE 调用生成 PPTX，并在任务页显示回复、Tool 活动与
+  成果。真实 `SIGKILL` 后使用同一 SQLite 恢复相同内容；不新增 Contract、migration、依赖或下游能力。
+- Core `0.0.0-mvp.vs1.backend.2` 完成 VS1.2 Agent / Skill / PPTX Tool 真实接线：internal-trial composition
+  加法启用 CPC，新增 code-owned `agent.presentation` 与受信仓内 `skill.presentation-planning`，并把 PPTX Tool exact
+  ref 贯通 Registry、Entitlement、Workspace/Authorization、Policy 和 Capability Lock。Gateway HTTP/SSE 返回的真实
+  Tool Call 现可经 provider-safe machine name 映射、`finishReason=tool_calls` 和 readable v1alpha4 selection 驱动
+  Document Worker 生成真实 PPTX，再把 Tool Result 送入第二轮模型调用并投影 completed Task/Tool activity/Artifact。
+  focused 3 files / 37 tests、CPC/R2D/Document 回归 10 files / 88 tests、Core typecheck、focused ESLint、DTP-4 audit
+  均 PASS；migration 26、lockfile 不变。当前为开发者验证通过、独立 QA 待统一执行；VS1.3 真实 Electron/重启 E2E
+  继续进行，不单独声明 `MVP_VERTICAL_SLICE_1_USABLE`。
+
+- Core `0.0.0-mvp.vs1.backend.1` 完成 VS1.1 后端真实企业 Model composition：新增 strict internal-trial
+  deployment 与一次性内存 Token Provider，将同一 exact Model 接入 Catalog/liveModels、Entitlement、Runtime
+  Selection v1alpha4、Capability Lock、Runtime Adapter Handle、durable Enterprise Provider/Invocation Link；默认
+  reasoning 复用 v1alpha4 lock 并保持 passthrough，不安装 Max release。真实 loopback HTTP/SSE Gateway + SQLite
+  stop/reopen 集成测试已证明纯文本回复与 Conversation 恢复。无 deployment/token 时继续 FailClosed，不新增
+  Contract、migration、依赖或 lockfile 变化。独立 QA 实测 5 files / 21 tests、Central online/offline 438/438、
+  typecheck、focused ESLint 与 DTP-4 全 PASS，已由用户接受并正式关闭；VS1.2/VS1.3 联合授权继续有效，整体 MVP 仍未关闭。
+
+- Desktop `0.0.0-mvp.vs1.frontend.1` 完成 VS1.1 前端 Model availability fail-closed 子项：Workbench 在模型目录全不可用时
+  不再允许通用机器人提交；已明确选择的模型刷新后不可用时清空模型选择并禁用提交，不自动回退到默认模型或其他全局模型。
+  本批只改 Renderer/测试和 Desktop 版本治理，不修改 Main、Preload、IPC、Contracts、Core、Central、Document Worker、
+  migration、依赖或 lockfile；VS1.1 后端真实 Model 组合与联合 E2E 仍未关闭。
+
+- 新增 docs-only
+  [MVP-VERTICAL-SLICE-1 真实任务垂直闭环联合实施方案](./docs/development/MVP-VERTICAL-SLICE-1-REAL-TASK-END-TO-END-DEVELOPMENT-PLAN.md)：
+  将当前最高优先级从 Personal Model/Contract/Stage Closure 调整为普通 Desktop 的真实企业 Model → Platform/Agent
+  Prompt → 显式本地 Skill → `tool.document.pptx.write` → Artifact → restart 恢复闭环。方案复用既有 Enterprise
+  Provider/Gateway、CPC、Agent Loop、Document Worker、Task/Artifact 与 Desktop 页面，按 VS1.1～VS1.3 在 6～9 个
+  集中工程日联合交付，只进行一次计划评审、一次编码和一次独立 QA。联合评审后的 Revision 1 已吸收真实输入、
+  Token 唯一路径、Agent/Skill/Tool exact lock、重启收敛、Admin 零触碰和逐项 DoD 证据，同时拒绝重新扩张关闭框架。
+  当前为 `PLAN REVIEW PASS/CLOSED / JOINT CODING AUTHORIZED；VS1.1 PASS/CLOSED / VS1.2 IN PROGRESS`；DFI-4A.4.2 repair.1、DFI-4A.4.3、Personal Model、Admin、TGM、
+  Knowledge、Agent Lifecycle 和无真实消费者的新 Contract 版本均暂停/GATED。本轮不修改代码、Contract、依赖、
+  migration 或 lockfile。
+
+- 新增 docs-only
+  [DFI-4A.4.2 repair.1 Public Mutation Identity Contract 聚焦方案](./docs/development/frontend/DFI-4A.4.2-REPAIR.1-PUBLIC-MUTATION-IDENTITY-CONTRACT-DEVELOPMENT-PLAN.md)：
+  采用 additive v1alpha3，在同一次 Core read snapshot 中将 configuration/execution exact pair 作为 strict public
+  mutation identity 投影；update/delete/reveal 原样回传并显式映射到既有 Coordinator。v1alpha1/v1alpha2、STRM、
+  durable 状态机、Renderer、migration、依赖、lockfile、Helper 与 historical Evidence 均保持冻结。当前仅文档评审，
+  编码继续 GATED；现已被 MVP-VERTICAL-SLICE-1 降为 P0.5 历史候选，不进入当前评审或编码。
+
+- DFI-4A.4.3 计划评审已由用户接受并获得编码授权；readiness 统一为 13 项（2 true、11 false），controlled
+  test identity 隔离约束已补齐。编码前 exact API 核对随后发现 v1alpha2 List/Detail 投影未返回
+  update/delete/reveal 命令必需的 `expectedExecutionDefinitionDigest`，真实 Renderer 无法构造后续命令。已按
+  停手条件暂停实现并新增
+  [Public Mutation Identity 停手报告](./docs/development/frontend/DFI-4A.4.3-PRE-CODE-PUBLIC-MUTATION-IDENTITY-STOP-REPORT.md)；
+  未修改 frozen Contract、产品代码、依赖、migration、lockfile 或 historical Evidence，等待 additive repair
+  方案评审与用户授权。
+
+- 新增 docs-only
+  [DFI-4A.4.3 Real Desktop E2E / Stage Closure / Frontend Handoff 详细方案](./docs/development/frontend/DFI-4A.4.3-REAL-DESKTOP-E2E-STAGE-CLOSURE-FRONTEND-HANDOFF-DEVELOPMENT-PLAN.md)：
+  冻结 normal unavailable + controlled real-process 双证据，规划真实 Electron/Main/Preload/Core/SQLite、真实编译
+  Helper child、临时 Keychain、受控 TLS Provider、七个 named SIGKILL 窗口、三轮 semantic replay、80 次泄漏
+  注入、22 类资源归零、父 120 项 Stage Closure 与 Frontend Handoff。当前仅文档评审，编码继续 GATED；
+  production Helper、CRUD/Reveal、Renderer UI 与全部下游仍 false/GATED。
+
+- DFI-4A.4.2 已按用户接受的方案 A/A2 完成实现：新增 additive Personal Model management v1alpha2
+  八方法安全接口，create/replace/reveal 继续走 STRM，reuse/delete 通过 safe Core command 调用同一 durable
+  Coordinator 并使用 zero Secret；normal Core graph 安装真实 production business handler、共享 operation gate、
+  recovery 与 Reveal Service。聚合 Harness 为 8 files / 59 tests，80 次泄漏负向注入、18 类资源归零、父 QA
+  账本分层及 historical Evidence 不漂移均通过。正式签名 Helper 仍不存在，因此本批只声明
+  `DFI4A42_PERSONAL_MODEL_CRUD_REVEAL_RECOVERY_CONFORMANT`，CRUD/Reveal/UI 继续 false/GATED，等待独立 QA。
+  Evidence 内层 digest 为 `sha256:f52e7a255374e70a920957ba7641f5643f73a39445946815e42d7261be87dc0e`；
+  Central online/offline 均 438/438 BUILD SUCCESS，typecheck、audit 与本批聚焦 ESLint 均 PASS。全仓
+  `lint/check` 的剩余阻塞来自前端并行批 `settings-adapter.ts rootRealPath`，不归因本批。
+  独立代码 QA P0～P3 全 0 已由用户正式接受，DFI-4A.4.2 现为 `PASS/CLOSED`；QA §3.3 的 readiness
+  数量由 9 项修正为 11 项作为 docs-only 精度收口。本次关闭不代表 production ready，也不自动解锁
+  Helper、CRUD/Reveal、Renderer Personal Model UI、DFI-4A.4.3 或其他下游。
+
+- 用户接受 DFI-4A.4.2 第一轮停手方案 A：delete 走 safe Core command，复用同一 durable
+  Coordinator/Journal/Receipt 并使用 zero Secret，不扩写 frozen STRM v1。恢复编码后的第二轮 exact Contract
+  核对又确认：frozen STRM v1 把全部 update 视为携带 mutation body，无法表达既有 Coordinator 的
+  `reuse_existing` metadata-only update + zero Secret。docs-only
+  [Transport Contract 停手报告 Revision 2](./docs/development/frontend/DFI-4A.4.2-PRE-CODE-TRANSPORT-CONTRACT-STOP-REPORT.md)
+  推荐该分支与 delete 一样走 safe Core command；create、replace-secret update、reveal 继续走 STRM。用户已正式
+  接受 A2 并恢复编码授权；实施不得缩窄 update 语义、修改 frozen STRM v1 或创建 transport v2。
+
+- 用户正式接受 STRM-3 独立代码 QA，STRM-3 现为 `PASS/CLOSED`，只确认
+  `STRM3_SENSITIVE_TRANSPORT_PRODUCTION_CONFORMANT / SENSITIVE_TRANSPORT_READY`。历史 DFI-4A.4.1 与
+  DFI-5.4.3 Harness/Evidence 保持只读，不为合法版本/consumer 演进改写；前端并行
+  `settings-adapter.ts rootRealPath` 不归因本批。production Helper、business handler、CRUD、Reveal、Renderer UI
+  与其他下游继续 false/GATED。
+
+- 新增 docs-only
+  [DFI-4A.4.2 Personal Model CRUD / Credential Reveal / Durable Recovery 详细方案](./docs/development/frontend/DFI-4A.4.2-PERSONAL-MODEL-CRUD-CREDENTIAL-REVEAL-DURABLE-RECOVERY-DEVELOPMENT-PLAN.md)：
+  byte-freeze v1alpha1 并规划 additive v1alpha2 八方法；普通字段走 strict JSON，Secret 只走 STRM MessagePort +
+  fd4/fd5；normal Core graph计划复用既有 Coordinator/Reveal/Journal/Receipt/Keychain，补齐 durable CRUD、exact
+  replay、uncertain/manual/cleanup recovery 与 Reveal 短生命周期。当前仅 `DOCUMENT REVIEW PENDING / CODING GATED`，
+  未修改代码、Contract、依赖、migration 或 lockfile。
+
+- `0.0.0-strm.3` 完成 Sensitive Transport production activation 与 unblock audit：新增 code-owned exact
+  activation authority、normal Main/Preload internal foundation 和 Main→Core trusted boot descriptor；三轮真实
+  Electron/Core/fd4/fd5 均经过 Core SIGKILL、新 identity 与恢复后重新协商，另有 6 个 controlled bytes-path
+  scenarios、80 次负向泄漏注入、16 类资源归零与 DFI-4A.4 父 QA-061～080 逐项账本。当前只达到
+  `SENSITIVE_TRANSPORT_READY`；production Personal Model feature、Broker business handler、Helper、CRUD、Reveal、
+  Renderer UI 与其他下游继续 false/GATED。独立代码 QA P0～P3 全 0 已由用户接受，本批正式 `PASS/CLOSED`。
+
+- `0.0.0-dfe.run.1.repair.1` 完成 DFE-RUN-1 产品复验修订：历史专项机器人消失后提供显式“使用通用机器人”
+  操作，仍禁止静默替换；任务页与侧栏改用同一个、以 `taskId` 为键的本次运行置顶 Store；用户菜单改为可在
+  路由切换和点击外部时关闭的受控弹层；侧栏路由切换任务时清理旧目录状态并丢弃迟到响应；同时收敛 900×600
+  智能中心统计布局、中央任务返回路径、设置/知识中心工程文案、机器人表单校验时机和开关可访问性。本批不新增
+  后端接口、持久化或打包能力，等待产品复验和独立 QA，不标记 `PASS/CLOSED`。
+
+- 用户正式接受 DFI-4A.4.1 独立代码 QA，DFI-4A.4.1 现为 `PASS/CLOSED`。P3 只保留为已收口的文档精度
+  记录；历史 DFI-5.4.3 Harness/Evidence 保持只读，前端并行 `settings-adapter.ts rootRealPath` 不归因本批。
+  新增 docs-only [STRM-3 Sensitive Transport Production Activation / Unblock Audit 详细方案](./docs/development/frontend/STRM-3-SENSITIVE-TRANSPORT-PRODUCTION-ACTIVATION-UNBLOCK-AUDIT-DEVELOPMENT-PLAN.md)：
+  冻结 code-owned activation、normal Main/Preload internal foundation、Main→Core content-free descriptor、真实
+  Electron/Core/fd4/fd5 audit、80 次泄漏注入与16类资源归零。STRM-3 只允许关闭 transport blocker；
+  production feature、business handler、Helper、CRUD/Reveal、Renderer UI 与下游继续 false/GATED。当前仅
+  `DOCUMENT REVIEW PENDING / CODING GATED`，不构成编码授权。
+
+- `0.0.0-dfe.run.1` 按产品综合验收完成 Desktop 本地试运行体验修订：一级导航收敛为“新建任务 / 智能中心 /
+  知识中心”，任务、项目空间和最近任务进入左侧栏，设置进入用户菜单；新任务默认使用稳定的
+  `agent.general` 通用机器人，专项机器人缺失不再阻塞提交，已失效或消失的历史选择仍保持失败关闭；任务详情
+  重排为任务导航、对话、操作面板三部分，并补齐成果标签、过程/Tool 调用、工作空间文件、面板收起/全屏和真实
+  打开/删除反馈；智能中心与创建页同步收敛为中文业务文案和真实能力边界。本批不新增 Contract、IPC、Core、
+  Main/Preload、持久化或安装打包能力，当前等待产品复验和独立 QA，不标记 `PASS/CLOSED`。
+
+- `0.0.0-dfi.4a.4.1` 完成 DFI-4A.4 Revision 2 第一批：新增 standalone/enterprise 分离的 Personal Model
+  management authority、签名后 digest 的固定包内 Helper builder/manifest/Main→Core 二次验证，以及独立
+  `personal-model-management/v1alpha1` Compatibility/List/Detail Contract、Core HTTP、Main IPC 与 sandboxed
+  Preload 三方法只读链路。专项 Harness 4/17、全量 TypeScript/Vitest 328/2187、三项 smoke、Central
+  online/offline 438/438、typecheck/focused lint/audit 均通过；migration 止 26、lockfile 未变。当前无正式签名
+  Helper 资产，CRUD/Reveal/Renderer UI 与下游继续 GATED；独立 QA 已由用户接受，本批正式 `PASS/CLOSED`。
+
+- 用户正式接受 DFI-5.4.3 独立代码 QA，并同步关闭 DFI-5.4.3、DFI-5.4 与 DFI-5 全阶段。最终证据为
+  `DFI5_MAX_REASONING_MODE_CONFORMANT`，聚合 Harness 9/52、三轮真实 Electron/Core SIGKILL/SQLite reopen、
+  父108项与 focused120项账本、80 次泄漏注入、Central 438/438 和 root check 324/2169 全绿。QA 报告中
+  “public Contract 未修改”按本批 additive `desktop-local/task-reasoning/v1alpha1` 精确修正；阶段关闭不是下游
+  自动解锁。Enterprise/DeepSeek、TGM、Knowledge Provider、Agent Lifecycle、DFI-4A.4 与 Admin v2 继续 GATED。
+
+- `0.0.0-dfi.5.4.3` 已完成 Renderer Max UI、Safe Preview、durable Task Reasoning Projection、Local Personal
+  exact Max production path 与 DFI-5 stage closure Evidence。聚合 Harness 9/52，三轮真实 Electron 都完成
+  Core SIGKILL/新 PID/SQLite reopen/TLS-SSE/Renderer DOM，80 次负向泄漏全检出且资源归零；完整 check
+  324/2169 + 3 smoke、Central online/offline 438/438、lint/typecheck/audit/frozen install 全绿。当前仅为
+  `IMPLEMENTED / INDEPENDENT QA PENDING`；该历史实施状态现已由后续独立 QA 和用户接受推进为
+  `PASS/CLOSED`，Enterprise/DeepSeek 与其他下游继续 GATED。
+
+- 用户正式接受DFI-5.4.3A聚焦修订后的独立代码QA结论，本批现为`PASS/CLOSED`。最终QA为
+  P0=0/P1=0/P2=0/P3=1；historical DFI-5.4.2与R2D-4 Harness/Evidence保持只读，不为适配当前合法演进改写，
+  Central online双节点时序偶发作为非阻断P3保留。该关闭只确认Local Personal production graph conformance，
+  DFI-5.4.3父批剩余Renderer Max UI、Safe Preview、真实Desktop E2E与DFI-5阶段Closure仍等待单独恢复授权。
+
+- `0.0.0-dfi.5.4.3a` 已完成Local Personal production graph：真实Personal Model/Invocation/Preference
+  persistence、Local Desktop exact subject、R2D-P.2/PRA-3 admission、task-pinned release、release-pinned
+  mapping、唯一durable DFI541 handler与Agent Loop/Provider正式接线。normal graph不再fallback scripted
+  Agent/Model/Provider；历史E2E只通过显式`legacy_test`隔离图使用fixture。缺verified Credential helper或合法
+  Personal Model时仍诚实返回`runtime_dependencies_unavailable`。focused Harness 2/9、单worker全量
+  323/2162 + 3 smoke、Central offline 438/438及lint/typecheck/audit均通过；独立QA与用户接受已完成，但不代表
+  production ready或DFI-5.4.3父批关闭。
+
+- 用户正式接受DFI-5.4.3A计划评审结论并单独恢复编码授权；当前仅允许进入Local Personal production graph：
+  Personal Model persistence、唯一production DFI541 handler、R2D-P.2/PRA-3 exact admission、task-pinned release、
+  release-pinned mapping、Agent Loop/Provider与Desktop bootstrap接线。migration、公共Contract、依赖、Credential
+  helper packaging及全部下游能力继续禁止；任一停手条件命中须立即回评审。
+
+- DFI-5.4.3A 独立文档复核总体 `PASS`（P0～P2=0）；完成 docs-only 精度收口：明确
+  `TaskLockedModelProviderResolver` Port仍绑定v1alpha2 readable selection，而具体Runtime Adapter按exact lock解析且
+  当前未消费selection；确认`runtime_dependencies_unavailable`已存在于冻结v1alpha5 Compatibility enum，本批只
+  消费该typed value，不修改public Contract。当前`USER ACCEPTANCE PENDING / CODING GATED`，未恢复编码。
+
+- 用户正式接受 DFI-5.4.3 实施停手结论，并授权先形成 docs-only
+  [DFI-5.4.3A Local Personal Production Graph 聚焦实施方案](./docs/development/frontend/DFI-5.4.3A-LOCAL-PERSONAL-PRODUCTION-GRAPH-DEVELOPMENT-PLAN.md)：
+  冻结真实 Personal Model/Invocation/Preference persistence 生命周期、唯一 production
+  `Dfi541SubmitTurnHandler`、R2D-P.2 entitlement、PRA-3 exact admission、task-pinned release reconstruction、
+  release-pinned mapping、Agent Loop/Provider 与 Desktop bootstrap 接线。方案明确区分 structural graph 与用户
+  Credential runtime readiness；缺 verified helper 或合法 Personal Model 时返回 `runtime_dependencies_unavailable`，
+  不用 Fixture 补位。当前 `DOCUMENT REVIEW PENDING / CODING GATED`，不新增 migration、依赖或下游能力。
+
+- DFI-5.4.3 编码已完成 strict Task Reasoning read model、Core/Main/Preload 独立链路、Renderer Max Adapter、
+  accessible switch 与 Task detail durable safe summary；定向 3 files / 10 tests、Core/Desktop build 通过。继续接入
+  production graph 时确认当前 bootstrap 仍为 scripted Fixture，且 production `Dfi541SubmitTurnHandler` 实现数为 0；
+  按方案停手条件 10 暂停，未打开任何 production gate，等待 Local Personal production graph 聚焦确认。
+
+- 用户正式接受 DFI-5.4.3 独立文档复核并单独授权编码；两项 P3 精度直接吸收：QA-062 增加非法 union state
+  `extraStateRejected`，QA-082 增加 `task-reasoning/v1alpha1` exact subpath 构建产物真实 import。计划现为
+  `PLAN REVIEW PASS/CLOSED / CODING AUTHORIZED`；其他下游继续 `GATED`。
+
+- 用户正式接受 DFI-5.4.2 独立 QA 精度收口结论，DFI-5.4.2 现为 `PASS/CLOSED`；此前 R2D-4 异常确认是
+  QA runtime/path 伪失败，不建立 repair 批次。新增 docs-only
+  [DFI-5.4.3 Renderer Max UI / Safe Preview / Real Desktop E2E / Stage Closure 详细方案](./docs/development/frontend/DFI-5.4.3-RENDERER-MAX-UI-REAL-DESKTOP-E2E-STAGE-CLOSURE-DEVELOPMENT-PLAN.md)：
+  保持 v1alpha5 六方法 API 冻结，另建最小只读 Task Reasoning Projection，冻结 final production composition、
+  真实 Electron/Core/SQLite/TLS-SSE E2E、父108项逐项账本与 focused120项QA。当前仍
+  `DOCUMENT REVIEW PENDING / CODING GATED`，本轮不改代码、Contract、migration、依赖或 lockfile。
+
+- 实现 `0.0.0-dfi.5.4.2` Desktop v1alpha5 Safe API / Restart Lease：补齐 preference safe projection，新增六条
+  exact Core private route、六个 Main IPC channel、bounded `CorePrivateClient` methods、webContents/client binding、
+  单一 runtime lease revalidation 与 frozen sandboxed Preload API。Renderer/UI 未接线，production compatibility
+  继续 `production_gate_disabled`，installed release 仍为0。`harness:dfi5.4.2` 5/21、root check 318/2143 +
+  3 smoke、Central online/offline 438/438、typecheck/lint/audit 全绿；migration 止26，lockfile digest 未变。
+  独立 QA 精度收口后 P0～P3 全0，用户已正式接受并关闭本批；不自动授权 DFI-5.4.3 编码。
+
+- 用户正式接受 DFI-5.4.1 独立 QA 与报告精度修正结论，DFI-5.4.1 现为 `PASS/CLOSED`。本次关闭只确认
+  Max Core Contract / Durable Cutover conformance；production gates、Core route、Main/Preload API、
+  Desktop Max UI 与 installed subject release 继续为 false/0。DFI-5.4.2 仍为
+  `USER ACCEPTANCE PENDING / CODING GATED`，未自动获得编码授权。
+
+- 同步修正 DFI-5.4.1 独立 QA 治理记录：Root/Core/Contracts 均为 `0.0.0-dfi.5.4.1`；PRA 共10种
+  typed cause，仅2种允许 fallback，其余8种 fail-closed。新增 docs-only
+  [DFI-5.4.2 Desktop v1alpha5 Safe API / Restart Lease 详细方案](./docs/development/frontend/DFI-5.4.2-DESKTOP-SAFE-API-RESTART-LEASE-DEVELOPMENT-PLAN.md)：
+  明确 R2D-P.3 已占用 v1alpha4 default-only API，Max 必须使用独立 v1alpha5 六方法 namespace；冻结 Core
+  六 route、Main client binding/restart lease、sandboxed Preload、96项QA与 post-transition historical Evidence
+  纪律。当前仅 `DOCUMENT REVIEW PENDING / CODING GATED`，未编码、不改 migration/依赖/lockfile。
+
+- DFI-5.4.2 独立文档复核为 `PASS_WITH_P3_PRECISION_NOTES`（P0～P2=0/P3=3），已完成 docs-only 收口：
+  将真实缺口精确限定为 Facade 三个 v1alpha5 production-facing method；leak scanner 明确继承 DFI-5.4.1
+  5关键词并扩展新增敏感项；编码版本冻结为 Root/Core/Contracts/Desktop `0.0.0-dfi.5.4.2`，Admin 保持
+  `0.0.0-afe.6c`。方案逻辑、96项QA与 `CODING GATED` 状态不变，无需重新完整复核。
+
+- 实现 `0.0.0-dfi.5.4.1` Max Core Contract / Durable Cutover：新增 Desktop Local v1alpha5、
+  ReasoningModeLock v1alpha2、Runtime Selection v1alpha4 与 coordination v1alpha5 additive Contract，落地六态
+  reasoning lock、best-effort Planner、exact Provider admission 及 InMemory/SQLite 原子 durable bundle。
+  `harness:dfi5.4.1` 5/37、root check 313/2122 + 3 smoke、Central online/offline 438/438、typecheck/lint/audit
+  全部 PASS；migration 仍止 26，lockfile digest 未变。当前为 `INDEPENDENT QA PENDING`，production gates 与
+  route/API/UI/installed release 继续关闭，DFI-5.4.2～5.4.3 未解锁。
+
+- DFI-5.4.1 独立文档复核通过（P0～P2=0/P3=2）后完成 docs-only 精度收口：明确 Desktop Receipt 的
+  `reasoningResolution*` 必须 exact 等于 durable `resolutionEvidence*`；PRA 10 个 typed cause 中仅
+  `policy_unavailable | policy_not_admitted` 两个允许 best-effort fallback，其余8个全部 fail-closed，并新增
+  显式停手条件。Claude 复核文本另有三处报告精度待其自身修正：当前不存在 Runtime Selection v1alpha4目录、
+  实施计划为四个 Step、PRA cause 数量为10（2 fallback + 8 fail-closed）。DFI-5.4.1 当前仍
+  `USER ACCEPTANCE PENDING / CODING GATED`，本轮未编码。
+
+- 新增 docs-only
+  [DFI-5.4.1 Max Core Contract / Durable Cutover 详细实施方案](./docs/development/frontend/DFI-5.4.1-MAX-CORE-CONTRACT-CUTOVER-DEVELOPMENT-PLAN.md)：
+  在方案 A 前置全线 `PASS/CLOSED` 后，冻结 Desktop v1alpha5、ReasoningModeLock v1alpha2、Runtime Selection
+  v1alpha4、coordination v1alpha5 的唯一版本链，两个 best-effort fallback、PRA-3 admission 分级、atomic bundle
+  recovery 与 code-owned default-false gate。当前仍为 `DOCUMENT REVIEW PENDING / CODING GATED`；本轮不编码、
+  不改 migration/依赖/lockfile，不解锁 DFI-5.4.2～5.4.3 或其他下游。
+
+- 用户正式接受 R2D-P.3 + PRA-3 独立 QA；两批现均为 `PASS/CLOSED`。DTP-4 self-test 旧版本 fixture 已在
+  关闭前修复，focused 2/2、production audit 与 root check 308/2085 + 3 smoke 全绿。该关闭只确认
+  Desktop v1alpha4 default-only cutover 与 Provider admitted policy/materializer conformance；DFI-5.4.1 仍
+  `GATED`，production R2D activation、release registry consumer、SubmitTurn Max 与 Desktop Max UI 仍为
+  false/0。
+
+- `0.0.0-r2dp.3-pra.3` 完成 R2D-P.3 与 PRA-3：Desktop Local v1alpha4 通过 exact Contract/Core/Main/
+  sandboxed Preload/Renderer 单线接入 default-only SubmitTurn，Receipt 删除 `defaultModelId`，真实 Electron/Core/
+  SQLite E2E 证明 production gate 默认关闭；Provider admission 新增 additive V2、九向量 immutable manifest 与
+  exact subject-bound admitted materialization，但 bootstrap installed release/registry consumer 仍为0。
+  `harness:r2dp3` 8 files/22 tests、`harness:pra3` 6 files/22 tests、root check 308 files/2085 tests + 3 smoke、
+  Central online/offline 438/438、lint/audit/frozen install 全绿；migration 止26，lockfile
+  `5b15ae01…874f31` 不变。当前为开发者门禁通过、独立 QA 待进行，不解锁 DFI-5.4.x 或其他下游。
+  独立 QA 后补齐 DTP-4 self-test 的旧 package-version fixture，focused 2/2 与完整 root check
+  308 files/2085 tests + 3 smoke 均以最终退出码0通过；未放宽审计规则。
+
+- R2D-P.3 + PRA-3 独立文档复核 `PASS（P0～P2=0/P3=2）` 后完成两项 docs-only 精度收口：v1alpha4 submit/query
+  均绑定 Main→Core connection lease，旧 lease 晚到响应返回 `runtime_changed`，但新 runtime 重新协商后允许使用
+  同一 command ID 恢复 durable Receipt；PRA-3 production 环境误启 test loopback 时复用既有 typed cause
+  `personal_model.test_transport_forbidden`，不新增同义错误。用户接受后，两份计划均为
+  `PLAN REVIEW PASS/CLOSED / CODING GATED`；尚未授权编码。
+
+- 用户正式接受 R2D-P.2 与 PRA-2 repair.1，R2D-P.2、repair.1 与修复后的 PRA-2 分层 `PASS/CLOSED`；
+  production R2D activation、Provider registry consumer、SubmitTurn Max 与 Desktop Max UI 仍为 0/false。新增
+  docs-only [R2D-P.3 Desktop Local v1alpha4 / Production Cutover / E2E 详细方案](./docs/development/frontend/R2D-P.3-DESKTOP-V1ALPHA4-PRODUCTION-CUTOVER-DEVELOPMENT-PLAN.md)
+  与 [PRA-3 Provider Lifecycle / Admission Closure 详细方案](./docs/development/frontend/PRA-3-PROVIDER-LIFECYCLE-ADMISSION-CLOSURE-DEVELOPMENT-PLAN.md)：
+  前者冻结 default-only v1alpha4、删除 `defaultModelId`、三个 exact API 与真实 Electron cutover；后者冻结
+  pending V1 byte freeze、additive admitted V2、code-owned conformance manifest 与真实 TLS/SSE 生命周期。
+  两份方案当前均为 `DOCUMENT REVIEW PENDING / CODING GATED`，各细化估算 4～7 日，父计划关键路径同步修正为
+  9～16 日；本条不构成编码授权。
+
+- `0.0.0-r2dp.2-pra.2-repair.1` 修复聚焦复核发现的 PRA-2 sealed outcome 类型缺口：原独立 QA 将实现误报为
+  pending/admitted/rejected 三态，实际代码只有 pending/rejected。repair.1 新增
+  `ProductionAdmittedProviderReleaseMaterialization`，以 module-private `unique symbol` proof 保证当前不可构造，
+  pending policy 仍只能返回 `pending_conformance_materialized`，production admitted/supported/registry consumer
+  继续为 0。新增双向 compile-time 非互换断言，`harness:pra2` 更新为 **5 files / 24 tests**、Evidence
+  `sha256:1efc27e9…894eda`、`sealedOutcomeVariantCount=3`；root check **301 files / 2070 tests + 3 smoke** 通过。
+  原独立 QA 结论因此不能直接用于关闭，需聚焦 re-QA。
+
+- 用户正式接受 R2D-P.1 + PRA-1 独立 QA 及两轮报告精度修正，两批均为 `PASS/CLOSED`；该关闭不打开
+  production R2D consumption，也不把 PRA-1 `pending_conformance` candidate 解释为 admitted。新增 docs-only
+  [R2D-P.2 Production Source / Composition 详细方案](./docs/development/frontend/R2D-P.2-PRODUCTION-SOURCE-COMPOSITION-DEVELOPMENT-PLAN.md)
+  与 [PRA-2 Exact Subject-bound Release Materializer 详细方案](./docs/development/frontend/PRA-2-EXACT-SUBJECT-BOUND-RELEASE-MATERIALIZER-DEVELOPMENT-PLAN.md)：
+  前者冻结 use-only local authority、subject proof、Personal Model consistency lease、唯一 production graph 与默认
+  false gate；后者冻结 exact subject 纯 materializer、code-owned identity、pending/admitted 类型隔离与 production
+  release count=0。两份方案已完成独立文档复核、用户授权与编码，当前状态见下一条。
+
+- `0.0.0-r2dp.2-pra.2` 并行完成 R2D-P.2 与 PRA-2。R2D-P.2 新增唯一 production
+  `TaskResourceEntitlementSource`、一次性 subject proof/captured lease、Local Desktop acceptance authority 与默认
+  disabled composition；真实 Personal Model 未能证明数值 context window 时投影 `unknown`，不补默认值，Planner
+  成功或失败均确定性释放 lease。PRA-2 新增纯函数 exact subject-bound release materializer，绑定 LDA、Personal
+  Model exact facts、safe Credential observation、Task lock、endpoint 与 adapter/projector/timeout identities；当前只产出
+  `pending_conformance_materialized`，production admitted/supported/registry consumer 均为 0。专项 Harness 分别
+  **5 files / 48 tests** 与 **5 files / 23 tests**，root check **301 files / 2069 tests + 3 smoke**、Central
+  online/offline **438/438**、lint/Architecture boundary/audit 全绿；migration 仍止 26、lockfile digest 保持
+  `5b15ae01…874f31`。当前 `IMPLEMENTED / DEVELOPER GATES PASS / INDEPENDENT QA PENDING`；详见
+  [R2D-P.2 实施报告](./docs/development/frontend/R2D-P.2-PRODUCTION-SOURCE-COMPOSITION-IMPLEMENTATION-REPORT.md)
+  与 [PRA-2 实施报告](./docs/development/frontend/PRA-2-EXACT-SUBJECT-BOUND-RELEASE-MATERIALIZER-IMPLEMENTATION-REPORT.md)。
+
+- `0.0.0-r2dp.1-pra.1` 并行完成方案 A 的 LDA-1 / R2D-P.1 与 PRA-1。Core 新增独立 HMAC domain 的
+  `local_desktop_owner` authority、Task Resource Entitlement v2/readable union 与单一 canonical normalize 路径；
+  production Entitlement Source 仍为 0，未开启 R2D consumption。PRA-1 新增 content-addressed Provider evidence、
+  admission policy 与 exclusion record；OpenAI `gpt-5.2-2025-12-11` 仅为 `pending_conformance` 候选，DeepSeek
+  因需要 additive mapping/Tool continuation private state 保持 excluded，production materializer/release 仍为 0。
+  `harness:r2dp1` 4 files / 48 tests、`harness:pra1` 5 files / 25 tests、宿主 root check 298 files / 2057 tests +
+  3 smoke、R2D-3.2 与 DFI-5.3.4 历史 Harness、Central online/offline 438/438、lint/audit/frozen install 全绿；
+  migration 仍止 26，lockfile digest 保持 `5b15ae01…874f31`。该段记录实现门禁；独立 QA 与用户接受已在
+  上方关闭记录中收口；详见
+  [R2D-P.1 实施报告](./docs/development/frontend/R2D-P.1-LOCAL-DESKTOP-AUTHORITY-ENTITLEMENT-IMPLEMENTATION-REPORT.md)
+  与 [PRA-1 实施报告](./docs/development/frontend/PRA-1-IMMUTABLE-EVIDENCE-ADMISSION-POLICY-IMPLEMENTATION-REPORT.md)。
+
+- DFI-5.4 Desktop Max UI / Safe Preview / Production Cutover 父方案独立文档复核已接受为
+  `PLAN REVIEW PASS/CLOSED`；docs-only
+  [DFI-5.4.0 Contract / Durable Resolution / Production Release Authority 前置聚焦确认](./docs/development/frontend/DFI-5.4.0-CONTRACT-RELEASE-AUTHORITY-PREFLIGHT-CONFIRMATION.md)：
+  核对 v1alpha3 Preview/SubmitTurn/Receipt exact 字段，识别 ReasoningModeLock v1alpha1 无法诚实承载两类最新
+  best-effort fallback，以及 coordination v1alpha4 属 R2D 分支而 production R2D gate 仍 false；冻结
+  ReasoningModeLock additive version 与 Runtime Selection/coordination 单一 version path 的评审问题。Local
+  Personal release authority 改为 code-owned admission policy + 具体用户 subject-bound exact release 两层，
+  当前无候选满足全部 production admission。聚焦复核已通过并由用户接受，DFI-5.4.0 正式 `PASS/CLOSED`；
+  用户选择方案 A，禁止 legacy Runtime Selection 分支。新增 docs-only
+  [方案 A：最小 R2D Production Consumption / Provider Release Admission 详细计划](./docs/development/frontend/DFI-5.4-SCHEME-A-R2D-PRODUCTION-PROVIDER-RELEASE-PREREQUISITE-PLAN.md)：
+  以 Local Desktop Authority 为共享根，把 R2D-P.1～P.3 与独立 PRA-1～PRA-3 分开验收；Desktop v1alpha4
+  先只接 R2D/default reasoning，DFI-5.4.1 后续再以 v1alpha5 单线接 Max。该条记录方案形成时的状态；当前
+  计划评审已 `PASS/CLOSED`，LDA-1 / R2D-P.1 与 PRA-1 已进入上方实现批，后续仍独立 GATED。
+
+- 用户正式接受 DFI-5.3.4 独立 QA（P0～P3 全 0），DFI-5.3.4 与 DFI-5.3 阶段整体 `PASS/CLOSED`；父方案
+  120 项账本正式确认为 `executed_at_dfi53_stage_closure`。DFI-5.3.1～5.3.3 historical Evidence/Harness
+  继续只读，不覆盖历史。本次关闭仅确认 `DFI53_REASONING_PROVIDER_MAPPING_CONFORMANT`，不代表 production
+  ready；Gateway v1alpha3 route、Local/Enterprise Max release、SubmitTurn v1alpha3 与 Desktop Max UI
+  继续不可达/0，DFI-5.4、TGM、Knowledge Provider、Agent Lifecycle 与 Desktop/Admin v2 consumption
+  继续 GATED。
+
+- `0.0.0-dfi.5.3.4` 完成 DFI-5.3 closure-only Lifecycle / Cutover / Stage Closure：新增真实 Core/Central
+  child、真实 SQLite reopen 与 loopback Provider fixture，覆盖 Local Personal、Enterprise OpenAI-compatible、
+  Enterprise Anthropic-compatible 的 6 个 SIGKILL 恢复窗口与 9 次 fresh-process replay；父方案 120 项形成
+  item-level execution ledger，96 项 focused QA、80 次多编码泄漏负向与 14 类资源归零进入同一聚合 Evidence。
+  DFI-5.3.1～5.3.3 historical Evidence 运行前后逐字节不变；Gateway v1alpha3 四个 canonical file digests、
+  migration 26 与 lockfile digest 均无漂移。root check 295 files / 2039 tests + 3 smoke、Central online/offline
+  438/438、lint、Architecture boundary、audit 与 frozen offline install 全绿。当前
+  `IMPLEMENTED / DEVELOPER GATES PASS / INDEPENDENT QA PENDING`，最高只输出
+  `DFI53_REASONING_PROVIDER_MAPPING_CONFORMANT`；production route/release/UI 与全部下游继续 false/GATED。详见
+  [实施报告](./docs/development/frontend/DFI-5.3.4-LIFECYCLE-CUTOVER-STAGE-CLOSURE-IMPLEMENTATION-REPORT.md)。
+
+- 用户正式接受 DFI-5.3.3 独立 QA（P0～P3 全 0），DFI-5.3.3 当前 `PASS/CLOSED`；文档复核阶段关于
+  Gateway Contract 路径的误报澄清保留为历史记录，不作为实现缺陷。DFI-5.3.1/5.3.2 historical
+  Evidence/Harness 继续只读，父方案 120 项仍保留至阶段收口。新增 docs-only
+  [DFI-5.3.4 Lifecycle / Cutover / Stage Closure 详细方案](./docs/development/frontend/DFI-5.3.4-LIFECYCLE-CUTOVER-STAGE-CLOSURE-DEVELOPMENT-PLAN.md)，
+  冻结三 Provider 真实进程崩溃恢复、Gateway v1/v2/v3 single-dispatch/cutover、父 120 项 item-level 执行账本、
+  96 项 focused QA、三轮 semantic replay、80 次负向泄漏注入、14 类资源归零及诚实
+  `DFI53_REASONING_PROVIDER_MAPPING_CONFORMANT` 输出。本轮只改文档，DFI-5.3.4 仍
+  `DOCUMENT REVIEW PASS / USER ACCEPTANCE PENDING / CODING GATED`；独立复核 P0～P2 全 0、P3=2，两个 P3
+  已直接吸收为文档精度修正：v3 canonical evidence 明确为四个 file digests，DFI-4A.3.1 repair.2 Timeout
+  Fact 明确等同 migration 25。DFI-5.4 与全部下游继续 GATED。
+
+- `0.0.0-dfi.5.3.3` 完成 Enterprise OpenAI-compatible / Anthropic-compatible Reasoning Mapping：新增
+  additive Enterprise Gateway v1alpha3 safe reasoning sidecar，Core 在 durable prepare 前完成 exact
+  Profile/mapping preflight，Central 独立重算 Strategy/Profile/mapping 三层 digest 并绑定 exact Endpoint，
+  OpenAI 仅投影 `reasoning_effort: high|xhigh`，Anthropic 仅投影 bounded `thinking.budget_tokens`；
+  default/fallback body 完全省略 reasoning 字段。三态 activation gate 保证 disabled 时 service/controller 为 0、
+  依赖不完整时 HTTP ready 前失败、production true 当前拒绝。专项 Harness、root check、Central online/offline、
+  CPC 回归、lint/audit/frozen install 全部通过；production Gateway v1alpha3 route、Enterprise Max release、
+  SubmitTurn v1alpha3 与 Desktop Max UI 继续为 0/不可达。当前 `IMPLEMENTED / INDEPENDENT QA PENDING`，详见
+  [实施报告](./docs/development/frontend/DFI-5.3.3-ENTERPRISE-OPENAI-ANTHROPIC-REASONING-MAPPING-IMPLEMENTATION-REPORT.md)。
+  该条记录的是实施完成时状态；独立 QA 与用户接受后的当前状态以上一条为准。
+
+- DFI-5.3.3 独立文档复核总体 `PASS`，聚焦纠正一项复核事实误判：Core-private
+  `ModelReasoningV1Alpha2Schema` 与 `contracts/enterprise-gateway/v1alpha1～v1alpha2/**` Wire Contract
+  属不同协议层，v1alpha3 继续落在 `contracts/enterprise-gateway/v1alpha3/**`。方案 §3.2 已进一步写死：既有
+  v1alpha2 reasoning schema 字节冻结，Core converter 只在转换阶段合并 exact Profile/mapping refs，禁止改写
+  v1alpha2 ModelRequest。修正后 P0～P2 全 0、P3=1；本轮仅修改文档，继续等待用户接受与单独编码授权。
+
+- 用户正式接受 DFI-5.3.2 独立 QA（P0～P3 全 0），DFI-5.3.2 `PASS/CLOSED`；DFI-5.3.1 historical
+  evidence/Harness 保持只读，父方案 120 项矩阵继续保留至 DFI-5.3 阶段收口。新增 docs-only
+  [DFI-5.3.3 Enterprise OpenAI-compatible / Anthropic-compatible Reasoning Mapping 详细方案](./docs/development/frontend/DFI-5.3.3-ENTERPRISE-OPENAI-ANTHROPIC-REASONING-MAPPING-DEVELOPMENT-PLAN.md)，
+  冻结 Gateway v1alpha3、Core/Central 双重 exact 校验、safe mapping refs、OpenAI effort/Anthropic bounded
+  budget sealed projector、cache/reasoning 四组合、真实 loopback Provider fixture 与 108 项 focused QA。
+  分批调整为 5.3.3 同时完成两类 Enterprise mapping，5.3.4 只做 Lifecycle/Cutover/Stage Closure；本轮未编码，
+  production SubmitTurn v1alpha3、Desktop Max UI 与 production Local/Enterprise Max release 继续不可达/0。
+
+- 用户正式接受 AFE-6C 独立 QA，Admin Evidence Hardening 当前 `PASS/CLOSED`。`0.0.0-afe.6c`
+  在 `apps/admin-console/**` 授权范围内加固 `scan:static`：新增 production/integration
+  `bundleEvidence`、`missingRequiredBundleRoots` 与 `emptyRequiredBundleRoots`，并在 `dist` /
+  `dist-integration` 缺失、为空或缺少 JS bundle 时 fail-closed。Admin gates 全绿（typecheck、
+  negative、build 82 modules、build:integration 181 modules、test 12 files / 50 tests、scan:static、
+  scan:deps、smoke:dev）；`harness:aapi0.4` evidenceDigest 保持
+  `sha256:aa4348558bcd333ed1fa377be99da0f82a5bc940456db3762ebf340dbad02a71`，Desktop build/tests 与
+  root check 289 files / 1998 tests + 3 smoke 全绿。mutation、Tool activation、TGM、Knowledge Provider、
+  production identity、AAPI-0.5、Desktop v2 consumption 与 AFE-6D 继续 GATED。
+
+- `0.0.0-dfi.5.3.2` 完成 Local Personal Reasoning Mapping：按 Revision 2 将 exact subject 的
+  `modelCapabilityRevision` 绑定 Task Capability lock revision，并以 Personal configuration binding、execution
+  digest 与 Adapter revision 分层证明其余身份；default/fallback body 完全省略 reasoning 字段，max 只投影 sealed
+  `reasoning_effort: high | xhigh`。mapping 在 durable Invocation prepare 与 Credential/DNS/socket/TLS/HTTP 前
+  完成，terminal replay 不重读 mapping。专项 Harness 8 files / 66 tests、root check 289 files / 1998 tests +
+  3 smoke、Central online/offline 424/424、lint/boundary/audit/frozen install 全绿；production Local supported
+  release 仍为 0，Contracts/migration/依赖/lockfile 未变。独立 QA P0～P3 全 0 并已由用户接受，当前
+  `PASS/CLOSED`，详见
+  [实施报告](./docs/development/frontend/DFI-5.3.2-LOCAL-PERSONAL-REASONING-MAPPING-IMPLEMENTATION-REPORT.md)。
+
+- 用户正式接受 AFE-6B 独立 QA，Admin Browser / Visual / Accessibility Evidence Closure 当前
+  `PASS/CLOSED`。`0.0.0-afe.6b` 在 `apps/admin-console/**` 内完成 hash-mode index HTML / integration
+  loopback 证据、导航 `aria-current`、详情入口/分页/返回入口可读名称、响应式 CSS Contract、bundle 敏感扫描和
+  AAPI-0.4 evidenceDigest 零漂移门禁；Admin gates、Desktop build/tests、`harness:aapi0.4` 与 root check
+  287 files / 1986 tests + 3 smoke 全绿。唯一 P3 为 `scan:static` 独立命令在缺少 bundle 时可空跑的健壮性观察，
+  不阻断关闭；mutation、Tool activation、TGM、Knowledge Provider、production identity、AAPI-0.5、
+  Desktop v2 consumption 与 AFE-6C 继续 GATED。
+
+- DFI-5.3.2 获得 Revision 1 用户接受与单独编码授权后，编码前代码事实核对发现 exact Local subject 的
+  `modelCapabilityRevision` 被方案误写为 Personal Model `configurationRevision`；两者属于不同摘要域，且
+  DFI-5.3.1 Mapper 已冻结前者必须等于 Task lock Capability definition revision。新增 Revision 2 聚焦修订：
+  Capability revision 继续绑定 lock，Personal configuration/execution 由已验证 binding 与
+  `personalExecutionDefinitionDigest` 分层证明。当前仅修改文档，生产实现暂停等待用户聚焦接受。
+
+- DFI-5.3.2 独立文档复核通过后完成 Revision 1 纯文档小修：明确 Local timeout ref 是本批新增的
+  code-owned identifier、父方案八类与 Local 十类零副作用通道的对应关系，并修正“DFI-5.3.2 接线后仍要求
+  DFI-5.3.1 production consumer=0/evidenceDigest 不变”的不可能约束。DFI-5.3.1 historical evidence 保持
+  只读；新批通过 foundation focused regression 与 `harness:dfi5.3.2` authorized Local consumer allowlist
+  证明演进正确。未修改生产代码、Contract、migration、依赖或 lockfile；DFI-5.3.2 继续
+  `USER ACCEPTANCE PENDING / CODING GATED`。
+
+- 用户正式接受 `0.0.0-dfi.5.3.1` 独立 QA，DFI-5.3.1 `PASS/CLOSED`；CGF-2B3.2 首跑偶发仅作
+  非阻断环境 P3，不建立 DFI repair。父方案 120 项矩阵继续按
+  `retained_for_dfi53_stage_closure` 保留，不视为本批已全部执行。新增 docs-only
+  [DFI-5.3.2 Local Personal Reasoning Mapping 详细方案](./docs/development/frontend/DFI-5.3.2-LOCAL-PERSONAL-REASONING-MAPPING-DEVELOPMENT-PLAN.md)，
+  冻结 exact Personal Model/Adapter/timeout binding、mapping-before-durable-prepare、default/fallback
+  body 完全省略、historical exact mapping、真实 loopback TLS/SSE fixture 与 96 项 QA。当前没有获批的真实
+  Local Personal Max release，production supported release count 保持 0；本轮未修改生产代码、Contract、
+  migration、依赖或 lockfile，DFI-5.3.2 仍 `DOCUMENT REVIEW PENDING / CODING GATED`。
+
+- `0.0.0-dfi.5.3.1` 完成 Private Mapping Foundation：新增 sealed Provider-private mapping domain、
+  `Strategy commitment → safe Profile → full private mapping` 非循环摘要顺序、release-pinned exact registry 与
+  Task-locked mapper。default Profile/mapping load=0，max exact load 各 1，缺失/漂移 typed fail-closed；尚未接
+  Provider Adapter、Gateway v1alpha3、production SubmitTurn 或 Desktop UI。专项 8 files / 61 tests、root check
+  287 files / 1986 tests + 3 smoke、Central offline 424/424、frozen install、lint、boundary 与 audit 通过；
+  Central online 首跑仅既有 CGF-2B3.2 timing 偶发，单类复跑 3/3 通过。本批未改 Contracts、migration、依赖或
+  lockfile，当前 `IMPLEMENTED / DEVELOPER GATES PASS / INDEPENDENT QA PENDING`。详见
+  [实施报告](./docs/development/frontend/DFI-5.3.1-PRIVATE-MAPPING-FOUNDATION-IMPLEMENTATION-REPORT.md)。
+
+- 用户正式接受 AFE-6A Admin Read-only Experience Closure 独立 QA，AFE-6A 当前 `PASS/CLOSED`。
+  `0.0.0-afe.6a` 在 `apps/admin-console/**` 内完成六模块真实只读展示体验收口、11 项页面状态矩阵、
+  分页 stale cursor 安全处理、中文业务字段与非生产提示；删除 8 个 Tool Prototype 创建/策略文件并确认生产
+  路由 0 暴露。Admin gates、`harness:aapi0.4`、Desktop build/tests 与独立 QA 复跑 root check
+  287 files / 1986 tests + 3 smoke 全绿；mutation、Tool activation、TGM、Knowledge Provider、
+  production identity、AAPI-0.5、Desktop v2 consumption 继续 GATED。
+
+- 用户正式接受 DFI-5.3.1 Digest Ordering 聚焦差异复核，状态为 `PASS/CLOSED`，并恢复 DFI-5.3.1
+  Private Mapping Foundation 单独编码授权。编码前吸收两个非阻断 P3：父方案 120 项与聚焦新增 24 项必须
+  分别保留验收证据；父方案 §2.1/§2.3/§2.5 均增加非循环摘要顺序指针。DFI-5.3.2～5.3.4 与下游继续 GATED。
+
+- DFI-5.3.1 在编码前基线核对中命中父方案 §13 停手条件：原 §2.2 同时要求 `strategyDigest` 承诺
+  `profileRevision`，而现有 safe Profile revision 又由含 `strategyDigest` 的 material 派生，形成循环依赖。
+  新增 docs-only
+  [DFI-5.3.1 Private Mapping Digest Ordering 聚焦修订](./docs/development/frontend/DFI-5.3.1-PRIVATE-MAPPING-DIGEST-ORDERING-FOCUSED-REVISION.md)，
+  冻结 `Strategy commitment → safe Profile revision → full private mapping digest` 的非循环顺序、双摘要精确
+  校验、历史映射失败关闭与 24 项测试增量。当前为 `FOCUSED DIFFERENCE REVIEW PENDING / CODING PAUSED`；
+  未修改生产代码、公共 Contract、migration、依赖或 lockfile。
+
+- 用户正式接受 AAPI-0.4 独立 QA（P0～P3 全 0），AAPI-0.4 与 AAPI-0 Foundation conformance 整体
+  `PASS/CLOSED`。该关闭仅确认 development/test Admin read integration；production identity/SSO、Admin Read
+  HTTP、Browser Security、Admin Adapter、mutation、TGM、Knowledge Provider、Agent Lifecycle 与 Desktop/Admin
+  v2 consumption 继续 GATED/false。`packages/contracts/src/**` Schema 零修改，Contract 测试与 Java E2E 作为
+  门禁证据保留。关闭时清理可重建的 `apps/admin-console/dist-integration/**`，lockfile digest 前后均保持
+  `sha256:5b15ae0197c6f7a1450a49551fbfb50a9e0edc32f0fbe75a9259a360ed874f31`。
+
+- `0.0.0-aapi.0.4` 完成 Admin development/test 只读真实链路：12 个 exact `AdminApiAdapter` GET operation、
+  strict `admin-control.v1alpha1` parsing、capability/read route bootstrap、六模块真实 Projection 页面，以及
+  `Vite integration build → Node loopback static/proxy child → Central ephemeral port`。production entry 保持
+  `UnavailableAdminAdapter`；Browser bearer/identity header、mutation、Fixture fallback 均为 0。真实 Spring Boot +
+  built Admin + proxy Harness、Admin 10 files / 37 tests、root 284 files / 1961 tests + 3 smoke、Central
+  online/offline 424/424、frozen install/lint/audit 全绿。唯一新增依赖为 Admin importer 的 workspace Contracts，
+  无新 registry package；production identity/Admin HTTP/Browser security/Adapter 继续 false。当前为
+  `IMPLEMENTED / DEVELOPER GATES PASS / INDEPENDENT QA PENDING`，详见
+  [实施报告](./docs/development/AAPI-0.4-BROWSER-SECURITY-ADMIN-ADAPTER-DEVELOPMENT-TEST-INTEGRATION-IMPLEMENTATION-REPORT.md)。
+
+- 用户正式接受 AAPI-0.3 独立 QA，AAPI-0.3 现为 `PASS/CLOSED`；P3 仅作为 Admin Browser 仍待 AAPI-0.4
+  的阶段边界保留。新增 docs-only
+  [AAPI-0.4 Browser Security / Admin Adapter / Development-Test Integration 详细方案](./docs/development/AAPI-0.4-BROWSER-SECURITY-ADMIN-ADAPTER-DEVELOPMENT-TEST-INTEGRATION-PLAN.md)：
+  冻结 same-origin loopback proxy、服务端 test Principal/Browser 零 bearer、12 exact Adapter methods、strict
+  Contract parse、capability/route 映射、六模块真实只读页面、CSP/Origin/Fetch Metadata/no-store、真实
+  Central+Vite integration、96 项 QA 与 7～10 日估算。production identity/SSO 不作为 test-only read integration
+  前置，仍 deferred/false；mutation route/method=0。该条记录初版方案状态，Revision 1 当前状态以上一条聚焦
+  差异收口记录为准。
+
+- AAPI-0.4 方案完成 Revision 1 docs-only 聚焦差异收口：§0/§4.1/§17 统一以 §8.1 为唯一权威拓扑，固定
+  `Vite integration build → Node loopback static/proxy child → Central ephemeral port`，Vite HMR/development
+  proxy 不作为严格 CSP 证据；独立复核事实同步更正为 Contract v1alpha1 共 12 文件、现有 Fixture/Unavailable
+  Adapter 无 Zod validation。聚焦确认 `P0～P3=0`，当前仍 `CODING GATED`；未修改代码、依赖或 lockfile。
+
+- `0.0.0-aapi.0.3` 完成 Central 六模块 read-only Projection inventory 与 `/admin/v1alpha1` test-only HTTP
+  shell：精确 12 条 GET、0 mutation，服务端 Principal/capability authorization、queryRevision、稳定排序、
+  per-runtime HMAC cursor、ETag/304 与 typed safe error 全部接通。Model/Robot/Skill/Knowledge 只读取通过
+  integrity verification 的 active snapshot/exact package，Audit 只读既有 pending outbox，Tool 在 TGM/risk
+  authority 缺失时保持 gated；不新增 Repository 读语义、不修改既有写路径。专项 8 Java classes / 33 tests +
+  2 TS files / 10 tests、root check 284 files / 1961 tests + 3 smoke、Central online/offline 424/424 全绿；
+  production identity/Admin HTTP/Browser security 与全部下游继续 false/GATED。详见
+  [实施报告](./docs/development/AAPI-0.3-READ-ONLY-PROJECTION-INVENTORY-HTTP-SHELL-IMPLEMENTATION-REPORT.md)。
+
+- 用户接受后端 / Desktop / Admin 接口解阻优先级，新增 docs-only
+  [AAPI-0.3 Read-only Projection Inventory / HTTP Shell 详细方案](./docs/development/AAPI-0.3-READ-ONLY-PROJECTION-INVENTORY-HTTP-SHELL-DEVELOPMENT-PLAN.md)：
+  冻结六模块可信 authority inventory、诚实 partial/unavailable、12 条 test-only GET route、服务端 capability
+  authorization、queryRevision/cursor/ETag、production Controller/mapping/source count=0、96 项 QA 与 7～12 日
+  估算。该条记录的是当时的方案状态；AAPI-0.3 后续已实现并由用户接受关闭，当前状态以上方最新条目为准。
+
+- 用户正式接受 R2D-4 独立 QA（P0=0、P1=0、P2=0、P3=0），R2D-4 与 R2D 工程线 conformance 整体
+  `PASS/CLOSED`。本次关闭只确认 `R2D_CORE_DELTA_CONFORMANT`；production CPC activation、production R2D
+  gate、production enterprise entitlement 与全部下游 readiness 继续 false，DFI-5.3、AAPI-0.3～0.4、TGM、
+  Knowledge Provider、Memory、Effect Reconciliation、Agent Lifecycle 与 Desktop/Admin v2 consumption
+  不自动解锁。
+
+- `0.0.0-r2d.4` 完成 closure-only Lifecycle / Cutover / Closure Harness：五个 durable named barrier 后真实
+  Core child SIGKILL、新 PID 与 SQLite same-file reopen；恢复阶段 current authority read=0；三个 fresh process
+  使用同一受控 FakeClock seed，`acceptedAt/createdAt/lockedAt/observedAt/committedAt` 全部进入 semantic
+  material，1ms 漂移会改变真实 plan 与 semantic digest；80 次负向泄漏注入全部可检出，正常四通道命中 0，
+  12 类真实资源归零。专项 18 files / 179 tests、完整 root check 283 files / 1958 tests + 3 smoke、Central
+  online/offline 404/404、audit 全绿；production CPC/R2D/enterprise entitlement 与全部下游 readiness 继续
+  false。本批未改 Core 生产实现、Contract、migration、Provider、Desktop/Admin/Central/Document Worker、
+  依赖或 lockfile。详见
+  [实施报告](./docs/development/R2D-4-LIFECYCLE-CUTOVER-CLOSURE-HARNESS-IMPLEMENTATION-REPORT.md)。
+
+- 用户正式接受 R2D-3.3 独立 QA，R2D-3.3 与 R2D-3 阶段整体 `PASS/CLOSED`；Central tracing exporter timeout、
+  本机端口占用作为非阻断环境 P3 留待对应子系统，Desktop v1alpha3 Receipt 的 `defaultModelId` 兼容投影保留到
+  Desktop/Admin v2 consumption，且不作为 Agent default authority。新增 docs-only
+  [R2D-4 Lifecycle / Cutover / Closure Harness 详细方案](./docs/development/R2D-4-LIFECYCLE-CUTOVER-CLOSURE-HARNESS-DEVELOPMENT-PLAN.md)：
+  冻结 production gate 三态、真实 Core child/SIGKILL/SQLite reopen、首次接受/Dynamic Facts/重放/多版本
+  single-dispatch、三轮 semantic replay、80 次负向泄漏注入、12 类资源归零、96 项 QA 与诚实
+  `R2D_CORE_DELTA_CONFORMANT` 输出；当前 `DOCUMENT REVIEW PENDING / CODING GATED`，未进入编码。
+
+- `0.0.0-r2d.3.3` 完成首次 SubmitTurn durable acceptance：复用既有四阶段 coordination，在既有 JSON 列中
+  增加 Core-private 双 envelope；SQLite 单 transaction 与 InMemory staged-state single-swap 原子提交 Task、
+  Model/Tool locks、Runtime Selection v1alpha3、Authorization、ReasoningModeLock 与 Task Instruction Binding；
+  accepted/message recovery 不重读 current authority，completed 后才启动 Agent Loop。专项 6 files / 74 tests、
+  非沙箱 root check 280 files / 1938 tests + 3 smoke、Central online/offline 404/404、audit 全绿；production CPC/R2D/
+  enterprise entitlement 继续 false，R2D-4 与全部下游继续 GATED。详见
+  [实施报告](./docs/development/R2D-3.3-DURABLE-ACCEPTANCE-COORDINATION-IMPLEMENTATION-REPORT.md)。
+
+- R2D-3.3 详细方案升级 Revision 1，机械吸收独立复核 `PASS_WITH_REVISIONS` 的一个 P2 与两个 P3：业务
+  `acceptanceReceiptIdentity` 固定等于 `submitTurnCommandId`，transport 使用独立
+  `preallocatedDeliveryId`；复用现有 `TaskInstructionBindingV1` schema/derive/validate helpers；SQLite 保持
+  transaction，InMemory 固定 staged-state single-swap；四类状态转换后强制重算 envelope digest。108 项 QA 通过
+  收紧既有编号保持连续。当前 `USER ACCEPTANCE PENDING / CODING GATED`，未改生产代码、Contract、migration、版本、
+  依赖或 lockfile。
+
+- 用户正式接受 R2D-3.2 聚焦环境 re-QA，`0.0.0-r2d.3.2` 标记为 `PASS/CLOSED`。确认原
+  `database.enableDefensive` 失败来自 QA shell 误用 Node 22.22.1；项目 Node 24.13.0 基线完整门禁全绿，
+  不建立 repair、不增加 Node 22 fallback，`dcf13c` 本轮未复现且不保留 P3。新增 docs-only
+  [R2D-3.3 Durable Acceptance / Coordination v1alpha4 / Task Bundle Atomic Commit 详细实施方案](./docs/development/R2D-3.3-DURABLE-ACCEPTANCE-COORDINATION-DEVELOPMENT-PLAN.md)：
+  冻结既有四阶段 coordination、Core-private 双 durable envelope、首次 authority 调用次数、Runtime Selection
+  v1alpha3 Task bundle 原子提交、Task Instruction Binding 同 transaction durable、Provider 前
+  `task_committed` barrier、exact recovery/cutover 与 disabled activation gate。方案为
+  `DOCUMENT REVIEW PENDING / CODING GATED`；R2D-3.3 明细估算由 2～4 日修正为 3～5 日，R2D-3 合计
+  7～11 日、R2D 总计 14～23 日。未改生产代码、Contract、migration、依赖、版本或 lockfile。
+
+- `0.0.0-r2d.3.2` 完成单一 `AgentResourceDecisionPlanner`、可信 Entitlement/Agent/Registry/Workspace/Auth
+  exact intersection、explicit/preference/stable ordinal Model 真值表、Entitlement/Tool policy Ports、code-owned
+  `agent.general` exact material 与 `agent.fixture.desktop-scripted` 隔离。专项 7 files / 65 tests、非沙箱 root
+  check 279 files / 1930 tests + 3 smoke、Central online/offline 404/404、lint/boundary/audit/frozen install 全绿；
+  lockfile 未变、migration 止 26。production SubmitTurn v1alpha4 未接线，CPC/R2D/enterprise entitlement 继续
+  false；独立 QA 已由用户正式接受，当前 `PASS/CLOSED`。
+
 - 用户正式接受 R2D-3.1 独立 QA，`0.0.0-r2d.3.1` 标记为 `PASS/CLOSED`；唯一 P3 为非本批的
   `dcf13c` 并发偶发，focused 复跑 PASS，留待对应子系统处理。新增 docs-only
   [R2D-3.2 `agent.general` Exact Material 编码前置聚焦确认](./docs/development/R2D-3.2-AGENT-GENERAL-EXACT-MATERIAL-PREFLIGHT-CONFIRMATION.md)：

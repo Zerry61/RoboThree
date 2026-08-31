@@ -13,11 +13,14 @@ describe("DFE-5A.1 Desktop settings adapter", () => {
   it("loads model projections through the existing listModels API only", async () => {
     const api = installDesktopApi();
     const data = await desktopSettingsAdapter.loadSettingsModels();
+    const query = api.listModels.mock.calls[0]?.[0];
 
     expect(api.listModels).toHaveBeenCalledWith(expect.objectContaining({
       contractVersion: "v1alpha1",
       type: "list_models",
     }));
+    expect(query?.clientInstanceId).toMatch(/^[0-9a-f-]{36}$/u);
+    expect(query?.clientInstanceId).not.toContain("renderer:");
     expect(data.models).toHaveLength(1);
     expect(JSON.stringify(data)).not.toMatch(/workspaceRoot|rootRealPath|Credential Reference|credentialReference/u);
   });

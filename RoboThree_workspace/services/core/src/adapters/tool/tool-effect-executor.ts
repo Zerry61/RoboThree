@@ -4,6 +4,7 @@ import {
   type Action,
   type EffectAttempt,
   type Observation,
+  type TaskCapabilityLock,
 } from "@robothree/contracts";
 
 import type { Clock } from "../../ports/clock.js";
@@ -14,11 +15,19 @@ import type {
 } from "../../ports/effect-executor.js";
 import type { TaskPersistence } from "../../ports/task-persistence.js";
 import type { RuntimeAdapterHandles } from "../../registry/runtime-adapter-handles.js";
+import type { ToolExecutionBackend } from "../../ports/tool-execution-backend.js";
 
 export type ToolEffectActionHydrator = (input: Readonly<{
   attempt: EffectAttempt;
   action: Action;
 }>) => Promise<Action> | Action;
+
+export type ToolEffectQueryResolver = (input: Readonly<{
+  attempt: EffectAttempt;
+  action: Action;
+  lock: TaskCapabilityLock;
+  backend: ToolExecutionBackend;
+}>) => Promise<EffectQueryResult> | EffectQueryResult;
 
 export class ToolEffectExecutor implements EffectExecutor {
   public readonly executorCapability: string;
@@ -26,6 +35,7 @@ export class ToolEffectExecutor implements EffectExecutor {
   readonly #handles: RuntimeAdapterHandles;
   readonly #clock: Clock;
   readonly #hydrateAction: ToolEffectActionHydrator | undefined;
+  readonly #queryResolver: ToolEffectQueryResolver | undefined;
 
   public constructor(input: {
     adapterDescriptorId: string;
@@ -33,12 +43,14 @@ export class ToolEffectExecutor implements EffectExecutor {
     handles: RuntimeAdapterHandles;
     clock: Clock;
     hydrateAction?: ToolEffectActionHydrator;
+    queryResolver?: ToolEffectQueryResolver;
   }) {
     this.executorCapability = input.adapterDescriptorId;
     this.#persistence = input.persistence;
     this.#handles = input.handles;
     this.#clock = input.clock;
     this.#hydrateAction = input.hydrateAction;
+    this.#queryResolver = input.queryResolver;
   }
 
   public async execute(attempt: EffectAttempt, signal?: AbortSignal): Promise<EffectExecutionResult> {
@@ -86,8 +98,36 @@ export class ToolEffectExecutor implements EffectExecutor {
     return toEffectResult(observation.data);
   }
 
-  public async query(_attempt: EffectAttempt): Promise<EffectQueryResult> {
-    return { outcome: "unknown" };
+  public async query(attempt: EffectAttempt): Promise<EffectQueryResult> {
+    if (this.#queryResolver === undefined) return { outcome: "unknown" };
+    try {
+      const capabilityId = requireMetadataString(attempt, "capabilityId");
+      const lock = await this.#persistence.loadTaskCapabilityLock(attempt.taskId, capabilityId);
+      if (
+        lock === undefined
+        || lock.adapterDescriptorSnapshot.adapterDescriptorId !== attempt.executorCapability
+      ) {
+        return { outcome: "unknown" };
+      }
+      const persistedAction = ActionSchema.safeParse(attempt.metadata.action);
+      if (!persistedAction.success || persistedAction.data.actionId !== attempt.actionId) {
+        return { outcome: "unknown" };
+      }
+      const action = ActionSchema.parse(await this.#hydrateAction?.({
+        attempt,
+        action: persistedAction.data,
+      }) ?? persistedAction.data);
+      if (action.actionId !== attempt.actionId || action.kind !== persistedAction.data.kind) {
+        return { outcome: "unknown" };
+      }
+      const backend = this.#handles.toolExecutionBackend(
+        lock.adapterDescriptorSnapshot.adapterDescriptorId,
+        lock.adapterDescriptorSnapshot.revision,
+      );
+      return await this.#queryResolver({ attempt, action, lock, backend });
+    } catch {
+      return { outcome: "unknown" };
+    }
   }
 }
 

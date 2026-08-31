@@ -41,7 +41,7 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
-public final class ModelInvocationRuntime implements ModelInvocationApplicationRuntime {
+public final class ModelInvocationRuntime implements ModelInvocationV1Alpha3Runtime {
 
     private static final Pattern NODE_ID =
             Pattern.compile("^[a-z][a-z0-9]*(?:[._:-][a-z0-9]+)+$");

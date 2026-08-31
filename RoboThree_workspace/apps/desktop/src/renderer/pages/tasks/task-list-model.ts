@@ -50,28 +50,38 @@ export type TaskListView = {
 export function buildTaskListView(input: {
   sessions: readonly SessionSummary[];
   tasks: readonly TaskSummaryProjection[];
-  pinnedSessionIds: ReadonlySet<string>;
+  pinnedTaskIds: ReadonlySet<string>;
   searchQuery: string;
   statusFilter: TaskListStatusFilter;
 }): TaskListView {
-  const taskBySession = new Map<string, TaskSummaryProjection>();
+  const tasksBySession = new Map<string, TaskSummaryProjection[]>();
   for (const task of input.tasks) {
-    const current = taskBySession.get(task.sessionId);
-    if (
-      current === undefined
-      || Date.parse(task.updatedAt) > Date.parse(current.updatedAt)
-    ) {
-      taskBySession.set(task.sessionId, task);
-    }
+    const tasks = tasksBySession.get(task.sessionId) ?? [];
+    tasks.push(task);
+    tasksBySession.set(task.sessionId, tasks);
   }
 
   const allItems = input.sessions
     .filter((session) => !session.tombstoned)
-    .map((session) => buildTaskListItem({
-      session,
-      task: taskBySession.get(session.sessionId),
-      pinned: input.pinnedSessionIds.has(session.sessionId),
-    }));
+    .flatMap((session) => {
+      const tasks = tasksBySession.get(session.sessionId) ?? [];
+      const sessionCanDelete = tasks.every((task) =>
+        isTerminalTaskStatus(task.displayStatus));
+      if (tasks.length === 0) {
+        return [buildTaskListItem({
+          session,
+          task: undefined,
+          pinned: false,
+          sessionCanDelete,
+        })];
+      }
+      return tasks.map((task) => buildTaskListItem({
+        session,
+        task,
+        pinned: input.pinnedTaskIds.has(task.taskId),
+        sessionCanDelete,
+      }));
+    });
 
   const summary = summarizeTaskList(allItems);
   const query = normalizeSearch(input.searchQuery);
@@ -91,12 +101,14 @@ export function buildTaskListItem(input: {
   session: SessionSummary;
   task: TaskSummaryProjection | undefined;
   pinned: boolean;
+  sessionCanDelete?: boolean;
 }): TaskListItem {
   const status = input.task?.displayStatus;
   const presentation = status === undefined ? undefined : presentTaskStatus(status);
-  const canDelete = input.task === undefined || isTerminalTaskStatus(input.task.displayStatus);
+  const canDelete = input.sessionCanDelete
+    ?? (input.task === undefined || isTerminalTaskStatus(input.task.displayStatus));
   return {
-    id: input.session.sessionId,
+    id: input.task?.taskId ?? input.session.sessionId,
     session: input.session,
     task: input.task,
     title: input.session.title,

@@ -13,12 +13,15 @@ import type {
   UserConfirmationProjection,
 } from "@robothree/contracts";
 import type { InjectionKey } from "vue";
+import type { TaskReasoningModeProjectionV1Alpha1 } from
+  "@robothree/contracts/desktop-local/task-reasoning/v1alpha1";
 
 import type {
   DesktopRendererEvent,
   RendererSafeResult,
   RoboThreeDesktopApiV1Alpha1,
 } from "../../shared/foundation-api.js";
+import { desktopReasoningModeAdapter } from "./reasoning-mode-adapter.js";
 
 declare global {
   interface Window {
@@ -35,6 +38,7 @@ export type TasksAdapter = {
   loadTasks(): Promise<TasksAdapterData>;
   loadConversation(sessionId: string): Promise<ConversationSnapshot>;
   loadTaskDetail(taskId: string): Promise<TaskDetailProjection>;
+  loadTaskReasoning(taskId: string): Promise<TaskReasoningModeProjectionV1Alpha1>;
   openTask(sessionId: string): Promise<SessionSummary>;
   renameTask(input: {
     sessionId: string;
@@ -95,7 +99,7 @@ export type TasksAdapter = {
 export const tasksAdapterKey: InjectionKey<TasksAdapter> =
   Symbol("RoboThreeTasksAdapter");
 
-const clientInstanceId = `renderer:dfe2b:${randomId()}`;
+const clientInstanceId = randomId();
 
 export const desktopTasksAdapter: TasksAdapter = {
   async loadTasks(): Promise<TasksAdapterData> {
@@ -132,6 +136,10 @@ export const desktopTasksAdapter: TasksAdapter = {
       type: "task_detail",
       taskId,
     }));
+  },
+
+  async loadTaskReasoning(taskId: string): Promise<TaskReasoningModeProjectionV1Alpha1> {
+    return desktopReasoningModeAdapter.loadTaskReasoning({ taskId });
   },
 
   async openTask(sessionId: string): Promise<SessionSummary> {

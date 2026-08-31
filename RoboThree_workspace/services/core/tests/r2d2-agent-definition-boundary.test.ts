@@ -75,7 +75,7 @@ describe("R2D-2 private export, zero drift and production boundary", () => {
     );
   });
 
-  it("keeps the v1alpha2 foundation unconsumed by production runtime", async () => {
+  it("confines v1alpha2 consumption to the authorized R2D Core graph", async () => {
     expect(AGENT_DEFINITION_V1ALPHA2_PRODUCTION_CONSUMER_ENABLED).toBe(false);
     const allowedDefinitions = new Set([
       "services/core/src/application/agent-definition-v1alpha2.ts",
@@ -83,6 +83,9 @@ describe("R2D-2 private export, zero drift and production boundary", () => {
       "services/core/src/application/built-in-general-agent-source.ts",
       "services/core/src/application/task-resource-entitlement.ts",
       "services/core/src/ports/readable-agent-definition-repository.ts",
+      "services/core/src/application/r2d3-durable-acceptance.ts",
+      "services/core/src/application/local-desktop-r2d-production.ts",
+      "services/core/src/ports/r2d3-acceptance-authority.ts",
       "services/core/src/ports/task-tool-candidate-policy.ts",
       "services/core/src/index.ts",
     ]);
@@ -125,7 +128,7 @@ describe("R2D-2 private export, zero drift and production boundary", () => {
     expect(migrations).not.toMatch(/\bid:\s*27,/u);
     const lockfile = await readFile(resolve(root, "pnpm-lock.yaml"));
     expect(createHash("sha256").update(lockfile).digest("hex")).toBe(
-      "c47641ac78aa6ccd8cfbef139e0823fbe343615b5b3749f965a20a335f815a07",
+      "5b15ae0197c6f7a1450a49551fbfb50a9e0edc32f0fbe75a9259a360ed874f31",
     );
   });
 });

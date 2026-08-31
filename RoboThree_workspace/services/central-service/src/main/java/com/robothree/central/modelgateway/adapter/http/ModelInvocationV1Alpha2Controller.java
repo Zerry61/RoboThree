@@ -141,8 +141,8 @@ public final class ModelInvocationV1Alpha2Controller {
                             "model_stream_resume_unavailable",
                             "The complete live Model output is no longer available.");
                 }
-                var ephemeral = subscription.poll(250);
-                if (ephemeral != null) {
+                var ephemeralEvents = subscription.pollAvailable(250);
+                for (var ephemeral : ephemeralEvents) {
                     emitter.send(SseEmitter.event()
                             .name("model")
                             .data(ModelInvocationHttpResponseAssembler.ephemeral(
@@ -160,7 +160,7 @@ public final class ModelInvocationV1Alpha2Controller {
                 ModelInvocation status = subscription.currentStatus();
                 if (status.status().isTerminal()
                         && durableSequence >= status.lastDurableEventSequence()
-                        && ephemeral == null) {
+                        && ephemeralEvents.isEmpty()) {
                     emitter.complete();
                     return;
                 }

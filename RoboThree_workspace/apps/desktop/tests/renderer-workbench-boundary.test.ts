@@ -37,7 +37,7 @@ describe("DCF-1.2B Renderer boundary", () => {
   it("keeps main.ts as a thin Vue bootstrap entry", async () => {
     const source = await readFile(mainEntry, "utf8");
     expect(source).toContain("createApp(App)");
-    expect(source).toContain(".use(createRoboThreeRouter())");
+    expect(source).toContain(".use(createRoboThreeRouter({ runtimeMode, demoAuthSession }))");
     expect(source).toContain('.mount("#app")');
     expect(source).toContain("./app/App.vue");
     expect(source).toContain("./app/router.js");
@@ -107,6 +107,7 @@ describe("DCF-1.2B Renderer boundary", () => {
     expect(desktopApiFiles).toEqual([
       "adapters/intelligence-adapter.ts",
       "adapters/settings-adapter.ts",
+      "adapters/shell-navigation-adapter.ts",
       "adapters/task-workspace-adapter.ts",
       "adapters/tasks-adapter.ts",
       "adapters/workbench-adapter.ts",

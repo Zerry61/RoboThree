@@ -23,7 +23,10 @@ export type DesktopReasoningModeOwnerAuthority =
     userId: string;
     deviceId: string;
     currentClientInstanceId: string;
-    authoritySource: "runtime_active_enterprise_identity" | "test_only";
+    authoritySource:
+      | "runtime_active_enterprise_identity"
+      | "local_desktop_owner"
+      | "test_only";
     testIdentityUsed: boolean;
     productionIdentityReady: boolean;
   }>

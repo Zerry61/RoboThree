@@ -12,11 +12,11 @@ import type {
   SubmitTurnRecordV1Alpha2,
 } from "@robothree/contracts";
 import {
-  ReadablePersistedSubmitTurnReceiptSchema,
-  ReadableSubmitTurnRecordSchema,
-  type ReadablePersistedSubmitTurnReceipt,
-  type ReadableSubmitTurnRecord,
-} from "@robothree/contracts/submit-turn-coordination/v1alpha3";
+  ReadablePersistedSubmitTurnReceiptV1Alpha5Schema as ReadablePersistedSubmitTurnReceiptSchema,
+  ReadableSubmitTurnRecordV1Alpha5Schema as ReadableSubmitTurnRecordSchema,
+  type ReadablePersistedSubmitTurnReceiptV1Alpha5 as ReadablePersistedSubmitTurnReceipt,
+  type ReadableSubmitTurnRecordV1Alpha5 as ReadableSubmitTurnRecord,
+} from "@robothree/contracts/submit-turn-coordination/v1alpha5";
 
 import type { Clock } from "../../ports/clock.js";
 import type {
@@ -27,6 +27,18 @@ import type {
   SubmitTurnWriteResult,
 } from "../../ports/submit-turn-persistence.js";
 import { configureSqlite, migrateAndPreflight } from "./schema-preflight.js";
+import {
+  createR2D3CoordinationEnvelopeV1,
+  parsePersistedR2D3CoordinationValue,
+  validateR2D3CoordinationEnvelopeV1,
+  type PersistedR2D3CoordinationEnvelopeV1,
+} from "../../application/r2d3-durable-acceptance.js";
+import {
+  createDfi541CoordinationEnvelopeV1,
+  parsePersistedDfi541CoordinationValue,
+  validateDfi541CoordinationEnvelopeV1,
+  type PersistedDfi541CoordinationEnvelopeV1,
+} from "../../application/dfi541-durable-acceptance.js";
 
 export class SqliteSubmitTurnPersistence implements SubmitTurnPersistence {
   readonly adapterKind = "persistence" as const;
@@ -88,7 +100,9 @@ export class SqliteSubmitTurnPersistence implements SubmitTurnPersistence {
     input: ReadableSubmitTurnRecord,
   ): Promise<SubmitTurnWriteResult<ReadableSubmitTurnRecord>> {
     const parsed = ReadableSubmitTurnRecordSchema.safeParse(input);
-    if (!parsed.success || parsed.data.status !== "accepted") {
+    if (!parsed.success || parsed.data.status !== "accepted"
+      || parsed.data.schemaVersion === "v1alpha4"
+      || parsed.data.schemaVersion === "v1alpha5") {
       return failure("submit_turn.invalid_record", "accepted SubmitTurnRecord is invalid");
     }
     try {
@@ -113,6 +127,87 @@ export class SqliteSubmitTurnPersistence implements SubmitTurnPersistence {
     }
   }
 
+  async prepareAcceptedR2D3(
+    input: PersistedR2D3CoordinationEnvelopeV1,
+  ): Promise<SubmitTurnWriteResult<ReadableSubmitTurnRecord>> {
+    let envelope: PersistedR2D3CoordinationEnvelopeV1;
+    try {
+      envelope = validateR2D3CoordinationEnvelopeV1(input);
+    } catch {
+      return failure("r2d.acceptance_plan_invalid", "R2D3 acceptance plan is invalid");
+    }
+    if (envelope.record.status !== "accepted") {
+      return failure("submit_turn.invalid_record", "accepted R2D3 record is invalid");
+    }
+    try {
+      const result = withTransaction(this.#requireDatabase(), () => {
+        const database = this.#requireDatabase();
+        const existing = selectRecord(database, envelope.record.submitTurnCommandId);
+        if (existing !== undefined) {
+          const existingEnvelope = selectR2D3Envelope(
+            database,
+            envelope.record.submitTurnCommandId,
+          );
+          return existingEnvelope !== undefined
+            && existingEnvelope.acceptedPlan.planDigest === envelope.acceptedPlan.planDigest
+            && sameAcceptedIdentity(existing, envelope.record)
+            ? { ok: true, replayed: true, value: existing } as const
+            : conflict();
+        }
+        if (selectRecordByClientTurn(database, envelope.record.clientTurnId) !== undefined) {
+          return conflict();
+        }
+        insertRecordValue(database, envelope.record, envelope);
+        return { ok: true, replayed: false, value: envelope.record } as const;
+      });
+      this.#faultInjector?.("submit_turn.accepted.after_commit");
+      return result;
+    } catch (error) {
+      return sqliteFailure(error);
+    }
+  }
+
+  async prepareAcceptedDfi541(
+    input: PersistedDfi541CoordinationEnvelopeV1,
+  ): Promise<SubmitTurnWriteResult<ReadableSubmitTurnRecord>> {
+    let envelope: PersistedDfi541CoordinationEnvelopeV1;
+    try {
+      envelope = validateDfi541CoordinationEnvelopeV1(input);
+    } catch {
+      return failure("dfi541.acceptance_plan_invalid",
+        "DFI-5.4.1 acceptance plan is invalid");
+    }
+    if (envelope.record.status !== "accepted") {
+      return failure("submit_turn.invalid_record",
+        "accepted DFI-5.4.1 record is invalid");
+    }
+    try {
+      const result = withTransaction(this.#requireDatabase(), () => {
+        const database = this.#requireDatabase();
+        const existing = selectRecord(database, envelope.record.submitTurnCommandId);
+        if (existing !== undefined) {
+          const existingEnvelope = selectDfi541Envelope(
+            database,
+            envelope.record.submitTurnCommandId,
+          );
+          return existingEnvelope !== undefined
+            && existingEnvelope.acceptedPlan.planDigest === envelope.acceptedPlan.planDigest
+            && sameAcceptedIdentity(existing, envelope.record)
+            ? { ok: true, replayed: true, value: existing } as const
+            : conflict();
+        }
+        if (selectRecordByClientTurn(database,
+          envelope.record.clientTurnId) !== undefined) return conflict();
+        insertRecordValue(database, envelope.record, envelope);
+        return { ok: true, replayed: false, value: envelope.record } as const;
+      });
+      this.#faultInjector?.("submit_turn.accepted.after_commit");
+      return result;
+    } catch (error) {
+      return sqliteFailure(error);
+    }
+  }
+
   async loadRecord(
     submitTurnCommandId: string,
   ): Promise<ReadableSubmitTurnRecord | undefined> {
@@ -123,6 +218,18 @@ export class SqliteSubmitTurnPersistence implements SubmitTurnPersistence {
     clientTurnId: string,
   ): Promise<ReadableSubmitTurnRecord | undefined> {
     return selectRecordByClientTurn(this.#requireDatabase(), clientTurnId);
+  }
+
+  async loadR2D3Envelope(
+    submitTurnCommandId: string,
+  ): Promise<PersistedR2D3CoordinationEnvelopeV1 | undefined> {
+    return selectR2D3Envelope(this.#requireDatabase(), submitTurnCommandId);
+  }
+
+  async loadDfi541Envelope(
+    submitTurnCommandId: string,
+  ): Promise<PersistedDfi541CoordinationEnvelopeV1 | undefined> {
+    return selectDfi541Envelope(this.#requireDatabase(), submitTurnCommandId);
   }
 
   async loadReceipt(
@@ -261,15 +368,16 @@ export class SqliteSubmitTurnPersistence implements SubmitTurnPersistence {
     const rows = this.#requireDatabase().prepare(`
       SELECT record_json FROM submit_turn_records
       WHERE status IN ('accepted', 'message_appended', 'task_committed')
-         OR (status = 'completed'
-             AND json_extract(record_json, '$.schemaVersion') != 'v1alpha3'
-             AND json_extract(record_json, '$.loopStartedAt') IS NULL)
+         OR status = 'completed'
       ORDER BY updated_at, submit_turn_command_id
-      LIMIT ?
-    `).all(bounded) as Record<string, unknown>[];
-    return rows.map((row) => ReadableSubmitTurnRecordSchema.parse(
+      LIMIT 256
+    `).all() as Record<string, unknown>[];
+    return rows.map((row) => parseStoredCoordinationRecord(
       JSON.parse(requireString(row.record_json, "record_json")),
-    ));
+    )).filter((record) =>
+      record.status !== "completed"
+      || (record.schemaVersion !== "v1alpha3" && record.loopStartedAt === undefined))
+      .slice(0, bounded);
   }
 
   async listDeliveriesAfter(
@@ -495,11 +603,58 @@ function insertRecord(
   );
 }
 
+function insertRecordValue(
+  database: DatabaseSync,
+  record: ReadableSubmitTurnRecord,
+  persistedValue: ReadableSubmitTurnRecord
+    | PersistedR2D3CoordinationEnvelopeV1
+    | PersistedDfi541CoordinationEnvelopeV1,
+): void {
+  database.prepare(`
+    INSERT INTO submit_turn_records (
+      submit_turn_command_id, client_turn_id, status, request_digest,
+      internal_session_id, internal_task_id, updated_at, record_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    record.submitTurnCommandId,
+    record.clientTurnId,
+    record.status,
+    record.requestDigest,
+    record.internalSessionId,
+    record.internalTaskId,
+    record.updatedAt,
+    JSON.stringify(persistedValue),
+  );
+}
+
 function updateRecord(
   database: DatabaseSync,
   record: ReadableSubmitTurnRecord,
   expectedStatus: ReadableSubmitTurnRecord["status"],
 ): void {
+  const persistedValue = record.schemaVersion === "v1alpha4"
+    ? (() => {
+      const current = selectR2D3Envelope(database, record.submitTurnCommandId);
+      if (current === undefined) {
+        throw new Error("R2D3 acceptance plan is missing");
+      }
+      return createR2D3CoordinationEnvelopeV1({
+        record,
+        acceptedPlan: current.acceptedPlan,
+      });
+    })()
+    : record.schemaVersion === "v1alpha5"
+      ? (() => {
+        const current = selectDfi541Envelope(database, record.submitTurnCommandId);
+        if (current === undefined) {
+          throw new Error("DFI-5.4.1 acceptance plan is missing");
+        }
+        return createDfi541CoordinationEnvelopeV1({
+          record,
+          acceptedPlan: current.acceptedPlan,
+        });
+      })()
+      : record;
   const result = database.prepare(`
     UPDATE submit_turn_records
     SET status = ?, updated_at = ?, record_json = ?
@@ -507,7 +662,7 @@ function updateRecord(
   `).run(
     record.status,
     record.updatedAt,
-    JSON.stringify(record),
+    JSON.stringify(persistedValue),
     record.submitTurnCommandId,
     expectedStatus,
   );
@@ -544,9 +699,11 @@ function parseOptionalRecord(
   row: Record<string, unknown> | undefined,
 ): ReadableSubmitTurnRecord | undefined {
   if (row === undefined) return undefined;
-  const record = ReadableSubmitTurnRecordSchema.parse(
-    JSON.parse(requireString(row.record_json, "record_json")),
-  );
+  const raw = JSON.parse(requireString(row.record_json, "record_json"));
+  const record = typeof raw === "object" && raw !== null
+      && Reflect.get(raw, "schemaVersion") === "dfi541_coordination_envelope_v1"
+    ? parsePersistedDfi541CoordinationValue(raw).record
+    : parsePersistedR2D3CoordinationValue(raw).record;
   if (
     record.clientTurnId !== row.client_turn_id
     || record.status !== row.status
@@ -555,6 +712,42 @@ function parseOptionalRecord(
     || record.internalTaskId !== row.internal_task_id
   ) throw new Error("SubmitTurnRecord indexed fields are invalid");
   return record;
+}
+
+function parseStoredCoordinationRecord(input: unknown): ReadableSubmitTurnRecord {
+  return typeof input === "object" && input !== null
+      && Reflect.get(input, "schemaVersion") === "dfi541_coordination_envelope_v1"
+    ? parsePersistedDfi541CoordinationValue(input).record
+    : parsePersistedR2D3CoordinationValue(input).record;
+}
+
+function selectR2D3Envelope(
+  database: DatabaseSync,
+  submitTurnCommandId: string,
+): PersistedR2D3CoordinationEnvelopeV1 | undefined {
+  const row = database.prepare(`
+    SELECT record_json FROM submit_turn_records WHERE submit_turn_command_id = ?
+  `).get(submitTurnCommandId) as Record<string, unknown> | undefined;
+  if (row === undefined) return undefined;
+  return parsePersistedR2D3CoordinationValue(
+    JSON.parse(requireString(row.record_json, "record_json")),
+  ).envelope;
+}
+
+function selectDfi541Envelope(
+  database: DatabaseSync,
+  submitTurnCommandId: string,
+): PersistedDfi541CoordinationEnvelopeV1 | undefined {
+  const row = database.prepare(`
+    SELECT record_json FROM submit_turn_records WHERE submit_turn_command_id = ?
+  `).get(submitTurnCommandId) as Record<string, unknown> | undefined;
+  if (row === undefined) return undefined;
+  const raw = JSON.parse(requireString(row.record_json, "record_json"));
+  if (typeof raw !== "object" || raw === null
+    || Reflect.get(raw, "schemaVersion") !== "dfi541_coordination_envelope_v1") {
+    return undefined;
+  }
+  return parsePersistedDfi541CoordinationValue(raw).envelope;
 }
 
 function selectReceipt(

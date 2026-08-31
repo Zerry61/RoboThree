@@ -40,7 +40,7 @@ import {
 import { createHash } from "node:crypto";
 import { constants as fsConstants } from "node:fs";
 import { copyFile, link, lstat, open, realpath, rm, stat } from "node:fs/promises";
-import { basename, dirname, join, normalize, relative, sep } from "node:path";
+import { basename, dirname, join, normalize, relative, resolve, sep } from "node:path";
 
 import {
   DESKTOP_IPC_CHANNELS,
@@ -48,6 +48,8 @@ import {
   type DesktopInvokeChannel,
   type FoundationStatus,
   type RendererSafeResult,
+  WorkbenchAttachmentPickerCommandSchema,
+  WorkbenchAttachmentValidationCommandSchema,
 } from "../shared/foundation-api.js";
 import type { CorePrivateClient } from "./core-private-client.js";
 import {
@@ -102,6 +104,7 @@ export type OpenFileLocation = (realPath: string) => void | Promise<void>;
 export type ChooseArtifactExportPath = (defaultFileName: string) => Promise<string | undefined>;
 export type ChooseWorkspaceArtifactFile = (
   authorities: readonly { rootRealPath: string; rootDisplayPath: string; displayName: string }[],
+  options?: Readonly<{ documentSourcesOnly: boolean }>,
 ) => Promise<string | undefined>;
 export type TrashArtifactSourceFile = (realPath: string) => Promise<void>;
 
@@ -113,6 +116,10 @@ export class DesktopIpcRouter {
   readonly #chooseWorkspaceArtifactFile: ChooseWorkspaceArtifactFile;
   readonly #trashArtifactSourceFile: TrashArtifactSourceFile;
   readonly #htmlPreviewSandbox: HtmlPreviewSandbox;
+  readonly #ensureDefaultWorkspaceGrant: ((input: Readonly<{
+    clientInstanceId: string;
+    correlationId: string;
+  }>) => Promise<string>) | undefined;
 
   constructor(input: {
     core: DesktopCoreAccess;
@@ -121,6 +128,10 @@ export class DesktopIpcRouter {
     chooseArtifactExportPath?: ChooseArtifactExportPath;
     chooseWorkspaceArtifactFile?: ChooseWorkspaceArtifactFile;
     trashArtifactSourceFile?: TrashArtifactSourceFile;
+    ensureDefaultWorkspaceGrant?: (input: Readonly<{
+      clientInstanceId: string;
+      correlationId: string;
+    }>) => Promise<string>;
   }) {
     this.#core = input.core;
     this.#chooseWorkspaceDirectory = input.chooseWorkspaceDirectory;
@@ -133,6 +144,7 @@ export class DesktopIpcRouter {
       throw new Error("Artifact source delete is unsupported");
     });
     this.#htmlPreviewSandbox = input.core.htmlPreviewSandbox ?? new HtmlPreviewSandbox();
+    this.#ensureDefaultWorkspaceGrant = input.ensureDefaultWorkspaceGrant;
   }
 
   async dispatch(
@@ -199,6 +211,26 @@ export class DesktopIpcRouter {
           return await this.#registerWorkspaceArtifactFromPicker(
             RegisterWorkspaceArtifactCommandSchema.parse(input),
           );
+        case DESKTOP_IPC_CHANNELS.pickWorkbenchAttachment: {
+          const command = WorkbenchAttachmentPickerCommandSchema.parse(input);
+          return await this.#registerWorkspaceArtifactFromPicker(
+            projectRegisterWorkspaceArtifactCommand(command),
+            {
+              workspaceGrantId: command.workspaceGrantId,
+              documentSourcesOnly: true,
+            },
+          );
+        }
+        case DESKTOP_IPC_CHANNELS.validateWorkbenchAttachment: {
+          const command = WorkbenchAttachmentValidationCommandSchema.parse(input);
+          return await this.#registerWorkspaceArtifactFromPicker(
+            projectRegisterWorkspaceArtifactCommand(command),
+            {
+              workspaceGrantId: command.workspaceGrantId,
+              expectedArtifact: command.artifact,
+            },
+          );
+        }
         case DESKTOP_IPC_CHANNELS.artifactPreview:
           return await this.#previewArtifact(
             ArtifactPreviewQuerySchema.parse(input),
@@ -244,7 +276,9 @@ export class DesktopIpcRouter {
             TaskControlCommandSchema.parse(input),
           );
         case DESKTOP_IPC_CHANNELS.submitTurn:
-          return await this.#core.client.submitTurn(SubmitTurnCommandSchema.parse(input));
+          return await this.#core.client.submitTurn(
+            await this.#prepareSubmitTurn(SubmitTurnCommandSchema.parse(input)),
+          );
         case DESKTOP_IPC_CHANNELS.submitTurnStatus:
           return await this.#core.client.querySubmitTurn(
             SubmitTurnStatusQuerySchema.parse(input),
@@ -268,6 +302,23 @@ export class DesktopIpcRouter {
         ),
       };
     }
+  }
+
+  async #prepareSubmitTurn(
+    command: ReturnType<typeof SubmitTurnCommandSchema.parse>,
+  ): Promise<ReturnType<typeof SubmitTurnCommandSchema.parse>> {
+    if (
+      command.selectionRequest.workspaceGrantId !== undefined
+      || this.#ensureDefaultWorkspaceGrant === undefined
+    ) return command;
+    const workspaceGrantId = await this.#ensureDefaultWorkspaceGrant({
+      clientInstanceId: command.clientInstanceId,
+      correlationId: command.correlationId,
+    });
+    return SubmitTurnCommandSchema.parse({
+      ...command,
+      selectionRequest: { ...command.selectionRequest, workspaceGrantId },
+    });
   }
 
   async #createWorkspaceGrant(
@@ -301,6 +352,13 @@ export class DesktopIpcRouter {
 
   async #registerWorkspaceArtifactFromPicker(
     command: ReturnType<typeof RegisterWorkspaceArtifactCommandSchema.parse>,
+    options: Readonly<{
+      workspaceGrantId?: string;
+      documentSourcesOnly?: boolean;
+      expectedArtifact?: ReturnType<
+        typeof WorkbenchAttachmentValidationCommandSchema.parse
+      >["artifact"];
+    }> = {},
   ): Promise<RendererSafeResult<unknown>> {
     const authoritiesResult = await this.#core.client.listWorkspaceGrantAuthorities({
       correlationId: command.correlationId,
@@ -308,23 +366,36 @@ export class DesktopIpcRouter {
     if (!authoritiesResult.ok) return authoritiesResult;
     const writableAuthorities = authoritiesResult.value
       .filter((authority) => authority.status === "active" && authority.accessMode === "read_write");
-    if (writableAuthorities.length === 0) {
+    const eligibleAuthorities = options.workspaceGrantId === undefined
+      ? writableAuthorities
+      : writableAuthorities.filter((authority) =>
+        authority.workspaceGrantId === options.workspaceGrantId);
+    if (eligibleAuthorities.length === 0) {
       return {
         ok: false,
         error: safeError(
           "workspace.selection_invalid",
-          "Select a writable workspace before registering an artifact.",
+          "The selected writable workspace is unavailable.",
           command.correlationId,
           "user_action_required",
           false,
         ),
       };
     }
-    const selectedPath = await this.#chooseWorkspaceArtifactFile(writableAuthorities);
+    const selectedPath = options.expectedArtifact === undefined
+      ? options.documentSourcesOnly === true
+        ? await this.#chooseWorkspaceArtifactFile(eligibleAuthorities, {
+          documentSourcesOnly: true,
+        })
+        : await this.#chooseWorkspaceArtifactFile(eligibleAuthorities)
+      : resolve(
+        eligibleAuthorities[0]!.rootRealPath,
+        options.expectedArtifact.relativePath ?? "",
+      );
     if (selectedPath === undefined) return { ok: true, value: undefined };
     const resolved = await resolveRegisterableWorkspaceFile({
       selectedPath,
-      authorities: writableAuthorities,
+      authorities: eligibleAuthorities,
     });
     if (!resolved.ok) {
       return {
@@ -334,6 +405,27 @@ export class DesktopIpcRouter {
           summaryForRegistrationFailure(resolved.reason),
           command.correlationId,
           categoryForRegistrationFailure(resolved.reason),
+          false,
+        ),
+      };
+    }
+    if (
+      options.expectedArtifact !== undefined
+      && (
+        options.expectedArtifact.sourceKind !== "workspace_file"
+        || options.expectedArtifact.relativePath !== resolved.value.relativePath
+        || options.expectedArtifact.displayName !== resolved.value.displayName
+        || options.expectedArtifact.mediaType !== resolved.value.mediaType
+        || options.expectedArtifact.byteSize !== resolved.value.byteSize
+      )
+    ) {
+      return {
+        ok: false,
+        error: safeError(
+          "artifact.source_changed",
+          "The selected attachment changed before the task was accepted.",
+          command.correlationId,
+          "conflict",
           false,
         ),
       };
@@ -348,6 +440,24 @@ export class DesktopIpcRouter {
       displayName: resolved.value.displayName,
     });
     if (!registered.ok) return registered;
+    if (
+      options.expectedArtifact !== undefined
+      && (
+        registered.value.artifactId !== options.expectedArtifact.artifactId
+        || registered.value.artifact.sourceDigest !== options.expectedArtifact.sourceDigest
+      )
+    ) {
+      return {
+        ok: false,
+        error: safeError(
+          "artifact.source_changed",
+          "The selected attachment changed before the task was accepted.",
+          command.correlationId,
+          "conflict",
+          false,
+        ),
+      };
+    }
     return {
       ok: true,
       value: RegisterWorkspaceArtifactReceiptSchema.parse(registered.value),
@@ -768,6 +878,22 @@ export class DesktopIpcRouter {
     }
     return await this.#core.client.commitArtifactSourceFileDeletion(command);
   }
+}
+
+function projectRegisterWorkspaceArtifactCommand(command: Readonly<{
+  contractVersion: "v1alpha1";
+  type: "register_workspace_artifact";
+  commandId: string;
+  correlationId: string;
+  clientInstanceId: string;
+}>) {
+  return RegisterWorkspaceArtifactCommandSchema.parse({
+    contractVersion: command.contractVersion,
+    type: command.type,
+    commandId: command.commandId,
+    correlationId: command.correlationId,
+    clientInstanceId: command.clientInstanceId,
+  });
 }
 
 const MAX_REGISTER_BYTES = 256 * 1024 * 1024;

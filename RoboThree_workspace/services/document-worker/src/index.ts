@@ -11,6 +11,7 @@ export * from "./pdf/index.js";
 export * from "./xlsx/index.js";
 export * from "./docx/index.js";
 export * from "./pptx/index.js";
+export * from "./text/index.js";
 
 // The worker entry point is worker.ts — not exported.
 // It runs as a standalone child process via `node dist/worker.js`.

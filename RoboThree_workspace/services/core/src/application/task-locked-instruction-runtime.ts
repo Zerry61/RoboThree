@@ -1,10 +1,7 @@
-import type {
-  AgentDefinitionRevision,
-  Sha256Digest,
-} from "@robothree/contracts";
+import type { Sha256Digest } from "@robothree/contracts";
 import { JsonValueSchema } from "@robothree/contracts";
-import type { ReadableTaskRuntimeSelection } from
-  "@robothree/contracts/runtime-selection/v1alpha2";
+import type { ReadableTaskRuntimeSelectionV1Alpha4 } from
+  "@robothree/contracts/runtime-selection/v1alpha4";
 
 import {
   CpcInstructionFoundationError,
@@ -14,8 +11,10 @@ import type {
   CompiledInstructionBundleV1,
 } from "./instruction-bundle-compiler.js";
 import { PLATFORM_PROMPT_V1_REVISION } from "./platform-prompt-source.js";
-import { parseReadableTaskRuntimeSelection } from "./runtime-selection-revisions.js";
+import { parseReadableTaskRuntimeSelectionV1Alpha4 } from
+  "./runtime-selection-revisions.js";
 import { sha256CanonicalJson } from "../persistence/digest.js";
+import type { ReadableAgentDefinitionRevision } from "./agent-definition-v1alpha2.js";
 
 export const LEGACY_DESKTOP_PROMPT_REVISION =
   "sha256:9999999999999999999999999999999999999999999999999999999999999999" as Sha256Digest;
@@ -52,13 +51,13 @@ export class TaskLockedInstructionRuntimeResolver {
   }
 
   public async resolve(input: Readonly<{
-    runtimeSelection: ReadableTaskRuntimeSelection;
+    runtimeSelection: ReadableTaskRuntimeSelectionV1Alpha4;
     submitTurnBundleDigest: string;
-    agent: AgentDefinitionRevision;
+    agent: ReadableAgentDefinitionRevision;
   }>): Promise<TaskLockedInstructionRuntimeMaterial> {
-    let selection: ReadableTaskRuntimeSelection;
+    let selection: ReadableTaskRuntimeSelectionV1Alpha4;
     try {
-      selection = parseReadableTaskRuntimeSelection(input.runtimeSelection);
+      selection = parseReadableTaskRuntimeSelectionV1Alpha4(input.runtimeSelection);
     } catch {
       throw new CpcInstructionFoundationError(
         "context.instruction_binding_invalid",

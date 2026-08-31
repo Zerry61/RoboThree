@@ -167,37 +167,8 @@ export class PersonalModelTaskLockMaterializer {
       configurationRevision: definition.configurationRevision,
       executionDefinitionDigest: definition.executionDefinitionDigest,
     });
-    const source = {
-      trust: "official" as const,
-      packageId: PERSONAL_PACKAGE_ID,
-      packageRevision: PERSONAL_PACKAGE_REVISION,
-    };
-    const descriptor = createAdapterDescriptor({
-      schemaVersion: CONTRACT_VERSION,
-      adapterDescriptorId: PERSONAL_ADAPTER_ID,
-      source,
-      implementationRef: `pmendpoint:${definition.endpointIdentityDigest}`,
-      runtimeBoundary: "in_process",
-      protocol: { name: "openai_compatible", version: "v1" },
-      adapterKind: "model_provider",
-    });
-    const capability = createCapabilityDefinition({
-      schemaVersion: CONTRACT_VERSION,
-      capabilityId: definition.personalModelId,
-      name: definition.displayName,
-      description: "Owner-scoped personal model executed by the trusted local runtime",
-      source,
-      kind: "model",
-      model: {
-        family: `${definition.providerKind}.openai_compatible`,
-        inputModalities: [
-          "text",
-          ...(definition.capabilities.includes("vision") ? ["image" as const] : []),
-        ],
-        outputModalities: ["text"],
-        supportsStreaming: definition.capabilities.includes("streaming"),
-      },
-    });
+    const { source, descriptor, capability } =
+      materializePersonalModelRegistryFacts(definition, this.#profiles);
     const binding = createCapabilityBinding({
       schemaVersion: CONTRACT_VERSION,
       bindingId: bindingId(definition.personalModelId, definition.configurationRevision),
@@ -260,6 +231,55 @@ export function isPersonalModelLock(lock: TaskCapabilityLock): boolean {
 }
 
 export const PERSONAL_MODEL_ADAPTER_DESCRIPTOR_ID = PERSONAL_ADAPTER_ID;
+
+/**
+ * Produces the exact Registry facts used by both entitlement projection and
+ * Task lock materialization. Keeping this as the single source prevents the
+ * production R2D graph from deriving a model revision with a second formula.
+ */
+export function materializePersonalModelRegistryFacts(
+  input: PersonalModelDefinition,
+  profiles: PersonalModelProviderProfileRegistry =
+    new PersonalModelProviderProfileRegistry(),
+) {
+  const definition = validatePersonalModelDefinition(input);
+  if (!/^model\.[a-z0-9]+(?:[._-][a-z0-9]+)*$/u.test(definition.personalModelId)) {
+    throw new PersonalModelTaskLockError("model.personal_id_not_capability_id");
+  }
+  profiles.resolve(definition.providerKind, definition.providerProfileRevision);
+  const source = Object.freeze({
+    trust: "official" as const,
+    packageId: PERSONAL_PACKAGE_ID,
+    packageRevision: PERSONAL_PACKAGE_REVISION,
+  });
+  const descriptor = createAdapterDescriptor({
+    schemaVersion: CONTRACT_VERSION,
+    adapterDescriptorId: PERSONAL_ADAPTER_ID,
+    source,
+    implementationRef: `pmendpoint:${definition.endpointIdentityDigest}`,
+    runtimeBoundary: "in_process",
+    protocol: { name: "openai_compatible", version: "v1" },
+    adapterKind: "model_provider",
+  });
+  const capability = createCapabilityDefinition({
+    schemaVersion: CONTRACT_VERSION,
+    capabilityId: definition.personalModelId,
+    name: definition.displayName,
+    description: "Owner-scoped personal model executed by the trusted local runtime",
+    source,
+    kind: "model",
+    model: {
+      family: `${definition.providerKind}.openai_compatible`,
+      inputModalities: [
+        "text",
+        ...(definition.capabilities.includes("vision") ? ["image" as const] : []),
+      ],
+      outputModalities: ["text"],
+      supportsStreaming: definition.capabilities.includes("streaming"),
+    },
+  });
+  return Object.freeze({ source, descriptor, capability });
+}
 
 function configurationMac(
   key: Uint8Array,

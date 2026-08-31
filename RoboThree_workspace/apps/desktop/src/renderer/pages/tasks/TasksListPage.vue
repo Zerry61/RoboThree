@@ -1,13 +1,15 @@
 <template>
-  <section class="tasks-page" aria-labelledby="tasks-title">
-    <header class="tasks-page__header">
+  <section
+    class="tasks-page"
+    :class="{ 'tasks-page--conversation': selectedTaskId !== '' }"
+    aria-labelledby="tasks-title"
+  >
+    <header v-if="selectedTaskId === ''" class="tasks-page__header">
       <div>
-        <p class="tasks-page__eyebrow">Task Center</p>
         <h2 id="tasks-title">任务</h2>
+        <p class="tasks-page__eyebrow">查看任务对话、成果和执行过程。</p>
       </div>
-      <R3StatusBadge :tone="loading ? 'neutral' : 'success'">
-        {{ loading ? "Syncing" : "Ready" }}
-      </R3StatusBadge>
+      <span class="tasks-page__eyebrow">{{ loading ? "正在同步任务…" : "" }}</span>
     </header>
 
     <R3InlineNotice v-if="error" tone="danger" title="任务操作失败">
@@ -17,7 +19,7 @@
       {{ notice }}
     </R3InlineNotice>
 
-    <section class="tasks-page__summary" aria-label="任务统计">
+    <section v-if="selectedTaskId === ''" class="tasks-page__summary" aria-label="任务统计">
       <R3Card v-for="metric in summaryMetrics" :key="metric.label">
         <div class="tasks-page__metric">
           <strong>{{ metric.value }}</strong>
@@ -26,8 +28,8 @@
       </R3Card>
     </section>
 
-    <div class="tasks-page__workspace">
-      <R3Card>
+    <div class="tasks-page__workspace" :class="{ 'tasks-page__workspace--detail': selectedTaskId !== '' }">
+      <R3Card v-if="selectedTaskId === ''">
         <template #header>
           <div class="tasks-page__toolbar">
             <R3SearchField
@@ -94,7 +96,7 @@
               >
                 打开
               </R3Button>
-              <R3Button variant="secondary" :disabled="busy" @click="togglePin(item)">
+              <R3Button variant="secondary" :disabled="busy || item.task === undefined" @click="togglePin(item)">
                 {{ item.pinned ? "取消置顶" : "置顶" }}
               </R3Button>
               <R3Button
@@ -125,30 +127,28 @@
         </ul>
       </R3Card>
 
-      <R3Card>
-        <template #header>
-          <div class="tasks-page__detail-header">
+      <section v-if="selectedTaskId !== ''" class="tasks-page__conversation-shell">
+        <header class="tasks-page__conversation-header">
+          <div class="tasks-page__conversation-heading">
+            <R3IconButton label="返回任务列表" @click="closeTaskDetail">←</R3IconButton>
             <div>
-              <h3>任务详情</h3>
+              <h2 id="tasks-title">{{ selectedSessionTitle }}</h2>
               <p v-if="selectedDetailView">{{ selectedDetailView.goalSummary }}</p>
             </div>
+          </div>
+          <div class="tasks-page__conversation-header-actions">
             <R3Button
+              v-if="sidePanelCollapsed"
               variant="secondary"
-              :disabled="busy || selectedTaskId === ''"
-              @click="void refreshSelectedDetail()"
+              data-side-panel-restore
+              @click="sidePanelCollapsed = false"
             >
-              同步
+              展开成果
             </R3Button>
           </div>
-        </template>
+        </header>
 
-        <R3EmptyState
-          v-if="selectedTaskId === ''"
-          title="选择一个任务"
-          description="从左侧打开任务后，这里会显示对话、状态、步骤和确认。"
-        />
-
-        <div v-else-if="detailLoading" class="tasks-page__loading">
+        <div v-if="detailLoading && selectedDetailView === undefined" class="tasks-page__loading tasks-page__conversation-loading">
           <R3Skeleton />
           <R3Skeleton />
         </div>
@@ -160,13 +160,6 @@
         />
 
         <div v-else class="tasks-page__detail" aria-live="polite">
-          <section class="tasks-page__detail-status">
-            <R3StatusBadge :tone="detailStatusTone">
-              {{ selectedDetailView.status.label }}
-            </R3StatusBadge>
-            <span>{{ formatTime(selectedDetailView.updatedAt) }}</span>
-            <span>{{ selectedDetailView.artifactCount }} 个成果</span>
-          </section>
           <R3InlineNotice
             v-if="selectedDetailView.status.guidance"
             tone="warning"
@@ -174,7 +167,6 @@
           >
             {{ selectedDetailView.status.guidance }}
           </R3InlineNotice>
-
           <div class="tasks-page__detail-actions" aria-label="任务详情操作">
             <R3Button
               v-if="selectedDetailView.status.controls.canCancel"
@@ -210,133 +202,124 @@
             </R3Button>
           </div>
 
-          <div class="tasks-page__detail-body">
+          <div
+            class="tasks-page__detail-body"
+            :class="{ 'tasks-page__detail-body--collapsed': sidePanelCollapsed }"
+          >
             <div class="tasks-page__detail-main">
-          <section class="tasks-page__detail-section">
-            <h4>对话</h4>
-            <R3EmptyState
-              v-if="selectedDetailView.messages.length === 0"
-              title="暂无对话"
-              description="持久消息或正在生成的回复会显示在这里。"
-            />
-            <ul v-else class="tasks-page__messages" aria-label="任务对话">
-              <li
-                v-for="message in selectedDetailView.messages"
-                :key="message.id"
-                class="tasks-page__message"
-                :class="message.presentation.roleClass"
+              <section
+                ref="conversationStream"
+                class="tasks-page__conversation-stream"
+                aria-live="polite"
+                aria-label="任务对话"
               >
-                <span class="tasks-page__message-avatar">
-                  {{ message.presentation.avatar }}
-                </span>
-                <div>
-                  <header>
-                    <strong>{{ message.presentation.authorName }}</strong>
-                    <small>{{ message.presentation.statusLabel }}</small>
-                  </header>
-                  <p>{{ message.presentation.content }}</p>
-                </div>
-              </li>
-            </ul>
-          </section>
-
-          <section class="tasks-page__detail-section">
-            <h4>确认</h4>
-            <R3EmptyState
-              v-if="selectedDetailView.confirmations.length === 0"
-              title="暂无待确认操作"
-              description="需要你确认的单次操作会显示在这里。"
-            />
-            <ul v-else class="tasks-page__cards" aria-label="用户确认">
-              <li
-                v-for="confirmation in selectedDetailView.confirmations"
-                :key="confirmation.id"
-                class="tasks-page__subcard"
-              >
-                <div class="tasks-page__subcard-header">
-                  <strong>{{ confirmation.presentation.title }}</strong>
-                  <R3StatusBadge tone="warning">
-                    {{ confirmation.presentation.statusLabel }}
-                  </R3StatusBadge>
-                </div>
-                <p>{{ confirmation.presentation.reasonSummary }}</p>
-                <p>{{ confirmation.presentation.riskSummary }}</p>
-                <dl>
-                  <template
-                    v-for="meta in confirmation.presentation.meta"
-                    :key="meta.label"
+                <h3 class="sr-only">任务对话</h3>
+                <R3EmptyState
+                  v-if="selectedDetailView.messages.length === 0"
+                  title="正在准备回复"
+                  description="RoboThree 的回复会在这里持续显示。"
+                />
+                <ul v-else class="tasks-page__messages">
+                  <li
+                    v-for="message in selectedDetailView.messages"
+                    :key="message.id"
+                    class="tasks-page__message"
+                    :class="message.presentation.roleClass"
                   >
-                    <dt>{{ meta.label }}</dt>
-                    <dd>{{ meta.value }}</dd>
-                  </template>
-                </dl>
-                <div v-if="confirmation.canDecide" class="tasks-page__detail-actions">
+                    <span class="tasks-page__message-avatar" aria-hidden="true">
+                      {{ message.presentation.avatar }}
+                    </span>
+                    <div class="tasks-page__message-body">
+                      <header><strong>{{ message.presentation.authorName }}</strong></header>
+                      <p>{{ message.presentation.content }}</p>
+                    </div>
+                  </li>
+                </ul>
+              </section>
+
+              <section
+                v-if="selectedDetailView.confirmations.length > 0"
+                class="tasks-page__detail-section tasks-page__confirmation-section"
+                aria-label="用户确认"
+              >
+                <h4>需要确认</h4>
+                <ul class="tasks-page__cards">
+                  <li
+                    v-for="confirmation in selectedDetailView.confirmations"
+                    :key="confirmation.id"
+                    class="tasks-page__subcard"
+                  >
+                    <div class="tasks-page__subcard-header">
+                      <strong>{{ confirmation.presentation.title }}</strong>
+                      <R3StatusBadge tone="warning">
+                        {{ confirmation.presentation.statusLabel }}
+                      </R3StatusBadge>
+                    </div>
+                    <p>{{ confirmation.presentation.reasonSummary }}</p>
+                    <p>{{ confirmation.presentation.riskSummary }}</p>
+                    <dl>
+                      <template
+                        v-for="meta in confirmation.presentation.meta"
+                        :key="meta.label"
+                      >
+                        <dt>{{ meta.label }}</dt>
+                        <dd>{{ meta.value }}</dd>
+                      </template>
+                    </dl>
+                    <div v-if="confirmation.canDecide" class="tasks-page__detail-actions">
+                      <R3Button
+                        variant="primary"
+                        :disabled="busy"
+                        data-confirmation-action="confirmed"
+                        @click="showConfirmationDialog(confirmation, 'confirmed')"
+                      >
+                        允许
+                      </R3Button>
+                      <R3Button
+                        variant="danger"
+                        :disabled="busy"
+                        data-confirmation-action="rejected"
+                        @click="showConfirmationDialog(confirmation, 'rejected')"
+                      >
+                        拒绝
+                      </R3Button>
+                    </div>
+                  </li>
+                </ul>
+              </section>
+
+              <form
+                class="tasks-page__conversation-composer"
+                aria-label="发送消息"
+                @submit.prevent="void submitConversationTurn()"
+              >
+                <R3Textarea
+                  v-model="conversationDraft"
+                  label="消息"
+                  placeholder="描述你想继续完成的内容…"
+                  :rows="3"
+                  :disabled="conversationSubmitting"
+                  data-conversation-composer
+                  @keydown="handleConversationKeydown"
+                />
+                <div class="tasks-page__conversation-composer-footer">
+                  <span v-if="!conversationTurnReady">RoboThree 正在回复</span>
                   <R3Button
+                    type="submit"
                     variant="primary"
-                    :disabled="busy"
-                    data-confirmation-action="confirmed"
-                    @click="showConfirmationDialog(confirmation, 'confirmed')"
+                    :disabled="!conversationCanSubmit"
+                    data-conversation-send
+                    aria-label="发送消息"
                   >
-                    允许
-                  </R3Button>
-                  <R3Button
-                    variant="danger"
-                    :disabled="busy"
-                    data-confirmation-action="rejected"
-                    @click="showConfirmationDialog(confirmation, 'rejected')"
-                  >
-                    拒绝
+                    ↑
                   </R3Button>
                 </div>
-              </li>
-            </ul>
-          </section>
+              </form>
 
-          <section class="tasks-page__detail-section">
-            <h4>任务进程</h4>
-            <ul class="tasks-page__cards" aria-label="任务步骤">
-              <li
-                v-for="step in selectedDetailView.steps"
-                :key="step.id"
-                class="tasks-page__subcard"
-              >
-                <div class="tasks-page__subcard-header">
-                  <strong>{{ step.sequence }}. {{ step.title }}</strong>
-                  <R3Tag tone="neutral">{{ step.statusLabel }}</R3Tag>
-                </div>
-                <p v-if="step.observationSummary">{{ step.observationSummary }}</p>
-              </li>
-            </ul>
-          </section>
-
-          <section class="tasks-page__detail-section">
-            <h4>工具活动</h4>
-            <ul class="tasks-page__cards" aria-label="工具活动">
-              <li
-                v-for="tool in selectedDetailView.tools"
-                :key="tool.id"
-                class="tasks-page__subcard"
-              >
-                <div class="tasks-page__subcard-header">
-                  <strong>{{ tool.source.toolName }}</strong>
-                  <R3Tag tone="neutral">{{ tool.presentation.statusLabel }}</R3Tag>
-                </div>
-                <p>{{ tool.presentation.summary }}</p>
-                <dl v-if="tool.presentation.meta.length > 0">
-                  <template
-                    v-for="meta in tool.presentation.meta"
-                    :key="meta.label"
-                  >
-                    <dt>{{ meta.label }}</dt>
-                    <dd>{{ meta.value }}</dd>
-                  </template>
-                </dl>
-              </li>
-            </ul>
-          </section>
             </div>
 
             <aside
+              v-if="!sidePanelCollapsed"
               class="tasks-page__side-panel"
               :class="{
                 'tasks-page__side-panel--collapsed': sidePanelCollapsed,
@@ -345,37 +328,31 @@
               aria-label="任务右侧面板"
             >
               <header class="tasks-page__side-header">
-                <div>
-                  <h4>右侧面板</h4>
-                  <p>成果预览与工作空间文件</p>
-                </div>
+                <label class="tasks-page__view-select">
+                  <span class="sr-only">面板内容</span>
+                  <select v-model="sidePanelTab" aria-label="面板内容">
+                    <option value="overview">概览</option>
+                    <option value="workspace">工作空间文件</option>
+                  </select>
+                </label>
                 <div class="tasks-page__side-actions">
-                  <R3Button
-                    variant="secondary"
-                    :disabled="busy"
-                    data-side-panel-collapse
-                    @click="sidePanelCollapsed = !sidePanelCollapsed"
-                  >
-                    {{ sidePanelCollapsed ? "展开" : "收起" }}
-                  </R3Button>
-                  <R3Button
-                    v-if="!sidePanelCollapsed"
-                    variant="secondary"
-                    :disabled="busy"
+                  <R3IconButton
+                    label="在文件夹中查看任务工作空间"
+                    :disabled="!workspaceCanReveal || workspaceState.revealBusy"
+                    @click="void revealTaskWorkspaceLocation()"
+                  >📁</R3IconButton>
+                  <R3IconButton
+                    :label="sidePanelFullscreen ? '退出软件内全屏' : '软件内全屏'"
                     data-side-panel-fullscreen
                     @click="sidePanelFullscreen = !sidePanelFullscreen"
-                  >
-                    {{ sidePanelFullscreen ? "退出全屏" : "软件内全屏" }}
-                  </R3Button>
+                  >{{ sidePanelFullscreen ? "↙" : "↗" }}</R3IconButton>
+                  <R3IconButton
+                    label="收起操作区"
+                    data-side-panel-collapse
+                    @click="sidePanelCollapsed = true"
+                  >»</R3IconButton>
                 </div>
               </header>
-
-              <template v-if="!sidePanelCollapsed">
-                <R3Tabs
-                  v-model="sidePanelTab"
-                  :tabs="sidePanelTabs"
-                  label="右侧面板视图"
-                />
 
                 <section
                   v-if="sidePanelTab === 'overview'"
@@ -577,7 +554,15 @@
                         </div>
                       </template>
                     </section>
+                    <R3InlineNotice
+                      v-else-if="activeArtifact && !activeArtifact.canPreviewText && !activeArtifact.canPreviewHtml"
+                      tone="info"
+                      title="此文件暂不支持页面内预览"
+                    >
+                      你仍可在文件夹中查看或导出该成果。
+                    </R3InlineNotice>
                   </template>
+
                 </section>
 
                 <section
@@ -713,11 +698,10 @@
                     </R3Button>
                   </template>
                 </section>
-              </template>
             </aside>
           </div>
         </div>
-      </R3Card>
+      </section>
     </div>
 
     <R3Modal
@@ -742,7 +726,8 @@
         <p>确认后只允许执行卡片中描述的这一项操作。</p>
       </template>
       <template v-else-if="dialog?.type === 'delete'">
-        <p>删除任务“{{ dialog.item.title }}”？该操作会移除任务记录。</p>
+        <p>删除任务“{{ dialog.item.title }}”？任务消息将被永久删除且无法恢复。</p>
+        <p>任务产生的成果文件和工作空间文件不会被删除。</p>
       </template>
       <template v-else-if="dialog?.type === 'cancel'">
         <p>确定停止这个任务吗？</p>
@@ -773,12 +758,23 @@ import type {
   ConversationSnapshot,
   TaskDetailProjection,
 } from "@robothree/contracts";
-import { computed, inject, onMounted, onUnmounted, reactive, ref, watch } from "vue";
+import {
+  computed,
+  inject,
+  nextTick,
+  onMounted,
+  onUnmounted,
+  reactive,
+  ref,
+  watch,
+} from "vue";
+import { useRoute, useRouter } from "vue-router";
 
 import {
   R3Button,
   R3Card,
   R3EmptyState,
+  R3IconButton,
   R3Input,
   R3InlineNotice,
   R3Modal,
@@ -786,16 +782,31 @@ import {
   R3Select,
   R3Skeleton,
   R3StatusBadge,
-  R3Tabs,
   R3Tag,
   R3Textarea,
 } from "../../components/ui";
 import {
+  desktopTaskPinStore,
+  taskPinStoreKey,
+  type TaskPinStore,
+} from "../../app/task-pin-store.js";
+import {
+  conversationSelection,
+  rememberConversationSelection,
+} from "../../app/conversation-selection-store.js";
+import {
+  DesktopTasksAdapterError,
   desktopTasksAdapter,
   tasksAdapterKey,
   type TasksAdapter,
   type TasksAdapterData,
 } from "../../adapters/tasks-adapter.js";
+import {
+  desktopWorkbenchAdapter,
+  DesktopWorkbenchAdapterError,
+  workbenchAdapterKey,
+  type WorkbenchAdapter,
+} from "../../adapters/workbench-adapter.js";
 import {
   desktopTaskWorkspaceAdapter,
   DesktopTaskWorkspaceAdapterError,
@@ -827,10 +838,17 @@ import {
 } from "./task-workspace-model.js";
 
 const adapter = inject<TasksAdapter>(tasksAdapterKey, desktopTasksAdapter);
+const workbenchAdapter = inject<WorkbenchAdapter>(
+  workbenchAdapterKey,
+  desktopWorkbenchAdapter,
+);
+const taskPins = inject<TaskPinStore>(taskPinStoreKey, desktopTaskPinStore);
 const workspaceAdapter = inject<TaskWorkspaceAdapter>(
   taskWorkspaceAdapterKey,
   desktopTaskWorkspaceAdapter,
 );
+const route = useRoute();
+const router = useRouter();
 
 type DialogState =
   | { type: "rename"; item: TaskListItem; title: string }
@@ -908,7 +926,6 @@ const data = reactive<TasksAdapterData>({
   sessions: [],
   tasks: [],
 });
-const pinnedSessionIds = ref<ReadonlySet<string>>(new Set());
 const selectedSessionId = ref("");
 const selectedTaskId = ref("");
 const selectedDetail = ref<TaskDetailProjection>();
@@ -927,6 +944,9 @@ const detailLoading = ref(false);
 const busy = ref(false);
 const error = ref("");
 const notice = ref("");
+const conversationDraft = ref("");
+const conversationSubmitting = ref(false);
+const conversationStream = ref<HTMLElement>();
 const dialog = ref<DialogState>();
 const workspaceState = reactive<WorkspacePanelState>({
   taskId: "",
@@ -946,21 +966,18 @@ const workspaceState = reactive<WorkspacePanelState>({
 });
 let unsubscribe: (() => void) | undefined;
 let workspaceRequestSequence = 0;
+let detailRequestSequence = 0;
+let conversationRequestSequence = 0;
 
 const statusOptions = taskStatusFilterOptions.map((option) => ({
   label: option.label,
   value: option.value,
 }));
 
-const sidePanelTabs = [
-  { label: "概览", value: "overview" },
-  { label: "工作空间文件", value: "workspace" },
-];
-
 const taskView = computed(() => buildTaskListView({
   sessions: data.sessions,
   tasks: data.tasks,
-  pinnedSessionIds: pinnedSessionIds.value,
+  pinnedTaskIds: taskPins.pinnedTaskIds.value,
   searchQuery: searchQuery.value,
   statusFilter: statusFilter.value,
 }));
@@ -971,8 +988,18 @@ const selectedDetailView = computed(() => selectedDetail.value === undefined
     detail: selectedDetail.value,
     snapshot: snapshot.value,
     streamingAssistant: streamingAssistant.value,
+    includeSessionMessages: true,
   }));
-
+const selectedSessionTitle = computed(() => data.sessions.find((session) =>
+  session.sessionId === selectedSessionId.value)?.title ?? "任务对话");
+const conversationTurnReady = computed(() =>
+  selectedDetail.value?.summary.displayStatus === "completed"
+  && selectedDetail.value.summary.taskId === selectedTaskId.value);
+const conversationCanSubmit = computed(() =>
+  conversationTurnReady.value
+  && selectedSessionId.value !== ""
+  && conversationDraft.value.trim() !== ""
+  && !conversationSubmitting.value);
 const artifactTabs = computed(() => {
   const artifacts = selectedDetailView.value?.artifacts ?? [];
   const open = new Set(openArtifactTabIds.value);
@@ -982,21 +1009,6 @@ const artifactTabs = computed(() => {
 const activeArtifact = computed(() =>
   selectedDetailView.value?.artifacts.find((artifact) =>
     artifact.id === activeArtifactId.value));
-
-const detailStatusTone = computed(() => {
-  switch (selectedDetailView.value?.status.tone) {
-    case "active":
-      return "primary";
-    case "attention":
-      return "warning";
-    case "completed":
-      return "success";
-    case "failed":
-      return "danger";
-    default:
-      return "neutral";
-  }
-});
 
 const summaryMetrics = computed(() => [
   { label: "全部", value: taskView.value.summary.total },
@@ -1060,7 +1072,7 @@ const dialogConfirmLabel = computed(() => {
 
 onMounted(() => {
   unsubscribe = adapter.subscribe(handleDesktopEvent);
-  void refresh();
+  void initializePage();
 });
 
 onUnmounted(() => {
@@ -1081,6 +1093,32 @@ watch([sidePanelTab, selectedTaskId], ([tab, taskId], [previousTab, previousTask
   }
 });
 
+watch(
+  () => [
+    singleQueryValue(route?.query.taskId),
+    singleQueryValue(route?.query.sessionId),
+  ] as const,
+  ([taskId, sessionId]) => {
+    if (
+      taskId === ""
+      || sessionId === ""
+      || (taskId === selectedTaskId.value && sessionId === selectedSessionId.value)
+    ) return;
+    const item = taskView.value.items.find((candidate) =>
+      candidate.task?.taskId === taskId && candidate.session.sessionId === sessionId);
+    if (item !== undefined) void openTask(item);
+  },
+);
+
+watch(
+  () => [
+    selectedDetailView.value?.messages.length ?? 0,
+    streamingAssistant.value?.text.length ?? 0,
+  ] as const,
+  () => { void scrollConversationToBottom(); },
+  { flush: "post" },
+);
+
 async function refresh(): Promise<void> {
   loading.value = true;
   try {
@@ -1094,33 +1132,62 @@ async function refresh(): Promise<void> {
   }
 }
 
+async function initializePage(): Promise<void> {
+  await refresh();
+  const taskId = singleQueryValue(route?.query.taskId);
+  const sessionId = singleQueryValue(route?.query.sessionId);
+  if (taskId === "" || sessionId === "") return;
+  const item = taskView.value.items.find((candidate) =>
+    candidate.task?.taskId === taskId && candidate.session.sessionId === sessionId);
+  if (item !== undefined) await openTask(item);
+}
+
 async function openTask(item: TaskListItem): Promise<void> {
+  if (item.task !== undefined && item.task.taskId !== selectedTaskId.value) {
+    resetWorkspacePanel(item.task.taskId);
+  }
   await guarded(async () => {
     await adapter.openTask(item.session.sessionId);
-    selectedSessionId.value = item.session.sessionId;
-    if (item.task !== undefined) {
-      await loadSelectedTask(item.task.taskId, item.session.sessionId);
-    } else {
-      selectedTaskId.value = "";
-      selectedDetail.value = undefined;
-      streamingAssistant.value = undefined;
-      resetArtifactPanel();
-      snapshot.value = await adapter.loadConversation(item.session.sessionId);
+    if (item.task === undefined) {
+      await router?.push({
+        name: "workbench",
+        query: { sessionId: item.session.sessionId },
+      });
+      return;
     }
-    notice.value = "任务已打开。";
+    selectedSessionId.value = item.session.sessionId;
+    const opened = await loadSelectedTask(item.task.taskId, item.session.sessionId);
+    if (!opened) return;
+    await router?.replace({
+      name: "tasks",
+      query: { sessionId: item.session.sessionId, taskId: item.task.taskId },
+    });
+    notice.value = "已打开任务对话。";
   });
 }
 
+async function closeTaskDetail(): Promise<void> {
+  detailRequestSequence += 1;
+  conversationRequestSequence += 1;
+  selectedSessionId.value = "";
+  selectedTaskId.value = "";
+  selectedDetail.value = undefined;
+  snapshot.value = undefined;
+  streamingAssistant.value = undefined;
+  sidePanelCollapsed.value = false;
+  sidePanelFullscreen.value = false;
+  resetArtifactPanel();
+  resetWorkspacePanel("");
+  await router.replace({ name: "tasks" });
+}
+
 function togglePin(item: TaskListItem): void {
-  const next = new Set(pinnedSessionIds.value);
-  if (next.has(item.session.sessionId)) {
-    next.delete(item.session.sessionId);
-    notice.value = "已取消本次视图置顶。";
+  if (item.task === undefined) return;
+  if (taskPins.toggle(item.task.taskId)) {
+    notice.value = "已在本次运行置顶。";
   } else {
-    next.add(item.session.sessionId);
-    notice.value = "已在本次视图置顶。";
+    notice.value = "已取消本次视图置顶。";
   }
-  pinnedSessionIds.value = next;
 }
 
 function showRenameDialog(item: TaskListItem): void {
@@ -1221,9 +1288,7 @@ async function deleteTask(item: TaskListItem): Promise<void> {
       session.sessionId !== deleted.sessionId);
     data.tasks = data.tasks.filter((task) =>
       task.sessionId !== deleted.sessionId);
-    const next = new Set(pinnedSessionIds.value);
-    next.delete(deleted.sessionId);
-    pinnedSessionIds.value = next;
+    if (item.task !== undefined) taskPins.remove(item.task.taskId);
     if (selectedSessionId.value === deleted.sessionId) {
       selectedSessionId.value = "";
       selectedTaskId.value = "";
@@ -1257,6 +1322,116 @@ async function controlSelectedTask(
     notice.value = type === "retry_task" ? "重试请求已提交。" : "继续请求已提交。";
     await refreshSelectedDetail();
   });
+}
+
+async function submitConversationTurn(): Promise<void> {
+  const detail = selectedDetail.value;
+  const text = conversationDraft.value.trim();
+  if (
+    detail?.summary.displayStatus !== "completed"
+    || selectedSessionId.value === ""
+    || text === ""
+    || conversationSubmitting.value
+  ) return;
+
+  conversationSubmitting.value = true;
+  error.value = "";
+  notice.value = "";
+  try {
+    const catalog = await workbenchAdapter.loadWorkbenchData();
+    const summary = detail.summary;
+    const rememberedSelection = conversationSelection(selectedSessionId.value);
+    const agentId = rememberedSelection?.agentId
+      ?? (summary.resolvedAgentId === "agent.general" ? "" : summary.resolvedAgentId);
+    const requestedModelId = rememberedSelection?.requestedModelId
+      ?? summary.resolvedModelId;
+    const modelAvailable = catalog.models.some((model) =>
+      model.modelId === requestedModelId && model.available);
+    const agent = agentId === ""
+      ? undefined
+      : catalog.agents.find((candidate) => candidate.agentId === agentId);
+    const selectedSkillIds = rememberedSelection?.selectedSkillIds ?? [];
+    const selectedKnowledgeIds = rememberedSelection?.selectedKnowledgeIds ?? [];
+    const availableSkillIds = new Set(agent?.skills
+      .filter((skill) => skill.available)
+      .map((skill) => skill.id) ?? []);
+    const availableKnowledgeIds = new Set(agent?.knowledge
+      .filter((knowledge) => knowledge.available)
+      .map((knowledge) => knowledge.id) ?? []);
+    if (
+      (rememberedSelection === undefined && agentId !== "")
+      || !modelAvailable
+      || (agentId !== "" && agent === undefined)
+      || (agent !== undefined && (
+      !agent.runnable
+      || !agent.eligibleModels.some((model) => model.modelId === requestedModelId)
+      || selectedSkillIds.some((skillId) => !availableSkillIds.has(skillId))
+      || selectedKnowledgeIds.some((knowledgeId) => !availableKnowledgeIds.has(knowledgeId))
+      ))
+    ) {
+      throw new DesktopWorkbenchAdapterError(
+        rememberedSelection === undefined && agentId !== ""
+          ? "该历史对话缺少可安全复用的机器人资源，请新建任务并重新选择。"
+          : "当前机器人或模型已不可用，请新建任务并重新选择。",
+      );
+    }
+
+    const session = data.sessions.find((candidate) =>
+      candidate.sessionId === selectedSessionId.value);
+    const result = await workbenchAdapter.submitTask({
+      sessionId: selectedSessionId.value,
+      sessionTitle: session?.title ?? "持续对话",
+      userInput: text,
+      agentId,
+      requestedModelId,
+      selectedSkillIds,
+      selectedKnowledgeIds,
+      ...(rememberedSelection?.workspaceGrantId === undefined
+        ? {}
+        : { workspaceGrantId: rememberedSelection.workspaceGrantId }),
+      attachments: [],
+    });
+    conversationDraft.value = "";
+    selectedSessionId.value = result.session.sessionId;
+    selectedTaskId.value = result.receipt.taskId;
+    rememberConversationSelection(result.session.sessionId, {
+      agentId,
+      requestedModelId,
+      selectedSkillIds,
+      selectedKnowledgeIds,
+      ...(rememberedSelection?.workspaceGrantId === undefined
+        ? {}
+        : { workspaceGrantId: rememberedSelection.workspaceGrantId }),
+    });
+    await router.replace({
+      name: "tasks",
+      query: {
+        sessionId: result.session.sessionId,
+        taskId: result.receipt.taskId,
+      },
+    });
+    await refresh();
+  } catch (caught) {
+    error.value = explainError(caught);
+  } finally {
+    conversationSubmitting.value = false;
+  }
+}
+
+function handleConversationKeydown(event: KeyboardEvent): void {
+  if (
+    event.key !== "Enter"
+    || event.shiftKey
+    || event.isComposing
+  ) return;
+  event.preventDefault();
+  if (conversationCanSubmit.value) void submitConversationTurn();
+}
+
+async function scrollConversationToBottom(): Promise<void> {
+  await nextTick();
+  const element = conversationStream.value;
+  if (element !== undefined) element.scrollTop = element.scrollHeight;
 }
 
 async function provideSelectedTaskInput(input: string): Promise<void> {
@@ -1296,29 +1471,49 @@ async function decideConfirmation(
 async function loadSelectedTask(
   taskId: string,
   sessionId: string,
-): Promise<void> {
+): Promise<boolean> {
+  const sequence = ++detailRequestSequence;
   detailLoading.value = true;
   const taskChanged = selectedTaskId.value !== "" && selectedTaskId.value !== taskId;
+  const conversationRefresh = refreshConversation(sessionId).catch((caught: unknown) => {
+    if (sequence === detailRequestSequence && sessionId === selectedSessionId.value) {
+      error.value = explainError(caught);
+    }
+  });
   try {
-    const [detail, conversation] = await Promise.all([
-      adapter.loadTaskDetail(taskId),
-      adapter.loadConversation(sessionId),
-    ]);
-    if (sessionId !== selectedSessionId.value) return;
+    const detail = await adapter.loadTaskDetail(taskId);
+    await conversationRefresh;
+    if (sequence !== detailRequestSequence || sessionId !== selectedSessionId.value) return false;
     if (taskChanged) {
       resetArtifactPanel();
       void closeCurrentHtmlPreview();
     }
     selectedTaskId.value = taskId;
     selectedDetail.value = detail;
-    snapshot.value = conversation;
     syncArtifactTabs(detail);
     error.value = "";
+    return true;
   } catch (caught) {
-    error.value = explainError(caught);
+    await conversationRefresh;
+    if (sequence === detailRequestSequence && sessionId === selectedSessionId.value) {
+      error.value = explainError(caught);
+    }
+    return false;
   } finally {
-    detailLoading.value = false;
+    if (sequence === detailRequestSequence) detailLoading.value = false;
   }
+}
+
+async function refreshConversation(sessionId = selectedSessionId.value): Promise<void> {
+  if (sessionId === "") return;
+  const sequence = ++conversationRequestSequence;
+  const conversation = await adapter.loadConversation(sessionId);
+  if (sequence !== conversationRequestSequence || sessionId !== selectedSessionId.value) return;
+  snapshot.value = conversation;
+}
+
+function singleQueryValue(value: unknown): string {
+  return typeof value === "string" ? value : "";
 }
 
 function openArtifactTab(artifact: TaskDetailArtifactItem): void {
@@ -1656,6 +1851,9 @@ async function refreshSelectedDetail(): Promise<void> {
 function handleDesktopEvent(event: DesktopRendererEvent): void {
   if (!("deliveryKind" in event)) {
     streamingAssistant.value = undefined;
+    void refreshConversation().catch((caught: unknown) => {
+      error.value = explainError(caught);
+    });
     void refreshSelectedDetail();
     return;
   }
@@ -1696,7 +1894,9 @@ function handleDesktopEvent(event: DesktopRendererEvent): void {
     if (streamingAssistant.value?.messageId === event.payload.messageId) {
       streamingAssistant.value = undefined;
     }
-    void refreshSelectedDetail();
+    void refreshConversation().catch((caught: unknown) => {
+      error.value = explainError(caught);
+    });
     return;
   }
   if (
@@ -1732,7 +1932,10 @@ async function guarded(operation: () => Promise<void>): Promise<void> {
 }
 
 function explainError(caught: unknown): string {
-  return caught instanceof Error ? caught.message : "未知错误。";
+  if (caught instanceof DesktopTasksAdapterError
+    || caught instanceof DesktopTaskWorkspaceAdapterError
+    || caught instanceof DesktopWorkbenchAdapterError) return caught.message;
+  return "任务暂时不可用，请稍后重试。";
 }
 
 function formatTime(value: string): string {
@@ -1750,7 +1953,25 @@ function formatTime(value: string): string {
 <style scoped>
 .tasks-page {
   display: grid;
-  gap: 18px;
+  align-content: start;
+  gap: 14px;
+  min-height: 100%;
+  padding: 18px;
+}
+
+.tasks-page--conversation {
+  height: 100vh;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  background: var(--r3-color-surface);
+}
+
+.tasks-page--conversation > :deep(.r3-inline-notice) {
+  margin: 10px 14px 0;
 }
 
 .tasks-page__header,
@@ -1770,6 +1991,7 @@ function formatTime(value: string): string {
 
 .tasks-page__header h2 {
   margin: 0;
+  font-size: 21px;
 }
 
 .tasks-page__eyebrow,
@@ -1782,23 +2004,98 @@ function formatTime(value: string): string {
 .tasks-page__summary {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 12px;
+  gap: 8px;
+}
+
+.tasks-page__summary :deep(.r3-card__body) {
+  padding: 9px 11px;
 }
 
 .tasks-page__workspace {
   display: grid;
-  grid-template-columns: minmax(360px, 0.9fr) minmax(420px, 1.1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   align-items: start;
 }
 
-.tasks-page__metric {
+.tasks-page__workspace--detail {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.tasks-page__conversation-shell {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
   display: grid;
-  gap: 4px;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  background: var(--r3-color-surface);
+}
+
+.tasks-page__conversation-header {
+  min-height: 66px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--r3-color-border);
+  padding: 10px 16px;
+  background: var(--r3-color-surface);
+}
+
+.tasks-page__conversation-heading,
+.tasks-page__conversation-header-actions {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tasks-page__conversation-heading > div {
+  min-width: 0;
+}
+
+.tasks-page__conversation-heading h2,
+.tasks-page__conversation-heading p {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tasks-page__conversation-heading h2 {
+  font-size: 16px;
+  font-weight: 680;
+}
+
+.tasks-page__conversation-heading p {
+  max-width: min(48vw, 680px);
+  color: var(--r3-color-text-secondary);
+  font-size: var(--r3-font-size-xs);
+}
+
+.tasks-page__conversation-loading {
+  align-content: center;
+  width: min(720px, calc(100% - 48px));
+  margin: 0 auto;
+}
+
+.tasks-page__metric {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .tasks-page__metric strong {
-  font-size: 24px;
+  font-size: 18px;
+}
+
+.tasks-page__metric span {
+  color: var(--r3-color-text-tertiary);
+  font-size: var(--r3-font-size-xs);
 }
 
 .tasks-page__toolbar {
@@ -1883,17 +2180,62 @@ function formatTime(value: string): string {
   gap: 12px;
 }
 
+.tasks-page__conversation-shell > .tasks-page__detail {
+  min-height: 0;
+  height: 100%;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  gap: 8px;
+  overflow: hidden;
+  padding: 10px 0 0 14px;
+}
+
+.tasks-page__conversation-shell > .tasks-page__detail > :deep(.r3-inline-notice),
+.tasks-page__conversation-shell > .tasks-page__detail > .tasks-page__detail-status,
+.tasks-page__conversation-shell > .tasks-page__detail > .tasks-page__detail-actions {
+  margin-right: 14px;
+}
+
 .tasks-page__detail-body {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.72fr);
-  gap: 16px;
-  align-items: start;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.72fr);
+  gap: 12px;
+  align-items: stretch;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.tasks-page__detail-body--collapsed {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.tasks-page__conversation-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.tasks-page__view-select select {
+  min-height: 34px;
+  border: 1px solid var(--r3-color-border);
+  border-radius: var(--r3-radius-sm);
+  padding: 0 30px 0 10px;
+  background: var(--r3-color-surface);
+  color: var(--r3-color-text);
+  font-weight: 700;
 }
 
 .tasks-page__detail-main {
   min-width: 0;
-  display: grid;
-  gap: 12px;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow: hidden;
+  background: var(--r3-color-surface);
 }
 
 .tasks-page__detail-header {
@@ -1940,10 +2282,13 @@ function formatTime(value: string): string {
 
 .tasks-page__side-panel {
   min-width: 0;
-  border: 1px solid var(--r3-color-border);
-  border-radius: var(--r3-radius-md);
-  padding: 12px;
-  background: var(--r3-color-surface);
+  height: 100%;
+  overflow: auto;
+  border: 0;
+  border-left: 1px solid var(--r3-color-border);
+  border-radius: 0;
+  padding: 14px;
+  background: var(--r3-color-surface-muted);
 }
 
 .tasks-page__side-panel--collapsed {
@@ -2196,12 +2541,102 @@ function formatTime(value: string): string {
   padding: 0;
 }
 
+.tasks-page__conversation-stream {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 24px clamp(18px, 5vw, 64px) 32px;
+  scroll-behavior: smooth;
+  overscroll-behavior: contain;
+}
+
+.tasks-page__messages {
+  width: min(820px, 100%);
+  margin: 0 auto;
+  display: grid;
+  gap: 22px;
+}
+
+.tasks-page__confirmation-section {
+  flex: 0 0 auto;
+  max-height: 220px;
+  overflow: auto;
+  margin: 0 clamp(18px, 5vw, 64px) 10px;
+  border: 1px solid var(--r3-color-warning);
+  border-radius: var(--r3-radius-md);
+  padding: 12px;
+  background: var(--r3-color-warning-subtle);
+}
+
+.tasks-page__conversation-composer {
+  flex: 0 0 auto;
+  display: grid;
+  gap: 0;
+  overflow: hidden;
+  width: min(820px, calc(100% - 36px));
+  margin: 0 auto 16px;
+  border: 1px solid var(--r3-color-border-strong, var(--r3-color-border));
+  border-radius: 14px;
+  background: var(--r3-color-surface);
+  box-shadow: 0 8px 24px rgba(26, 29, 46, 0.08);
+}
+
+.tasks-page__conversation-composer :deep(.r3-field) {
+  gap: 0;
+}
+
+.tasks-page__conversation-composer :deep(.r3-field > label) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.tasks-page__conversation-composer :deep(.r3-textarea) {
+  min-height: 82px;
+  resize: none;
+  border: 0;
+  border-radius: 0;
+  padding: 14px 16px 8px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.tasks-page__conversation-composer :deep(.r3-textarea:focus) {
+  border: 0;
+  box-shadow: none;
+}
+
+.tasks-page__conversation-composer-footer {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 9px 7px 14px;
+  border-top: 1px solid var(--r3-color-border);
+  color: var(--r3-color-text-secondary);
+  font-size: var(--r3-font-size-xs);
+}
+
+.tasks-page__conversation-composer-footer :deep(.r3-button) {
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  min-height: 36px;
+  border-radius: 50%;
+  padding: 0;
+  font-size: 18px;
+}
+
 .tasks-page__subcard,
 .tasks-page__message {
   border: 1px solid var(--r3-color-border);
   border-radius: var(--r3-radius-md);
-  padding: 12px;
-  background: var(--r3-color-surface);
+  padding: 11px;
+  background: var(--r3-color-surface-muted);
 }
 
 .tasks-page__subcard {
@@ -2227,9 +2662,57 @@ function formatTime(value: string): string {
 }
 
 .tasks-page__message {
+  grid-template-areas: "avatar body";
   display: grid;
   grid-template-columns: 32px minmax(0, 1fr);
-  gap: 10px;
+  gap: 12px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.tasks-page__message-avatar {
+  grid-area: avatar;
+}
+
+.tasks-page__message-body {
+  grid-area: body;
+  min-width: 0;
+}
+
+.tasks-page__message-body p {
+  margin-top: 7px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--r3-color-text);
+  font-size: 14px;
+  line-height: 1.75;
+}
+
+.message-user {
+  width: min(72%, 640px);
+  grid-template-areas: "body avatar";
+  grid-template-columns: minmax(0, 1fr) 32px;
+  justify-self: end;
+}
+
+.message-user .tasks-page__message-body {
+  border-radius: 14px 4px 14px 14px;
+  padding: 10px 13px;
+  background: var(--r3-color-primary-subtle);
+}
+
+.message-user .tasks-page__message-body header {
+  justify-content: flex-end;
+}
+
+.message-user .tasks-page__message-body p {
+  margin-top: 4px;
+}
+
+.message-assistant .tasks-page__message-body,
+.message-tool .tasks-page__message-body {
+  padding: 2px 0 10px;
 }
 
 .tasks-page__message-avatar {
@@ -2253,17 +2736,39 @@ function formatTime(value: string): string {
   color: var(--r3-color-warning);
 }
 
-@media (max-width: 1120px) {
-  .tasks-page__workspace {
-    grid-template-columns: 1fr;
-  }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
 
+@media (max-width: 820px) {
   .tasks-page__summary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 
   .tasks-page__detail-body {
     grid-template-columns: 1fr;
+    height: 100%;
+  }
+
+  .tasks-page__detail-main {
+    min-height: 0;
+  }
+
+  .tasks-page__side-panel {
+    position: absolute;
+    inset: 0 0 0 auto;
+    z-index: 12;
+    width: min(360px, calc(100% - 44px));
+    height: 100%;
+    max-height: none;
+    border: 1px solid var(--r3-color-border);
+    border-radius: var(--r3-radius-md) 0 0 var(--r3-radius-md);
+    box-shadow: -16px 0 36px rgba(26, 29, 46, 0.12);
   }
 
   .tasks-page__item {
@@ -2273,8 +2778,43 @@ function formatTime(value: string): string {
 }
 
 @media (max-width: 720px) {
+  .tasks-page {
+    padding: 14px;
+  }
+
+  .tasks-page--conversation {
+    padding: 0;
+  }
+
+  .tasks-page__conversation-header {
+    min-height: 58px;
+    padding: 8px 10px;
+  }
+
+  .tasks-page__conversation-heading p,
+  .tasks-page__conversation-header-actions :deep(.r3-status-badge) {
+    display: none;
+  }
+
+  .tasks-page__conversation-shell > .tasks-page__detail {
+    padding-left: 8px;
+  }
+
+  .tasks-page__conversation-stream {
+    padding: 18px 12px 24px 4px;
+  }
+
+  .tasks-page__conversation-composer {
+    width: calc(100% - 16px);
+    margin-bottom: 8px;
+  }
+
+  .message-user {
+    width: min(88%, 640px);
+  }
+
   .tasks-page__summary {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .tasks-page__toolbar,

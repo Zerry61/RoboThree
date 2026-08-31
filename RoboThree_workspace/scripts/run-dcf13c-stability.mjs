@@ -43,6 +43,7 @@ export async function runDcf13cStabilityHarness(input) {
   const supervisor = new CorePrivateSupervisor({
     entryPath: coreEntryPath,
     databasePath,
+    demoMode: "legacy_test",
     maxUnexpectedRestarts: 1,
   });
   const counters = createCounters();
@@ -501,7 +502,7 @@ async function submitAndConverge(input) {
     sessionId: input.sessionId,
     userInput: "Execute the DCF-1.3C stability turn.",
     selectionRequest: {
-      agentId: "agent.general",
+      agentId: "agent.fixture.desktop-scripted",
       selectedSkillIds: [],
       selectedKnowledgeIds: [],
       workspaceGrantId: input.workspaceGrantId,

@@ -24,7 +24,7 @@ export type AdminRouteMeta = Readonly<{
 export type CapabilityProjection = Readonly<{
   capabilityKey: string;
   state: CapabilityState;
-  safeReason?: string;
+  safeReason?: string | undefined;
 }>;
 
 export function provisionalPermissionAlias(value: string): ProvisionalPermissionAlias {

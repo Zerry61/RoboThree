@@ -71,26 +71,44 @@ describe('Admin router shell', () => {
     expect(canUseOperation(operationAlias, projection)).toBe(false);
   });
 
-  it('registers Tool management child shells as prototype-gated sensitive routes', () => {
-    const childRoutes = routes.filter((route) =>
-      ['/tools/new/api', '/tools/new/mcp', '/tools/:toolId/policy'].includes(route.path)
-    );
+  it('keeps Tool management read-only by removing prototype mutation shells', () => {
+    const forbiddenRoutes = ['/tools/new/api', '/tools/new/mcp', '/tools/:toolId/policy'];
+    const forbiddenNames = ['admin.tools.newApi', 'admin.tools.newMcp', 'admin.tools.policy'];
 
-    expect(childRoutes.map((route) => route.name)).toEqual([
-      'admin.tools.newApi',
-      'admin.tools.newMcp',
-      'admin.tools.policy'
-    ]);
-    for (const route of childRoutes) {
-      expect(route.meta).toMatchObject({
-        module: 'tools',
-        navKey: 'tools',
-        implementationGate: 'prototype',
-        sensitiveSurface: true
-      });
-      expect(route.meta.routePermissionAlias).toEqual(provisionalPermissionAlias('admin.tools.route'));
-      expect(route.meta.operationPermissionAlias).toEqual(provisionalPermissionAlias('admin.tools.operate'));
-    }
+    expect(routes.filter((route) => forbiddenRoutes.includes(route.path))).toEqual([]);
+    expect(routes.filter((route) => forbiddenNames.includes(String(route.name)))).toEqual([]);
+    expect(routes.find((route) => route.path === '/tools')?.meta).toMatchObject({
+      module: 'tools',
+      navKey: 'tools',
+      implementationGate: 'shellImplemented',
+      sensitiveSurface: true
+    });
+    expect(routes.find((route) => route.path === '/tools/:toolId')?.meta).toMatchObject({
+      module: 'tools',
+      navKey: 'tools',
+      implementationGate: 'shellImplemented',
+      sensitiveSurface: true
+    });
+  });
+
+  it('defines managed model create and edit routes before the dynamic detail route', () => {
+    const modelPaths = routes.map((route) => route.path).filter((path) => path.startsWith('/models'));
+
+    expect(modelPaths).toEqual(['/models', '/models/new', '/models/:modelId/edit', '/models/:modelId']);
+    expect(routes.find((route) => route.path === '/models/new')?.meta).toMatchObject({
+      module: 'models',
+      navKey: 'models',
+      pageTitle: '添加企业模型',
+      implementationGate: 'shellImplemented',
+      sensitiveSurface: true
+    });
+    expect(routes.find((route) => route.path === '/models/:modelId/edit')?.meta).toMatchObject({
+      module: 'models',
+      navKey: 'models',
+      pageTitle: '编辑企业模型',
+      implementationGate: 'shellImplemented',
+      sensitiveSurface: true
+    });
   });
 
   it('routes unauthenticated users to the login shell and denied users to permission denied', async () => {

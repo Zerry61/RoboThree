@@ -111,12 +111,134 @@ import {
   type TaskControlCommand,
   type WorkspaceGrantProjection,
 } from "@robothree/contracts";
+import {
+  CompatibilityProjectionV1Alpha4Schema,
+  CompatibilityQueryV1Alpha4Schema,
+  DesktopErrorEnvelopeV1Alpha4Schema,
+  SubmitTurnCommandV1Alpha4Schema,
+  SubmitTurnReceiptV1Alpha4Schema,
+  SubmitTurnStatusQueryV1Alpha4Schema,
+  type CompatibilityQueryV1Alpha4,
+  type SubmitTurnCommandV1Alpha4,
+  type SubmitTurnStatusQueryV1Alpha4,
+} from "@robothree/contracts/desktop-local/v1alpha4";
+import {
+  CompatibilityProjectionV1Alpha5Schema,
+  CompatibilityQueryV1Alpha5Schema,
+  DesktopErrorEnvelopeV1Alpha5Schema,
+  GetReasoningModePreferenceQueryV1Alpha5Schema,
+  PreviewReasoningModeQueryV1Alpha5Schema,
+  ReasoningModePreferenceProjectionV1Alpha5Schema,
+  ReasoningModePreferenceReceiptV1Alpha5Schema,
+  ReasoningModePreviewV1Alpha5Schema,
+  SubmitTurnCommandV1Alpha5Schema,
+  SubmitTurnReceiptV1Alpha5Schema,
+  SubmitTurnStatusQueryV1Alpha5Schema,
+  UpdateReasoningModePreferenceCommandV1Alpha5Schema,
+  type CompatibilityQueryV1Alpha5,
+  type GetReasoningModePreferenceQueryV1Alpha5,
+  type PreviewReasoningModeQueryV1Alpha5,
+  type SubmitTurnCommandV1Alpha5,
+  type SubmitTurnStatusQueryV1Alpha5,
+  type UpdateReasoningModePreferenceCommandV1Alpha5,
+} from "@robothree/contracts/desktop-local/v1alpha5";
+import {
+  GetTaskReasoningModeQueryV1Alpha1Schema,
+  TaskReasoningErrorEnvelopeV1Alpha1Schema,
+  TaskReasoningModeProjectionV1Alpha1Schema,
+  type GetTaskReasoningModeQueryV1Alpha1,
+} from "@robothree/contracts/desktop-local/task-reasoning/v1alpha1";
+import {
+  GetPersonalModelQueryV1Alpha1Schema,
+  ListPersonalModelsQueryV1Alpha1Schema,
+  PersonalModelManagementCompatibilityProjectionV1Alpha1Schema,
+  PersonalModelManagementCompatibilityQueryV1Alpha1Schema,
+  PersonalModelManagementErrorEnvelopeV1Alpha1Schema,
+  PersonalModelPageV1Alpha1Schema,
+  PersonalModelSafeProjectionV1Alpha1Schema,
+  type GetPersonalModelQueryV1Alpha1,
+  type ListPersonalModelsQueryV1Alpha1,
+  type PersonalModelManagementCompatibilityQueryV1Alpha1,
+} from "@robothree/contracts/desktop-local/personal-model-management/v1alpha1";
+import {
+  CreatePersonalModelCommandV1Alpha2Schema,
+  DeletePersonalModelCommandV1Alpha2Schema,
+  GetPersonalModelQueryV1Alpha2Schema,
+  ListPersonalModelsQueryV1Alpha2Schema,
+  PersonalModelCommandPreparationV1Alpha2Schema,
+  PersonalModelManagementCompatibilityProjectionV1Alpha2Schema,
+  PersonalModelManagementCompatibilityQueryV1Alpha2Schema,
+  PersonalModelManagementErrorEnvelopeV1Alpha2Schema,
+  PersonalModelOperationReceiptV1Alpha2Schema,
+  PersonalModelPageV1Alpha2Schema,
+  PersonalModelSafeProjectionV1Alpha2Schema,
+  QueryPersonalModelOperationV1Alpha2Schema,
+  RevealPersonalModelKeyCommandV1Alpha2Schema,
+  UpdatePersonalModelCommandV1Alpha2Schema,
+  type CreatePersonalModelCommandV1Alpha2,
+  type DeletePersonalModelCommandV1Alpha2,
+  type GetPersonalModelQueryV1Alpha2,
+  type ListPersonalModelsQueryV1Alpha2,
+  type PersonalModelManagementCompatibilityQueryV1Alpha2,
+  type QueryPersonalModelOperationV1Alpha2,
+  type RevealPersonalModelKeyCommandV1Alpha2,
+  type UpdatePersonalModelCommandV1Alpha2,
+} from "@robothree/contracts/desktop-local/personal-model-management/v1alpha2";
+import {
+  CreateRobotDraftCommandSchema,
+  AgentLifecycleSafeErrorSchema,
+  GetMyRobotDraftQuerySchema,
+  ListMyRobotDraftsQuerySchema,
+  RobotDraftDetailSchema,
+  RobotDraftPageSchema,
+  RobotLifecycleMutationReceiptSchema,
+  StartRobotDraftTestCommandSchema,
+  SubmitRobotDraftCommandSchema,
+  UpdateRobotDraftCommandSchema,
+  WithdrawRobotSubmissionCommandSchema,
+  type CreateRobotDraftCommand,
+  type GetMyRobotDraftQuery,
+  type ListMyRobotDraftsQuery,
+  type StartRobotDraftTestCommand,
+  type SubmitRobotDraftCommand,
+  type UpdateRobotDraftCommand,
+  type WithdrawRobotSubmissionCommand,
+} from "@robothree/contracts/agent-lifecycle/v1alpha1";
 
 const CORE_PRIVATE_ORIGIN = "robothree://desktop-main";
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 const MAX_SSE_FRAME_BYTES = 256 * 1024;
 
 const ROUTES = Object.freeze({
+  listMyRobotDraftsV1Alpha1: "/agent-lifecycle/v1alpha1/drafts/list",
+  getMyRobotDraftV1Alpha1: "/agent-lifecycle/v1alpha1/drafts/detail",
+  createRobotDraftV1Alpha1: "/agent-lifecycle/v1alpha1/drafts/create",
+  updateRobotDraftV1Alpha1: "/agent-lifecycle/v1alpha1/drafts/update",
+  startRobotDraftTestV1Alpha1: "/agent-lifecycle/v1alpha1/drafts/test",
+  submitRobotDraftV1Alpha1: "/agent-lifecycle/v1alpha1/drafts/submit",
+  withdrawRobotSubmissionV1Alpha1: "/agent-lifecycle/v1alpha1/drafts/withdraw",
+  personalModelManagementCompatibilityV1Alpha2: "/personal-model-management/v1alpha2/compatibility",
+  listPersonalModelsV1Alpha2: "/personal-model-management/v1alpha2/list",
+  getPersonalModelV1Alpha2: "/personal-model-management/v1alpha2/detail",
+  createPersonalModelV1Alpha2: "/personal-model-management/v1alpha2/create",
+  updatePersonalModelV1Alpha2: "/personal-model-management/v1alpha2/update",
+  deletePersonalModelV1Alpha2: "/personal-model-management/v1alpha2/delete",
+  revealPersonalModelV1Alpha2: "/personal-model-management/v1alpha2/reveal",
+  queryPersonalModelOperationV1Alpha2: "/personal-model-management/v1alpha2/operation",
+  personalModelManagementCompatibilityV1Alpha1:
+    "/personal-model-management/v1alpha1/compatibility",
+  listPersonalModelsV1Alpha1: "/personal-model-management/v1alpha1/list",
+  getPersonalModelV1Alpha1: "/personal-model-management/v1alpha1/detail",
+  getTaskReasoningModeV1Alpha1: "/task-reasoning/v1alpha1/get",
+  compatibilityV1Alpha5: "/v1alpha5/control/compatibility",
+  previewReasoningModeV1Alpha5: "/v1alpha5/reasoning/preview",
+  getReasoningModePreferenceV1Alpha5: "/v1alpha5/reasoning/preference/get",
+  updateReasoningModePreferenceV1Alpha5: "/v1alpha5/reasoning/preference/update",
+  submitTurnV1Alpha5: "/v1alpha5/turns/submit",
+  submitTurnStatusV1Alpha5: "/v1alpha5/turns/status",
+  compatibilityV1Alpha4: "/v1alpha4/control/compatibility",
+  submitTurnV1Alpha4: "/v1alpha4/turns/submit",
+  submitTurnStatusV1Alpha4: "/v1alpha4/turns/status",
   compatibilityV1Alpha2: "/v1alpha2/control/compatibility",
   listRobotCatalogV1Alpha2: "/v1alpha2/catalog/robots/list",
   getRobotCatalogV1Alpha2: "/v1alpha2/catalog/robots/detail",
@@ -165,6 +287,29 @@ export type CorePrivateResult<T> =
 export type CorePrivateResultV1Alpha2<T> =
   | Readonly<{ ok: true; value: T }>
   | Readonly<{ ok: false; error: ReturnType<typeof DesktopErrorEnvelopeV1Alpha2Schema.parse> }>;
+
+export type CorePrivateResultV1Alpha4<T> =
+  | Readonly<{ ok: true; value: T }>
+  | Readonly<{ ok: false; error: ReturnType<typeof DesktopErrorEnvelopeV1Alpha4Schema.parse> }>;
+
+export type CorePrivateResultV1Alpha5<T> =
+  | Readonly<{ ok: true; value: T }>
+  | Readonly<{ ok: false; error: ReturnType<typeof DesktopErrorEnvelopeV1Alpha5Schema.parse> }>;
+
+export type CorePrivateTaskReasoningResult<T> =
+  | Readonly<{ ok: true; value: T }>
+  | Readonly<{ ok: false; error: ReturnType<typeof TaskReasoningErrorEnvelopeV1Alpha1Schema.parse> }>;
+
+export type CorePrivatePersonalModelManagementResult<T> =
+  | Readonly<{ ok: true; value: T }>
+  | Readonly<{
+    ok: false;
+    error: ReturnType<typeof PersonalModelManagementErrorEnvelopeV1Alpha1Schema.parse>;
+  }>;
+
+export type CorePrivatePersonalModelManagementResultV1Alpha2<T> =
+  | Readonly<{ ok: true; value: T }>
+  | Readonly<{ ok: false; error: ReturnType<typeof PersonalModelManagementErrorEnvelopeV1Alpha2Schema.parse> }>;
 
 type Parser<T> = Readonly<{ parse(value: unknown): T }>;
 
@@ -371,6 +516,41 @@ export class CorePrivateClient {
     this.#authorizationToken = input.authorizationToken;
   }
 
+  listMyRobotDraftsV1Alpha1(input: ListMyRobotDraftsQuery) {
+    return this.#postAgentLifecycle(ROUTES.listMyRobotDraftsV1Alpha1,
+      ListMyRobotDraftsQuerySchema.parse(input), RobotDraftPageSchema);
+  }
+
+  getMyRobotDraftV1Alpha1(input: GetMyRobotDraftQuery) {
+    return this.#postAgentLifecycle(ROUTES.getMyRobotDraftV1Alpha1,
+      GetMyRobotDraftQuerySchema.parse(input), RobotDraftDetailSchema);
+  }
+
+  createRobotDraftV1Alpha1(input: CreateRobotDraftCommand) {
+    return this.#postAgentLifecycle(ROUTES.createRobotDraftV1Alpha1,
+      CreateRobotDraftCommandSchema.parse(input), RobotLifecycleMutationReceiptSchema);
+  }
+
+  updateRobotDraftV1Alpha1(input: UpdateRobotDraftCommand) {
+    return this.#postAgentLifecycle(ROUTES.updateRobotDraftV1Alpha1,
+      UpdateRobotDraftCommandSchema.parse(input), RobotLifecycleMutationReceiptSchema);
+  }
+
+  startRobotDraftTestV1Alpha1(input: StartRobotDraftTestCommand) {
+    return this.#postAgentLifecycle(ROUTES.startRobotDraftTestV1Alpha1,
+      StartRobotDraftTestCommandSchema.parse(input), RobotLifecycleMutationReceiptSchema);
+  }
+
+  submitRobotDraftV1Alpha1(input: SubmitRobotDraftCommand) {
+    return this.#postAgentLifecycle(ROUTES.submitRobotDraftV1Alpha1,
+      SubmitRobotDraftCommandSchema.parse(input), RobotLifecycleMutationReceiptSchema);
+  }
+
+  withdrawRobotSubmissionV1Alpha1(input: WithdrawRobotSubmissionCommand) {
+    return this.#postAgentLifecycle(ROUTES.withdrawRobotSubmissionV1Alpha1,
+      WithdrawRobotSubmissionCommandSchema.parse(input), RobotLifecycleMutationReceiptSchema);
+  }
+
   compatibility(input: CompatibilityQuery) {
     return this.#post(
       ROUTES.compatibility,
@@ -379,12 +559,165 @@ export class CorePrivateClient {
     );
   }
 
+  getTaskReasoningModeV1Alpha1(input: GetTaskReasoningModeQueryV1Alpha1) {
+    return this.#postTaskReasoning(
+      ROUTES.getTaskReasoningModeV1Alpha1,
+      GetTaskReasoningModeQueryV1Alpha1Schema.parse(input),
+      TaskReasoningModeProjectionV1Alpha1Schema,
+      10_000,
+    );
+  }
+
+  personalModelManagementCompatibilityV1Alpha1(
+    input: PersonalModelManagementCompatibilityQueryV1Alpha1,
+  ) {
+    return this.#postPersonalModelManagement(
+      ROUTES.personalModelManagementCompatibilityV1Alpha1,
+      PersonalModelManagementCompatibilityQueryV1Alpha1Schema.parse(input),
+      PersonalModelManagementCompatibilityProjectionV1Alpha1Schema,
+      3_000,
+    );
+  }
+
+  listPersonalModelsV1Alpha1(input: ListPersonalModelsQueryV1Alpha1) {
+    return this.#postPersonalModelManagement(
+      ROUTES.listPersonalModelsV1Alpha1,
+      ListPersonalModelsQueryV1Alpha1Schema.parse(input),
+      PersonalModelPageV1Alpha1Schema,
+      5_000,
+    );
+  }
+
+  getPersonalModelV1Alpha1(input: GetPersonalModelQueryV1Alpha1) {
+    return this.#postPersonalModelManagement(
+      ROUTES.getPersonalModelV1Alpha1,
+      GetPersonalModelQueryV1Alpha1Schema.parse(input),
+      PersonalModelSafeProjectionV1Alpha1Schema,
+      5_000,
+    );
+  }
+
+  personalModelManagementCompatibilityV1Alpha2(input: PersonalModelManagementCompatibilityQueryV1Alpha2) {
+    return this.#postPersonalModelManagementV1Alpha2(ROUTES.personalModelManagementCompatibilityV1Alpha2, PersonalModelManagementCompatibilityQueryV1Alpha2Schema.parse(input), PersonalModelManagementCompatibilityProjectionV1Alpha2Schema, 3_000);
+  }
+
+  listPersonalModelsV1Alpha2(input: ListPersonalModelsQueryV1Alpha2) {
+    return this.#postPersonalModelManagementV1Alpha2(ROUTES.listPersonalModelsV1Alpha2, ListPersonalModelsQueryV1Alpha2Schema.parse(input), PersonalModelPageV1Alpha2Schema, 5_000);
+  }
+
+  getPersonalModelV1Alpha2(input: GetPersonalModelQueryV1Alpha2) {
+    return this.#postPersonalModelManagementV1Alpha2(ROUTES.getPersonalModelV1Alpha2, GetPersonalModelQueryV1Alpha2Schema.parse(input), PersonalModelSafeProjectionV1Alpha2Schema, 5_000);
+  }
+
+  createPersonalModelV1Alpha2(input: CreatePersonalModelCommandV1Alpha2) {
+    return this.#postPersonalModelManagementV1Alpha2(ROUTES.createPersonalModelV1Alpha2, CreatePersonalModelCommandV1Alpha2Schema.parse(input), PersonalModelCommandPreparationV1Alpha2Schema, 5_000);
+  }
+
+  updatePersonalModelV1Alpha2(input: UpdatePersonalModelCommandV1Alpha2) {
+    return this.#postPersonalModelManagementV1Alpha2(ROUTES.updatePersonalModelV1Alpha2, UpdatePersonalModelCommandV1Alpha2Schema.parse(input), PersonalModelCommandPreparationV1Alpha2Schema, 5_000);
+  }
+
+  deletePersonalModelV1Alpha2(input: DeletePersonalModelCommandV1Alpha2) {
+    return this.#postPersonalModelManagementV1Alpha2(ROUTES.deletePersonalModelV1Alpha2, DeletePersonalModelCommandV1Alpha2Schema.parse(input), PersonalModelCommandPreparationV1Alpha2Schema, 5_000);
+  }
+
+  revealPersonalModelV1Alpha2(input: RevealPersonalModelKeyCommandV1Alpha2) {
+    return this.#postPersonalModelManagementV1Alpha2(ROUTES.revealPersonalModelV1Alpha2, RevealPersonalModelKeyCommandV1Alpha2Schema.parse(input), PersonalModelCommandPreparationV1Alpha2Schema, 5_000);
+  }
+
+  queryPersonalModelOperationV1Alpha2(input: QueryPersonalModelOperationV1Alpha2) {
+    return this.#postPersonalModelManagementV1Alpha2(ROUTES.queryPersonalModelOperationV1Alpha2, QueryPersonalModelOperationV1Alpha2Schema.parse(input), PersonalModelOperationReceiptV1Alpha2Schema, 5_000);
+  }
+
   compatibilityV1Alpha2(input: CompatibilityQueryV1Alpha2) {
     return this.#postV1Alpha2(
       ROUTES.compatibilityV1Alpha2,
       CompatibilityQueryV1Alpha2Schema.parse(input),
       CompatibilityProjectionV1Alpha2Schema,
       3_000,
+    );
+  }
+
+  compatibilityV1Alpha4(input: CompatibilityQueryV1Alpha4) {
+    return this.#postV1Alpha4(
+      ROUTES.compatibilityV1Alpha4,
+      CompatibilityQueryV1Alpha4Schema.parse(input),
+      CompatibilityProjectionV1Alpha4Schema,
+      3_000,
+    );
+  }
+
+  compatibilityV1Alpha5(input: CompatibilityQueryV1Alpha5) {
+    return this.#postV1Alpha5(
+      ROUTES.compatibilityV1Alpha5,
+      CompatibilityQueryV1Alpha5Schema.parse(input),
+      CompatibilityProjectionV1Alpha5Schema,
+      3_000,
+    );
+  }
+
+  previewReasoningModeV1Alpha5(input: PreviewReasoningModeQueryV1Alpha5) {
+    return this.#postV1Alpha5(
+      ROUTES.previewReasoningModeV1Alpha5,
+      PreviewReasoningModeQueryV1Alpha5Schema.parse(input),
+      ReasoningModePreviewV1Alpha5Schema,
+      10_000,
+    );
+  }
+
+  getReasoningModePreferenceV1Alpha5(input: GetReasoningModePreferenceQueryV1Alpha5) {
+    return this.#postV1Alpha5(
+      ROUTES.getReasoningModePreferenceV1Alpha5,
+      GetReasoningModePreferenceQueryV1Alpha5Schema.parse(input),
+      ReasoningModePreferenceProjectionV1Alpha5Schema,
+      10_000,
+    );
+  }
+
+  updateReasoningModePreferenceV1Alpha5(
+    input: UpdateReasoningModePreferenceCommandV1Alpha5,
+  ) {
+    return this.#postV1Alpha5(
+      ROUTES.updateReasoningModePreferenceV1Alpha5,
+      UpdateReasoningModePreferenceCommandV1Alpha5Schema.parse(input),
+      ReasoningModePreferenceReceiptV1Alpha5Schema,
+      10_000,
+    );
+  }
+
+  submitTurnV1Alpha5(input: SubmitTurnCommandV1Alpha5) {
+    return this.#postV1Alpha5(
+      ROUTES.submitTurnV1Alpha5,
+      SubmitTurnCommandV1Alpha5Schema.parse(input),
+      SubmitTurnReceiptV1Alpha5Schema,
+      30_000,
+    );
+  }
+
+  querySubmitTurnV1Alpha5(input: SubmitTurnStatusQueryV1Alpha5) {
+    return this.#postV1Alpha5(
+      ROUTES.submitTurnStatusV1Alpha5,
+      SubmitTurnStatusQueryV1Alpha5Schema.parse(input),
+      SubmitTurnReceiptV1Alpha5Schema,
+      10_000,
+    );
+  }
+
+  submitTurnV1Alpha4(input: SubmitTurnCommandV1Alpha4) {
+    return this.#postV1Alpha4(
+      ROUTES.submitTurnV1Alpha4,
+      SubmitTurnCommandV1Alpha4Schema.parse(input),
+      SubmitTurnReceiptV1Alpha4Schema,
+      30_000,
+    );
+  }
+
+  querySubmitTurnV1Alpha4(input: SubmitTurnStatusQueryV1Alpha4) {
+    return this.#postV1Alpha4(
+      ROUTES.submitTurnStatusV1Alpha4,
+      SubmitTurnStatusQueryV1Alpha4Schema.parse(input),
+      SubmitTurnReceiptV1Alpha4Schema,
+      10_000,
     );
   }
 
@@ -808,6 +1141,29 @@ export class CorePrivateClient {
     return { ok: true, value: parser.parse(value.value) };
   }
 
+  async #postAgentLifecycle<T>(route: string, input: unknown, parser: Parser<T>) {
+    const body = JSON.stringify(input);
+    if (Buffer.byteLength(body) > 256 * 1024) {
+      throw new Error("Core private Agent lifecycle request exceeds the byte limit");
+    }
+    const response = await fetch(new URL(route, this.#baseUrl), {
+      method: "POST",
+      redirect: "manual",
+      headers: { ...this.#headers(), "content-type": "application/json",
+        "content-length": String(Buffer.byteLength(body)) },
+      body,
+      signal: AbortSignal.timeout(30_000),
+    });
+    const value = await readBoundedJson(response);
+    if (!isRecord(value) || typeof value.ok !== "boolean") {
+      throw new Error("Core returned an invalid Agent lifecycle envelope");
+    }
+    if (!value.ok) {
+      return { ok: false as const, error: AgentLifecycleSafeErrorSchema.parse(value.error) };
+    }
+    return { ok: true as const, value: parser.parse(value.value) };
+  }
+
   async #postV1Alpha2<T>(
     route: string,
     input: unknown,
@@ -836,6 +1192,149 @@ export class CorePrivateClient {
     if (!value.ok) {
       return { ok: false, error: DesktopErrorEnvelopeV1Alpha2Schema.parse(value.error) };
     }
+    return { ok: true, value: parser.parse(value.value) };
+  }
+
+  async #postV1Alpha4<T>(
+    route: string,
+    input: unknown,
+    parser: Parser<T>,
+    timeoutMs: number,
+  ): Promise<CorePrivateResultV1Alpha4<T>> {
+    const body = JSON.stringify(input);
+    if (Buffer.byteLength(body) > 160 * 1024) {
+      throw new Error("Core private v1alpha4 request exceeds the byte limit");
+    }
+    const response = await fetch(new URL(route, this.#baseUrl), {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        ...this.#headers(),
+        "content-type": "application/json",
+        "content-length": String(Buffer.byteLength(body)),
+      },
+      body,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    const value = await readBoundedJson(response);
+    if (!isRecord(value) || typeof value.ok !== "boolean") {
+      throw new Error("Core returned an invalid private response envelope");
+    }
+    if (!value.ok) {
+      return { ok: false, error: DesktopErrorEnvelopeV1Alpha4Schema.parse(value.error) };
+    }
+    return { ok: true, value: parser.parse(value.value) };
+  }
+
+  async #postV1Alpha5<T>(
+    route: string,
+    input: unknown,
+    parser: Parser<T>,
+    timeoutMs: number,
+  ): Promise<CorePrivateResultV1Alpha5<T>> {
+    const body = JSON.stringify(input);
+    const maxBytes = route === ROUTES.submitTurnV1Alpha5 ? 160 * 1024 : 16 * 1024;
+    if (Buffer.byteLength(body) > maxBytes) {
+      throw new Error("Core private v1alpha5 request exceeds the byte limit");
+    }
+    const response = await fetch(new URL(route, this.#baseUrl), {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        ...this.#headers(),
+        "content-type": "application/json",
+        "content-length": String(Buffer.byteLength(body)),
+      },
+      body,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    const value = await readBoundedJson(response);
+    if (!isRecord(value) || typeof value.ok !== "boolean") {
+      throw new Error("Core returned an invalid private response envelope");
+    }
+    if (!value.ok) {
+      return { ok: false, error: DesktopErrorEnvelopeV1Alpha5Schema.parse(value.error) };
+    }
+    return { ok: true, value: parser.parse(value.value) };
+  }
+
+  async #postTaskReasoning<T>(
+    route: string,
+    input: unknown,
+    parser: Parser<T>,
+    timeoutMs: number,
+  ): Promise<CorePrivateTaskReasoningResult<T>> {
+    const body = JSON.stringify(input);
+    if (Buffer.byteLength(body) > 16 * 1024) {
+      throw new Error("Core private Task Reasoning request exceeds the byte limit");
+    }
+    const response = await fetch(new URL(route, this.#baseUrl), {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        ...this.#headers(),
+        "content-type": "application/json",
+        "content-length": String(Buffer.byteLength(body)),
+      },
+      body,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    const value = await readBoundedJson(response);
+    if (!isRecord(value) || typeof value.ok !== "boolean") {
+      throw new Error("Core returned an invalid private response envelope");
+    }
+    if (!value.ok) {
+      return {
+        ok: false,
+        error: TaskReasoningErrorEnvelopeV1Alpha1Schema.parse(value.error),
+      };
+    }
+    return { ok: true, value: parser.parse(value.value) };
+  }
+
+  async #postPersonalModelManagement<T>(
+    route: string,
+    input: unknown,
+    parser: Parser<T>,
+    timeoutMs: number,
+  ): Promise<CorePrivatePersonalModelManagementResult<T>> {
+    const body = JSON.stringify(input);
+    if (Buffer.byteLength(body) > 16 * 1024) {
+      throw new Error("Core private Personal Model request exceeds the byte limit");
+    }
+    const response = await fetch(new URL(route, this.#baseUrl), {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        ...this.#headers(),
+        "content-type": "application/json",
+        "content-length": String(Buffer.byteLength(body)),
+      },
+      body,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    const value = await readBoundedJson(response);
+    if (!isRecord(value) || typeof value.ok !== "boolean") {
+      throw new Error("Core returned an invalid private response envelope");
+    }
+    if (!value.ok) {
+      return {
+        ok: false,
+        error: PersonalModelManagementErrorEnvelopeV1Alpha1Schema.parse(value.error),
+      };
+    }
+    return { ok: true, value: parser.parse(value.value) };
+  }
+
+  async #postPersonalModelManagementV1Alpha2<T>(route: string, input: unknown, parser: Parser<T>, timeoutMs: number): Promise<CorePrivatePersonalModelManagementResultV1Alpha2<T>> {
+    const body = JSON.stringify(input);
+    if (Buffer.byteLength(body) > 16 * 1024) throw new Error("Core private Personal Model request exceeds the byte limit");
+    const response = await fetch(new URL(route, this.#baseUrl), {
+      method: "POST", redirect: "manual", headers: { ...this.#headers(), "content-type": "application/json", "content-length": String(Buffer.byteLength(body)) }, body, signal: AbortSignal.timeout(timeoutMs),
+    });
+    const value = await readBoundedJson(response);
+    if (!isRecord(value) || typeof value.ok !== "boolean") throw new Error("Core returned an invalid private response envelope");
+    if (!value.ok) return { ok: false, error: PersonalModelManagementErrorEnvelopeV1Alpha2Schema.parse(value.error) };
     return { ok: true, value: parser.parse(value.value) };
   }
 

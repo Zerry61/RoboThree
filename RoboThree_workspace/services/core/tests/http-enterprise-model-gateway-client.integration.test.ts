@@ -78,6 +78,46 @@ describe("CGF-2C.1 HTTP Enterprise Model Gateway client", () => {
     ]);
   });
 
+  it("locks all four HTTP operations to the additive v1alpha3 wire version", async () => {
+    const token = randomBytes(32).toString("base64url");
+    const ids = identities();
+    const paths: string[] = [];
+    const origin = await listen((request, response) => {
+      paths.push(`${request.method} ${request.url}`);
+      if (request.method === "POST" && request.url?.endsWith("/cancel")) {
+        json(response, 200, status(ids, "cancelled", 2, 3, "v1alpha3"));
+      } else if (request.method === "POST") {
+        json(response, 202, accepted(ids, "v1alpha3"));
+      } else if (request.url?.includes("/events")) {
+        response.writeHead(200, { "content-type": "text/event-stream" });
+        for (const event of events(ids, "v1alpha3")) {
+          response.write(`data: ${JSON.stringify(event)}\n\n`);
+        }
+        response.end();
+      } else {
+        json(response, 200, status(ids, "running", 1, 2, "v1alpha3"));
+      }
+    });
+    const operation = client(origin, new TokenProvider(token)).begin(scope, "v1alpha3");
+    const signal = new AbortController().signal;
+    await operation.accept({}, signal);
+    await operation.status(ids.invocationId, signal);
+    await operation.cancel({
+      invocationId: ids.invocationId,
+      requestId: randomUUID(),
+      expectedStatusRevision: 1,
+      reason: "user_requested",
+      signal,
+    });
+    await collect(operation, ids.invocationId);
+    expect(paths).toEqual([
+      "POST /v1alpha3/model-invocations",
+      `GET /v1alpha3/model-invocations/${ids.invocationId}`,
+      `POST /v1alpha3/model-invocations/${ids.invocationId}/cancel`,
+      `GET /v1alpha3/model-invocations/${ids.invocationId}/events`,
+    ]);
+  });
+
   it("strictly consumes started/text/tool/usage/terminal with an opaque durable cursor", async () => {
     const token = randomBytes(32).toString("base64url");
     const ids = identities();
@@ -239,7 +279,7 @@ function identities() {
 
 function accepted(
   ids: ReturnType<typeof identities>,
-  contractVersion: "v1alpha1" | "v1alpha2" = "v1alpha1",
+  contractVersion: "v1alpha1" | "v1alpha2" | "v1alpha3" = "v1alpha1",
 ) {
   return {
     contractVersion,
@@ -259,7 +299,7 @@ function status(
   state: string,
   revision: number,
   sequence: number,
-  contractVersion: "v1alpha1" | "v1alpha2" = "v1alpha1",
+  contractVersion: "v1alpha1" | "v1alpha2" | "v1alpha3" = "v1alpha1",
 ) {
   return {
     contractVersion,
@@ -280,7 +320,7 @@ function status(
 
 function events(
   ids: ReturnType<typeof identities>,
-  contractVersion: "v1alpha1" | "v1alpha2" = "v1alpha1",
+  contractVersion: "v1alpha1" | "v1alpha2" | "v1alpha3" = "v1alpha1",
 ) {
   const common = { contractVersion, invocationId: ids.invocationId };
   const ephemeral = (sequence: number, eventType: string, eventPayload: unknown) => ({

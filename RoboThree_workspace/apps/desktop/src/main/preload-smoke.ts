@@ -1,10 +1,8 @@
 import { fileURLToPath } from "node:url";
 
-import electron from "electron";
+import { app, BrowserWindow } from "electron";
 
 import { createSecureWindowOptions } from "./window-security.js";
-
-const { app, BrowserWindow } = electron;
 
 type PreloadSmokeProjection = Readonly<{
   contractVersion?: unknown;

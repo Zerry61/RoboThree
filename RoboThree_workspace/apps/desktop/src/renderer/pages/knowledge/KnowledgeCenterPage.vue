@@ -1,9 +1,8 @@
 <template>
   <section class="knowledge-page" aria-labelledby="knowledge-center-title">
     <R3PageHeader
-      eyebrow="Knowledge"
       title="知识中心"
-      description="查看知识能力接入状态。真实知识库检索能力仍待接入。"
+      description="查看当前可用的企业知识来源，并在任务中按需引用。"
     />
 
     <R3InlineNotice tone="warning" :title="view.noticeTitle">
@@ -127,7 +126,10 @@ async function loadKnowledge(): Promise<void> {
 <style scoped>
 .knowledge-page {
   display: grid;
-  gap: 20px;
+  align-content: start;
+  gap: 14px;
+  width: min(100%, 960px);
+  margin: 0 auto;
   padding: 24px;
 }
 
@@ -149,15 +151,22 @@ async function loadKnowledge(): Promise<void> {
 }
 
 .knowledge-page__source {
-  min-height: 112px;
+  min-height: 94px;
   display: grid;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 14px;
   border: 1px solid var(--r3-color-border);
   border-radius: var(--r3-radius-md);
-  padding: 14px;
+  padding: 12px 14px;
   background: var(--r3-color-surface);
   color: var(--r3-color-text);
   text-decoration: none;
+  box-shadow: var(--r3-shadow-sm);
+}
+
+.knowledge-page__source:hover {
+  border-color: var(--r3-color-border-strong);
+  box-shadow: var(--r3-shadow-md);
 }
 
 .knowledge-page__source:focus-visible {
@@ -176,9 +185,32 @@ async function loadKnowledge(): Promise<void> {
   color: var(--r3-color-text-secondary);
 }
 
+.knowledge-page__source p {
+  margin-top: 3px;
+}
+
+.knowledge-page__source small {
+  grid-column: 1 / -1;
+}
+
 .knowledge-page__meta {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  justify-content: flex-end;
+}
+
+@media (max-width: 720px) {
+  .knowledge-page {
+    padding: 18px 14px;
+  }
+
+  .knowledge-page__source {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .knowledge-page__meta {
+    justify-content: flex-start;
+  }
 }
 </style>

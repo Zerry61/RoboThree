@@ -26,6 +26,7 @@ describe("PTX-4 PPTX visual preview productization", () => {
     const runtime = createDesktopPrivateRuntime({
       databasePath: join(directory, "robothree.sqlite"),
       authorizationToken: "q".repeat(48),
+      demoMode: "legacy_test",
     });
     await runtime.start();
     cleanup.push(async () => {

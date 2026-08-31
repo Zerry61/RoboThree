@@ -8,3 +8,9 @@ coverage/
 .env.*
 !.env.example
 .DS_Store
+
+# admin-console tsc emit outputs (paired *.js next to *.ts in src/, no outDir configured)
+apps/admin-console/src/**/*.js
+# admin-console integration harness artifacts
+apps/admin-console/dist-integration/
+apps/admin-console/integration.html

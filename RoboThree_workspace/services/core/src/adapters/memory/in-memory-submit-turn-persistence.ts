@@ -10,11 +10,11 @@ import type {
   SubmitTurnRecordV1Alpha2,
 } from "@robothree/contracts";
 import {
-  ReadablePersistedSubmitTurnReceiptSchema,
-  ReadableSubmitTurnRecordSchema,
-  type ReadablePersistedSubmitTurnReceipt,
-  type ReadableSubmitTurnRecord,
-} from "@robothree/contracts/submit-turn-coordination/v1alpha3";
+  ReadablePersistedSubmitTurnReceiptV1Alpha5Schema as ReadablePersistedSubmitTurnReceiptSchema,
+  ReadableSubmitTurnRecordV1Alpha5Schema as ReadableSubmitTurnRecordSchema,
+  type ReadablePersistedSubmitTurnReceiptV1Alpha5 as ReadablePersistedSubmitTurnReceipt,
+  type ReadableSubmitTurnRecordV1Alpha5 as ReadableSubmitTurnRecord,
+} from "@robothree/contracts/submit-turn-coordination/v1alpha5";
 
 import type { Clock } from "../../ports/clock.js";
 import type {
@@ -24,6 +24,16 @@ import type {
   SubmitTurnPersistenceFaultInjector,
   SubmitTurnWriteResult,
 } from "../../ports/submit-turn-persistence.js";
+import {
+  createR2D3CoordinationEnvelopeV1,
+  validateR2D3CoordinationEnvelopeV1,
+  type PersistedR2D3CoordinationEnvelopeV1,
+} from "../../application/r2d3-durable-acceptance.js";
+import {
+  createDfi541CoordinationEnvelopeV1,
+  validateDfi541CoordinationEnvelopeV1,
+  type PersistedDfi541CoordinationEnvelopeV1,
+} from "../../application/dfi541-durable-acceptance.js";
 
 export class InMemorySubmitTurnPersistence implements SubmitTurnPersistence {
   readonly adapterKind = "persistence" as const;
@@ -31,6 +41,8 @@ export class InMemorySubmitTurnPersistence implements SubmitTurnPersistence {
   readonly #clock: Clock;
   readonly #faultInjector: SubmitTurnPersistenceFaultInjector | undefined;
   readonly #records = new Map<string, ReadableSubmitTurnRecord>();
+  readonly #r2d3Envelopes = new Map<string, PersistedR2D3CoordinationEnvelopeV1>();
+  readonly #dfi541Envelopes = new Map<string, PersistedDfi541CoordinationEnvelopeV1>();
   readonly #clientTurns = new Map<string, string>();
   readonly #receipts = new Map<string, ReadablePersistedSubmitTurnReceipt>();
   readonly #deliveries: DesktopDeliveryRecord[] = [];
@@ -69,7 +81,9 @@ export class InMemorySubmitTurnPersistence implements SubmitTurnPersistence {
   ): Promise<SubmitTurnWriteResult<ReadableSubmitTurnRecord>> {
     this.#requireStarted();
     const parsed = ReadableSubmitTurnRecordSchema.safeParse(input);
-    if (!parsed.success || parsed.data.status !== "accepted") {
+    if (!parsed.success || parsed.data.status !== "accepted"
+      || parsed.data.schemaVersion === "v1alpha4"
+      || parsed.data.schemaVersion === "v1alpha5") {
       return failure("submit_turn.invalid_record", "accepted SubmitTurnRecord is invalid");
     }
     const record = parsed.data;
@@ -82,6 +96,70 @@ export class InMemorySubmitTurnPersistence implements SubmitTurnPersistence {
     const commandForClientTurn = this.#clientTurns.get(record.clientTurnId);
     if (commandForClientTurn !== undefined) return conflict();
     this.#records.set(record.submitTurnCommandId, cloneRecord(record));
+    this.#clientTurns.set(record.clientTurnId, record.submitTurnCommandId);
+    this.#faultInjector?.("submit_turn.accepted.after_commit");
+    return { ok: true, replayed: false, value: cloneRecord(record) };
+  }
+
+  async prepareAcceptedR2D3(
+    input: PersistedR2D3CoordinationEnvelopeV1,
+  ): Promise<SubmitTurnWriteResult<ReadableSubmitTurnRecord>> {
+    this.#requireStarted();
+    let envelope: PersistedR2D3CoordinationEnvelopeV1;
+    try {
+      envelope = validateR2D3CoordinationEnvelopeV1(input);
+    } catch {
+      return failure("r2d.acceptance_plan_invalid", "R2D3 acceptance plan is invalid");
+    }
+    const record = envelope.record;
+    if (record.status !== "accepted") {
+      return failure("submit_turn.invalid_record", "accepted R2D3 record is invalid");
+    }
+    const existing = this.#records.get(record.submitTurnCommandId);
+    if (existing !== undefined) {
+      const existingEnvelope = this.#r2d3Envelopes.get(record.submitTurnCommandId);
+      return existingEnvelope !== undefined
+        && existingEnvelope.acceptedPlan.planDigest === envelope.acceptedPlan.planDigest
+        && sameAcceptedIdentity(existing, record)
+        ? { ok: true, replayed: true, value: cloneRecord(existing) }
+        : conflict();
+    }
+    if (this.#clientTurns.has(record.clientTurnId)) return conflict();
+    this.#records.set(record.submitTurnCommandId, cloneRecord(record));
+    this.#r2d3Envelopes.set(record.submitTurnCommandId, structuredClone(envelope));
+    this.#clientTurns.set(record.clientTurnId, record.submitTurnCommandId);
+    this.#faultInjector?.("submit_turn.accepted.after_commit");
+    return { ok: true, replayed: false, value: cloneRecord(record) };
+  }
+
+  async prepareAcceptedDfi541(
+    input: PersistedDfi541CoordinationEnvelopeV1,
+  ): Promise<SubmitTurnWriteResult<ReadableSubmitTurnRecord>> {
+    this.#requireStarted();
+    let envelope: PersistedDfi541CoordinationEnvelopeV1;
+    try {
+      envelope = validateDfi541CoordinationEnvelopeV1(input);
+    } catch {
+      return failure("dfi541.acceptance_plan_invalid",
+        "DFI-5.4.1 acceptance plan is invalid");
+    }
+    const record = envelope.record;
+    if (record.status !== "accepted") {
+      return failure("submit_turn.invalid_record",
+        "accepted DFI-5.4.1 record is invalid");
+    }
+    const existing = this.#records.get(record.submitTurnCommandId);
+    if (existing !== undefined) {
+      const existingEnvelope = this.#dfi541Envelopes.get(record.submitTurnCommandId);
+      return existingEnvelope !== undefined
+        && existingEnvelope.acceptedPlan.planDigest === envelope.acceptedPlan.planDigest
+        && sameAcceptedIdentity(existing, record)
+        ? { ok: true, replayed: true, value: cloneRecord(existing) }
+        : conflict();
+    }
+    if (this.#clientTurns.has(record.clientTurnId)) return conflict();
+    this.#records.set(record.submitTurnCommandId, cloneRecord(record));
+    this.#dfi541Envelopes.set(record.submitTurnCommandId, structuredClone(envelope));
     this.#clientTurns.set(record.clientTurnId, record.submitTurnCommandId);
     this.#faultInjector?.("submit_turn.accepted.after_commit");
     return { ok: true, replayed: false, value: cloneRecord(record) };
@@ -101,6 +179,26 @@ export class InMemorySubmitTurnPersistence implements SubmitTurnPersistence {
     this.#requireStarted();
     const commandId = this.#clientTurns.get(clientTurnId);
     return commandId === undefined ? undefined : this.loadRecord(commandId);
+  }
+
+  async loadR2D3Envelope(
+    submitTurnCommandId: string,
+  ): Promise<PersistedR2D3CoordinationEnvelopeV1 | undefined> {
+    this.#requireStarted();
+    const envelope = this.#r2d3Envelopes.get(submitTurnCommandId);
+    return envelope === undefined
+      ? undefined
+      : structuredClone(validateR2D3CoordinationEnvelopeV1(envelope));
+  }
+
+  async loadDfi541Envelope(
+    submitTurnCommandId: string,
+  ): Promise<PersistedDfi541CoordinationEnvelopeV1 | undefined> {
+    this.#requireStarted();
+    const envelope = this.#dfi541Envelopes.get(submitTurnCommandId);
+    return envelope === undefined
+      ? undefined
+      : structuredClone(validateDfi541CoordinationEnvelopeV1(envelope));
   }
 
   async loadReceipt(
@@ -133,6 +231,33 @@ export class InMemorySubmitTurnPersistence implements SubmitTurnPersistence {
       || !allowedTransition(current.status, parsed.data.status)
     ) {
       return conflict();
+    }
+    const currentEnvelope = this.#r2d3Envelopes.get(
+      parsed.data.submitTurnCommandId,
+    );
+    if (parsed.data.schemaVersion === "v1alpha4") {
+      if (currentEnvelope === undefined) {
+        return failure("r2d.acceptance_plan_unavailable", "R2D3 acceptance plan is missing");
+      }
+      this.#r2d3Envelopes.set(
+        parsed.data.submitTurnCommandId,
+        createR2D3CoordinationEnvelopeV1({
+          record: parsed.data,
+          acceptedPlan: currentEnvelope.acceptedPlan,
+        }),
+      );
+    }
+    if (parsed.data.schemaVersion === "v1alpha5") {
+      const dfiEnvelope = this.#dfi541Envelopes.get(parsed.data.submitTurnCommandId);
+      if (dfiEnvelope === undefined) {
+        return failure("dfi541.acceptance_plan_unavailable",
+          "DFI-5.4.1 acceptance plan is missing");
+      }
+      this.#dfi541Envelopes.set(parsed.data.submitTurnCommandId,
+        createDfi541CoordinationEnvelopeV1({
+          record: parsed.data,
+          acceptedPlan: dfiEnvelope.acceptedPlan,
+        }));
     }
     this.#records.set(parsed.data.submitTurnCommandId, cloneRecord(parsed.data));
     this.#faultInjector?.(parsed.data.status === "message_appended"
@@ -214,6 +339,29 @@ export class InMemorySubmitTurnPersistence implements SubmitTurnPersistence {
       loopStartedAt: startedAt,
       updatedAt: startedAt,
     });
+    const envelope = this.#r2d3Envelopes.get(submitTurnCommandId);
+    if (next.schemaVersion === "v1alpha4") {
+      if (envelope === undefined) return failure(
+        "r2d.acceptance_plan_unavailable",
+        "R2D3 acceptance plan is missing",
+      );
+      this.#r2d3Envelopes.set(submitTurnCommandId, createR2D3CoordinationEnvelopeV1({
+        record: next,
+        acceptedPlan: envelope.acceptedPlan,
+      }));
+    }
+    if (next.schemaVersion === "v1alpha5") {
+      const dfiEnvelope = this.#dfi541Envelopes.get(submitTurnCommandId);
+      if (dfiEnvelope === undefined) return failure(
+        "dfi541.acceptance_plan_unavailable",
+        "DFI-5.4.1 acceptance plan is missing",
+      );
+      this.#dfi541Envelopes.set(submitTurnCommandId,
+        createDfi541CoordinationEnvelopeV1({
+          record: next,
+          acceptedPlan: dfiEnvelope.acceptedPlan,
+        }));
+    }
     this.#records.set(submitTurnCommandId, cloneRecord(next));
     this.#faultInjector?.("submit_turn.loop_started.after_commit");
     return { ok: true, replayed: false, value: cloneRecord(next) };
@@ -329,6 +477,19 @@ export class InMemorySubmitTurnPersistence implements SubmitTurnPersistence {
       || !sameImmutableIdentity(current, record.data)
       || !allowedTransition(current.status, record.data.status)
     ) return conflict();
+    const currentEnvelope = this.#r2d3Envelopes.get(
+      record.data.submitTurnCommandId,
+    );
+    if (record.data.schemaVersion === "v1alpha4" && currentEnvelope === undefined) {
+      return failure("r2d.acceptance_plan_unavailable", "R2D3 acceptance plan is missing");
+    }
+    const currentDfiEnvelope = this.#dfi541Envelopes.get(
+      record.data.submitTurnCommandId,
+    );
+    if (record.data.schemaVersion === "v1alpha5" && currentDfiEnvelope === undefined) {
+      return failure("dfi541.acceptance_plan_unavailable",
+        "DFI-5.4.1 acceptance plan is missing");
+    }
     const delivery = DesktopDeliveryRecordSchema.safeParse({
       ...input.delivery,
       sequence: this.#nextDeliverySequence,
@@ -338,6 +499,24 @@ export class InMemorySubmitTurnPersistence implements SubmitTurnPersistence {
       || delivery.data.submitTurnCommandId !== record.data.submitTurnCommandId
     ) {
       return failure("submit_turn.invalid_delivery", "Desktop delivery is invalid");
+    }
+    if (record.data.schemaVersion === "v1alpha4" && currentEnvelope !== undefined) {
+      this.#r2d3Envelopes.set(
+        record.data.submitTurnCommandId,
+        createR2D3CoordinationEnvelopeV1({
+          record: record.data,
+          acceptedPlan: currentEnvelope.acceptedPlan,
+        }),
+      );
+    }
+    if (record.data.schemaVersion === "v1alpha5" && currentDfiEnvelope !== undefined) {
+      this.#dfi541Envelopes.set(
+        record.data.submitTurnCommandId,
+        createDfi541CoordinationEnvelopeV1({
+          record: record.data,
+          acceptedPlan: currentDfiEnvelope.acceptedPlan,
+        }),
+      );
     }
     this.#records.set(record.data.submitTurnCommandId, cloneRecord(record.data));
     this.#receipts.set(record.data.submitTurnCommandId, cloneReceipt(receipt.data));

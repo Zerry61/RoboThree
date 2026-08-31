@@ -92,9 +92,12 @@ describe('Admin shell components', () => {
       'ready',
       'unavailable',
       'permissionDenied',
+      'notFound',
+      'stale',
       'error',
       'disabled',
-      'partial'
+      'partial',
+      'gated'
     ];
 
     for (const status of statuses) {

@@ -4,8 +4,8 @@
 
 ```text
 Phase: DFE Frontend Living Spec
-Status: DFE-0 PASS/CLOSED / DFE-5A.1 PASS/CLOSED / DFE-5B.1 PASS/CLOSED / DFE-5B.2 PASS/CLOSED / DFE-6.0 REVIEW PASS / DFE-6A PASS/CLOSED / DFE-6B PASS/CLOSED / Frontend Experience Foundation PASS/CLOSED / DFE-7A 0.0.0-dfe.7a PASS/CLOSED
-Date: 2026-08-26
+Status: DFE-0 PASS/CLOSED / DFE-5A.1 PASS/CLOSED / DFE-5B.1 PASS/CLOSED / DFE-5B.2 PASS/CLOSED / DFE-6.0 REVIEW PASS / DFE-6A PASS/CLOSED / DFE-6B PASS/CLOSED / Frontend Experience Foundation PASS/CLOSED / DFE-7A 0.0.0-dfe.7a PASS/CLOSED / DFE-8A/8B IMPLEMENTED / INDEPENDENT QA PENDING
+Date: 2026-08-30
 Owner: Codex 5.6
 Scope: Desktop Renderer frontend planning, DFE-5A.1, DFE-5B.1, DFE-5B.2, DFE-6.0 closure planning baselines, and DFE-7A Robot/Tool Catalog Renderer consumption implementation
 ```
@@ -32,6 +32,13 @@ review confirmed the Renderer focused gates, but found unauthorized CPC-2 Core i
 The Core drift was subsequently authorized, independently verified, and closed as CPC-2. The user then separately accepted
 DFE-7A; `0.0.0-dfe.7a` is now PASS/CLOSED. This does not unlock Skill Catalog, Tool management, creation/publishing, or any
 missing backend capability.
+
+DFE-8.0 Revision 1 froze an explicit `local_demo` Renderer entry and prototype-aligned settings pages.
+The fixed `admin/123456` account is a public local fixture and not an authentication authority; non-demo mode does not
+register that route or guard. Model settings retain real read-only projections while Personal Model mutation/reveal and its
+form stay gated; personalization and memory are editable only in demo mode and clear on navigation; production feedback
+does not read attachments or submit. Product focused review passed and the user authorized DFE-8B followed by DFE-8A;
+both are implemented with developer verification complete and independent QA pending.
 
 ## 2. Source Priority
 
@@ -91,7 +98,8 @@ but business pages remain gated until their own batches.
 | `#/settings/personalization` | Personalization | P1 Prototype | Prototype | DFE-5B | No real context injection. |
 | `#/settings/memory` | Personal Memory | P1 Prototype/GATED | Prototype | DFE-5B | No Memory Store read/write. |
 | `#/settings/feedback` | Feedback | P1 Prototype | Prototype | DFE-5B | No real submission channel unless separately authorized. |
-| `#/settings/identity` | Identity | P1 Enterprise Integration | Prototype/GATED | DFE-5B | No SSO/RBAC implementation. |
+| `#/settings/identity` | Legacy identity route | Compatibility redirect | Static | DFE-8B | Hidden redirect to models; not a fifth settings page. |
+| `#/login` | Local demo entry | Demo only | Public fixed fixture | DFE-8A | Registered only under explicit `local_demo`; absent from normal production routes. |
 | `#/__design-system` | Design System Gallery | Dev/Test only | Static fixtures | DFE-1A | Must be absent from production router table. |
 | `#/legacy` | Legacy Renderer Wrapper | Temporary | Real existing UI | DFE-1A | Mechanically hosts current Renderer behavior during migration. |
 

@@ -126,6 +126,50 @@ class PromptCachePlannerTest {
     }
 
     @Test
+    void requestScopedSystemFactsAreExcludedFromTheStaticCachePrefix() {
+        StaticPromptPrefixProjector projector = new StaticPromptPrefixProjector();
+        ObjectNode firstRequest = CanonicalJson.parseObject(
+                request(A, A, "core.request-context.v1", "one", true),
+                1_000_000);
+        ObjectNode secondRequest = firstRequest.deepCopy();
+        ((ObjectNode) secondRequest.withArray("messages").get(0))
+                .put("sourceDigest", B)
+                .set("content", textContent("same instructions, later request facts"));
+
+        var first = projector.project(CanonicalJson.canonicalize(firstRequest));
+        var second = projector.project(CanonicalJson.canonicalize(secondRequest));
+
+        assertThat(first.systemSourceCount()).isZero();
+        assertThat(second.systemSourceCount()).isZero();
+        assertThat(second.staticSourceLockDigest())
+                .isEqualTo(first.staticSourceLockDigest());
+        assertThat(second.staticPrefixDigest())
+                .isEqualTo(first.staticPrefixDigest());
+    }
+
+    @Test
+    void taskScopedInstructionBundlesAreExcludedFromTheStaticCachePrefix() {
+        StaticPromptPrefixProjector projector = new StaticPromptPrefixProjector();
+        ObjectNode firstRequest = CanonicalJson.parseObject(
+                request(A, A, "core.instruction-bundle.v1", "one", true),
+                1_000_000);
+        ObjectNode secondRequest = firstRequest.deepCopy();
+        ((ObjectNode) secondRequest.withArray("messages").get(0))
+                .put("sourceDigest", B)
+                .set("content", textContent("next task instruction bundle"));
+
+        var first = projector.project(CanonicalJson.canonicalize(firstRequest));
+        var second = projector.project(CanonicalJson.canonicalize(secondRequest));
+
+        assertThat(first.systemSourceCount()).isZero();
+        assertThat(second.systemSourceCount()).isZero();
+        assertThat(second.staticSourceLockDigest())
+                .isEqualTo(first.staticSourceLockDigest());
+        assertThat(second.staticPrefixDigest())
+                .isEqualTo(first.staticPrefixDigest());
+    }
+
+    @Test
     void toolRegistrationOrderIsCanonical() {
         StaticPromptPrefixProjector projector = new StaticPromptPrefixProjector();
         String first = requestWithTools(false);

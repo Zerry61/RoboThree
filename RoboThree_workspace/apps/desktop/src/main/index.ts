@@ -1,24 +1,56 @@
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
-import electron from "electron";
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  MessageChannelMain,
+  shell,
+} from "electron";
 import type { BrowserWindow as BrowserWindowType } from "electron";
 
 import {
   DESKTOP_IPC_CHANNELS,
+  AGENT_LIFECYCLE_V1ALPHA1_IPC_CHANNELS,
   DESKTOP_V1ALPHA2_IPC_CHANNELS,
+  DESKTOP_V1ALPHA4_IPC_CHANNELS,
+  DESKTOP_V1ALPHA5_IPC_CHANNELS,
+  DESKTOP_TASK_REASONING_V1ALPHA1_IPC_CHANNELS,
+  PERSONAL_MODEL_V1ALPHA1_IPC_CHANNELS,
+  PERSONAL_MODEL_V1ALPHA2_IPC_CHANNELS,
   FOUNDATION_STATUS_CHANNEL,
   type DesktopInvokeChannel,
   type DesktopV1Alpha2InvokeChannel,
+  type DesktopV1Alpha4InvokeChannel,
+  type DesktopV1Alpha5InvokeChannel,
+  type DesktopTaskReasoningV1Alpha1InvokeChannel,
+  type PersonalModelV1Alpha1InvokeChannel,
+  type PersonalModelV1Alpha2InvokeChannel,
+  type AgentLifecycleV1Alpha1InvokeChannel,
 } from "../shared/foundation-api.js";
 import { CorePrivateSupervisor } from "./core-private-supervisor.js";
 import { DesktopEventReconnectController } from "./desktop-event-reconnect-controller.js";
 import { DesktopIpcRouter } from "./desktop-ipc-router.js";
+import { DefaultWorkspaceGrantProvider } from "./default-workspace-grant-provider.js";
 import { DesktopV1Alpha2IpcRouter } from "./desktop-v1alpha2-ipc-router.js";
+import { DesktopV1Alpha4IpcRouter } from "./desktop-v1alpha4-ipc-router.js";
+import { DesktopV1Alpha5IpcRouter } from "./desktop-v1alpha5-ipc-router.js";
+import { DesktopTaskReasoningV1Alpha1IpcRouter } from
+  "./desktop-task-reasoning-v1alpha1-ipc-router.js";
+import { PersonalModelV1Alpha1IpcRouter } from
+  "./personal-model-v1alpha1-ipc-router.js";
+import { PersonalModelV1Alpha2IpcRouter } from
+  "./personal-model-v1alpha2-ipc-router.js";
+import { AgentLifecycleV1Alpha1IpcRouter } from
+  "./agent-lifecycle-v1alpha1-ipc-router.js";
 import { HtmlPreviewSandbox } from "./html-preview-sandbox.js";
 import { PersonalCredentialTransportProductionController } from "./personal-credential-transport-controller.js";
+import { resolvePackagedPersonalCredentialHelper } from
+  "./personal-credential-helper-package.js";
 import { createSecureWindowOptions } from "./window-security.js";
-
-const { app, BrowserWindow, dialog, ipcMain, MessageChannelMain, shell } = electron;
+import { STRM3_SENSITIVE_TRANSPORT_ACTIVATION } from
+  "../shared/sensitive-transport-activation.js";
 
 const demoMode = process.env.ROBOTHREE_DCF2C_DEMO === "1";
 if (demoMode) {
@@ -34,7 +66,9 @@ let supervisor: CorePrivateSupervisor | undefined;
 let eventSubscription: AbortController | undefined;
 const htmlPreviewSandbox = new HtmlPreviewSandbox();
 const personalCredentialTransport = new PersonalCredentialTransportProductionController({
-  foundationEnabled: false,
+  // Historical STRM-2 snapshot: foundationEnabled: false.
+  foundationEnabled: true,
+  productionActivation: STRM3_SENSITIVE_TRANSPORT_ACTIVATION,
   createMessageChannel: () => new MessageChannelMain(),
   brokerLeaseProvider: {
     current: () => {
@@ -89,12 +123,19 @@ if (hasSingleInstanceLock) {
   });
 
   void app.whenReady().then(async () => {
+    const credentialHelperDescriptor = await resolvePackagedPersonalCredentialHelper(
+      process.resourcesPath,
+    );
     supervisor = new CorePrivateSupervisor({
       entryPath: fileURLToPath(new URL(
         "../../../../services/core/dist/desktop-private-main.js",
         import.meta.url,
       )),
       databasePath: join(app.getPath("userData"), "robothree.sqlite"),
+      sensitiveTransportActivationDescriptor: STRM3_SENSITIVE_TRANSPORT_ACTIVATION,
+      ...(credentialHelperDescriptor === undefined
+        ? {}
+        : { credentialHelperDescriptor }),
       ...(demoMode ? { demoMode: "dcf2c" as const } : {}),
       maxUnexpectedRestarts: 1,
     });
@@ -154,6 +195,14 @@ function createMainWindow(): BrowserWindowType {
 }
 
 function registerBusinessIpc(core: CorePrivateSupervisor): void {
+  const defaultWorkspace = new DefaultWorkspaceGrantProvider({
+    resolveClient: () => core.client,
+    rootPath: join(app.getPath("home"), ".robothree"),
+  });
+  const ensureDefaultWorkspaceGrant = (input: Readonly<{
+    clientInstanceId: string;
+    correlationId: string;
+  }>) => defaultWorkspace.ensure(input);
   const router = new DesktopIpcRouter({
     core: {
       get client() {
@@ -187,11 +236,11 @@ function registerBusinessIpc(core: CorePrivateSupervisor): void {
       });
       return result.canceled ? undefined : result.filePath;
     },
-    chooseWorkspaceArtifactFile: async (authorities) => {
+    chooseWorkspaceArtifactFile: async (authorities, options) => {
       if (mainWindow === undefined || mainWindow.isDestroyed()) return undefined;
       const result = await dialog.showOpenDialog(mainWindow, {
-        title: "注册工作区 Artifact",
-        buttonLabel: "注册",
+        title: options?.documentSourcesOnly === true ? "选择任务资料" : "注册工作区 Artifact",
+        buttonLabel: options?.documentSourcesOnly === true ? "添加资料" : "注册",
         ...(authorities[0]?.rootRealPath === undefined
           ? {}
           : { defaultPath: authorities[0].rootRealPath }),
@@ -199,12 +248,15 @@ function registerBusinessIpc(core: CorePrivateSupervisor): void {
         filters: [
           {
             name: "Supported Documents",
-            extensions: ["pdf", "xlsx", "docx", "md", "markdown", "txt", "html", "htm"],
+            extensions: options?.documentSourcesOnly === true
+              ? ["pdf", "xlsx", "docx"]
+              : ["pdf", "xlsx", "docx", "md", "markdown", "txt", "html", "htm"],
           },
         ],
       });
       return result.canceled ? undefined : result.filePaths[0];
     },
+    ensureDefaultWorkspaceGrant,
   });
   const channels = Object.values(DESKTOP_IPC_CHANNELS)
     .filter((channel): channel is DesktopInvokeChannel =>
@@ -227,6 +279,103 @@ function registerBusinessIpc(core: CorePrivateSupervisor): void {
   for (const channel of v1alpha2Channels) {
     ipcMain.handle(channel, (event, input: unknown) =>
       v1alpha2Router.dispatch(channel, input, event));
+  }
+  const v1alpha4Router = new DesktopV1Alpha4IpcRouter({
+    resolveConnection: () => core.connectionLease(),
+    isCurrentConnection: (lease) => core.isCurrentConnectionLease(lease),
+    ensureDefaultWorkspaceGrant,
+  });
+  const v1alpha4Channels = Object.values(
+    DESKTOP_V1ALPHA4_IPC_CHANNELS,
+  ) as DesktopV1Alpha4InvokeChannel[];
+  for (const channel of v1alpha4Channels) {
+    ipcMain.handle(channel, (event, input: unknown) =>
+      v1alpha4Router.dispatch(channel, input, event));
+  }
+  const v1alpha5Router = new DesktopV1Alpha5IpcRouter({
+    resolveConnection: () => core.connectionLease(),
+    isCurrentConnection: (lease) => core.isCurrentConnectionLease(lease),
+    ensureDefaultWorkspaceGrant,
+  });
+  const v1alpha5Channels = Object.values(
+    DESKTOP_V1ALPHA5_IPC_CHANNELS,
+  ) as DesktopV1Alpha5InvokeChannel[];
+  for (const channel of v1alpha5Channels) {
+    ipcMain.handle(channel, (event, input: unknown) =>
+      v1alpha5Router.dispatch(channel, input, event));
+  }
+  const taskReasoningRouter = new DesktopTaskReasoningV1Alpha1IpcRouter({
+    resolveConnection: () => core.connectionLease(),
+    isCurrentConnection: (lease) => core.isCurrentConnectionLease(lease),
+  });
+  const taskReasoningChannels = Object.values(
+    DESKTOP_TASK_REASONING_V1ALPHA1_IPC_CHANNELS,
+  ) as DesktopTaskReasoningV1Alpha1InvokeChannel[];
+  for (const channel of taskReasoningChannels) {
+    ipcMain.handle(channel, (event, input: unknown) =>
+      taskReasoningRouter.dispatch(channel, input, event));
+  }
+  const personalModelRouter = new PersonalModelV1Alpha1IpcRouter({
+    resolveConnection: () => core.connectionLease(),
+    isCurrentConnection: (lease) => core.isCurrentConnectionLease(lease),
+    isAuthorizedWebContents: (webContentsId) =>
+      mainWindow !== undefined
+      && !mainWindow.isDestroyed()
+      && mainWindow.webContents.id === webContentsId,
+  });
+  const personalModelChannels = Object.values(
+    PERSONAL_MODEL_V1ALPHA1_IPC_CHANNELS,
+  ) as PersonalModelV1Alpha1InvokeChannel[];
+  for (const channel of personalModelChannels) {
+    ipcMain.handle(channel, (event, input: unknown) =>
+      personalModelRouter.dispatch(channel, input, event));
+  }
+  const personalModelV1Alpha2Router = new PersonalModelV1Alpha2IpcRouter({
+    resolveConnection: () => core.connectionLease(),
+    isCurrentConnection: (lease) => core.isCurrentConnectionLease(lease),
+    transport: personalCredentialTransport,
+    isAuthorizedWebContents: (webContentsId) => mainWindow !== undefined
+      && !mainWindow.isDestroyed()
+      && mainWindow.webContents.id === webContentsId,
+  });
+  const personalModelV1Alpha2Channels = Object.values(
+    PERSONAL_MODEL_V1ALPHA2_IPC_CHANNELS,
+  ) as PersonalModelV1Alpha2InvokeChannel[];
+  for (const channel of personalModelV1Alpha2Channels) {
+    ipcMain.handle(channel, (event, input: unknown) =>
+      personalModelV1Alpha2Router.dispatch(channel, input, event));
+  }
+  const agentLifecycleRouter = new AgentLifecycleV1Alpha1IpcRouter({
+    resolveConnection: () => core.connectionLease(),
+    isCurrentConnection: (lease) => core.isCurrentConnectionLease(lease),
+    isAuthorizedWebContents: (webContentsId) => mainWindow !== undefined
+      && !mainWindow.isDestroyed()
+      && mainWindow.webContents.id === webContentsId,
+  });
+  const agentLifecycleChannels = Object.values(
+    AGENT_LIFECYCLE_V1ALPHA1_IPC_CHANNELS,
+  ) as AgentLifecycleV1Alpha1InvokeChannel[];
+  for (const channel of agentLifecycleChannels) {
+    ipcMain.handle(channel, (event, input: unknown) =>
+      agentLifecycleRouter.dispatch(channel, input, event));
+  }
+  if (mainWindow !== undefined && !mainWindow.isDestroyed()) {
+    const webContents = mainWindow.webContents;
+    const clearBinding = (): void => {
+      v1alpha5Router.removeWebContents(webContents.id);
+      taskReasoningRouter.removeWebContents(webContents.id);
+      personalModelRouter.removeWebContents(webContents.id);
+      personalModelV1Alpha2Router.removeWebContents(webContents.id);
+    };
+    webContents.on("did-start-navigation", clearBinding);
+    webContents.on("render-process-gone", clearBinding);
+    webContents.once("destroyed", clearBinding);
+    mainWindow.once("closed", () => {
+      v1alpha5Router.clear();
+      taskReasoningRouter.clear();
+      personalModelRouter.clear();
+      personalModelV1Alpha2Router.clear();
+    });
   }
 }
 

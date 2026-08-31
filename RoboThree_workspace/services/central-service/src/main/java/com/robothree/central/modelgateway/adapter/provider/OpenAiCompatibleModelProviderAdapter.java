@@ -11,6 +11,7 @@ import com.robothree.central.modelgateway.adapter.http.BoundedSseEventReader;
 import com.robothree.central.modelgateway.domain.ModelEndpointBinding.Protocol;
 import com.robothree.central.modelgateway.domain.CanonicalStaticPromptMaterialPlanner;
 import com.robothree.central.modelgateway.domain.ProviderCacheProjection;
+import com.robothree.central.modelgateway.domain.ProviderReasoningProjection;
 import com.robothree.central.modelgateway.port.ModelAuthorizedHttpTransport;
 import com.robothree.central.modelgateway.port.ModelOutboundTraceContext;
 import com.robothree.central.modelgateway.port.ModelProviderAdapter;
@@ -18,6 +19,7 @@ import com.robothree.central.modelgateway.port.ModelStreamSink;
 import com.robothree.central.modelgateway.provider.BoundedModelStreamSink;
 import com.robothree.central.modelgateway.provider.ModelProviderRequest;
 import com.robothree.central.modelgateway.provider.ModelProviderStreamEvent;
+import com.robothree.central.shared.json.CanonicalJson;
 import java.util.Objects;
 
 public final class OpenAiCompatibleModelProviderAdapter
@@ -53,6 +55,7 @@ public final class OpenAiCompatibleModelProviderAdapter
                 request.requestDocument(),
                 request.binding().upstreamModelId(),
                 request.cacheProjection());
+        projectReasoning(body, request.reasoningProjection());
         BoundedModelStreamSink bounded = new BoundedModelStreamSink(
                 sink,
                 4096,
@@ -109,9 +112,7 @@ public final class OpenAiCompatibleModelProviderAdapter
         }
         ArrayNode messages = body.putArray("messages");
         for (JsonNode message : ProviderAdapterSupport.messages(source)) {
-            ObjectNode target = messages.addObject();
-            target.put("role", message.path("role").asText());
-            target.put("content", ProviderAdapterSupport.joinedText(message));
+            messages.add(projectMessage(message));
         }
         ArrayNode sourceTools = ProviderAdapterSupport.tools(source);
         java.util.List<ObjectNode> tools = explicitKey
@@ -131,6 +132,73 @@ public final class OpenAiCompatibleModelProviderAdapter
             }
         }
         return body;
+    }
+
+    private static ObjectNode projectMessage(JsonNode source) {
+        String role = source.path("role").asText();
+        ObjectNode target = JSON.createObjectNode().put("role", role);
+        target.put("content", ProviderAdapterSupport.joinedText(source));
+        switch (role) {
+            case "system", "user" -> {
+                return target;
+            }
+            case "assistant" -> {
+                JsonNode toolCallsNode = source.path("toolCalls");
+                if (!(toolCallsNode instanceof ArrayNode toolCalls)) {
+                    throw ProviderAdapterSupport.protocol(
+                            "model_gateway.provider_request_invalid");
+                }
+                if (!toolCalls.isEmpty()) {
+                    ArrayNode projectedCalls = target.putArray("tool_calls");
+                    for (JsonNode toolCall : toolCalls) {
+                        String toolCallId = requiredText(toolCall, "toolCallId");
+                        String name = requiredText(toolCall, "name");
+                        JsonNode arguments = toolCall.path("arguments");
+                        if (!arguments.isObject()) {
+                            throw ProviderAdapterSupport.protocol(
+                                    "model_gateway.provider_request_invalid");
+                        }
+                        ObjectNode function = projectedCalls.addObject()
+                                .put("id", toolCallId)
+                                .put("type", "function")
+                                .putObject("function");
+                        function.put("name", name);
+                        function.put("arguments", CanonicalJson.canonicalize(arguments));
+                    }
+                }
+                return target;
+            }
+            case "tool" -> {
+                target.put("tool_call_id", requiredText(source, "toolCallId"));
+                return target;
+            }
+            default -> throw ProviderAdapterSupport.protocol(
+                    "model_gateway.provider_request_invalid");
+        }
+    }
+
+    private static String requiredText(JsonNode source, String field) {
+        String value = source.path(field).asText(null);
+        if (value == null || value.isBlank()) {
+            throw ProviderAdapterSupport.protocol(
+                    "model_gateway.provider_request_invalid");
+        }
+        return value;
+    }
+
+    private static void projectReasoning(
+            ObjectNode body,
+            ProviderReasoningProjection projection) {
+        if (projection instanceof ProviderReasoningProjection.Omit) return;
+        if (!(projection instanceof ProviderReasoningProjection.OpenAiEffort effort)) {
+            throw ProviderAdapterSupport.protocol(
+                    "model_gateway.reasoning_projection_invalid");
+        }
+        body.put(
+                "reasoning_effort",
+                effort.effort() == ProviderReasoningProjection.Effort.HIGH
+                        ? "high"
+                        : "xhigh");
     }
 
     private static void requireProtocol(ModelProviderRequest request) {

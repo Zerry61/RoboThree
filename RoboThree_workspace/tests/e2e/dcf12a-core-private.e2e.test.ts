@@ -36,6 +36,7 @@ describe("DCF-1.2A Core private HTTP/SSE and Main client", () => {
     runtime = createDesktopPrivateRuntime({
       databasePath,
       authorizationToken: firstToken,
+      demoMode: "legacy_test",
     });
     await runtime.start();
     const clientInstanceId = randomUUID();
@@ -108,7 +109,7 @@ describe("DCF-1.2A Core private HTTP/SSE and Main client", () => {
     expect(agentsOverHttp).toEqual(agentsDirect);
     expect(agentsOverHttp).toMatchObject({
       ok: true,
-      value: [{ agentId: "agent.general", runnable: true }],
+      value: [{ agentId: "agent.fixture.desktop-scripted", runnable: true }],
     });
 
     const commandId = randomUUID();
@@ -122,7 +123,7 @@ describe("DCF-1.2A Core private HTTP/SSE and Main client", () => {
       sessionId: session.value.sessionId,
       userInput: "Run the DCF-1.2A scripted turn",
       selectionRequest: {
-        agentId: "agent.general",
+        agentId: "agent.fixture.desktop-scripted",
         selectedSkillIds: [],
         selectedKnowledgeIds: [],
         workspaceGrantId: grant.value.workspaceGrantId,
@@ -135,7 +136,7 @@ describe("DCF-1.2A Core private HTTP/SSE and Main client", () => {
         submitTurnCommandId: commandId,
         status: "accepted",
         runtimeSelectionSummary: {
-          agent: { id: "agent.general" },
+          agent: { id: "agent.fixture.desktop-scripted" },
           resolvedModel: { id: "model.desktop-scripted" },
         },
       },
@@ -174,7 +175,7 @@ describe("DCF-1.2A Core private HTTP/SSE and Main client", () => {
       value: [{
         sessionId: session.value.sessionId,
         displayStatus: "completed",
-        resolvedAgentId: "agent.general",
+        resolvedAgentId: "agent.fixture.desktop-scripted",
         resolvedModelId: "model.desktop-scripted",
       }],
     });
@@ -262,6 +263,7 @@ describe("DCF-1.2A Core private HTTP/SSE and Main client", () => {
     runtime = createDesktopPrivateRuntime({
       databasePath,
       authorizationToken: secondToken,
+      demoMode: "legacy_test",
     });
     await runtime.start();
     const secondClient = new CorePrivateClient({
@@ -301,6 +303,7 @@ describe("DCF-1.2A Core private HTTP/SSE and Main client", () => {
     const runtime = createDesktopPrivateRuntime({
       databasePath: join(directory, "robothree.sqlite"),
       authorizationToken: token,
+      demoMode: "legacy_test",
     });
     cleanups.push(async () => {
       await runtime.stop();
@@ -364,6 +367,7 @@ describe("DCF-1.2A Core private HTTP/SSE and Main client", () => {
     const runtime = createDesktopPrivateRuntime({
       databasePath: join(directory, "robothree.sqlite"),
       authorizationToken: token,
+      demoMode: "legacy_test",
     });
     cleanups.push(async () => {
       await runtime.stop();

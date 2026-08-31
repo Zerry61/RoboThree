@@ -19,7 +19,7 @@ describe("R2D-3.2 architecture and release boundary", () => {
     expect(CPC_INSTRUCTION_RUNTIME_DEFAULT_ENABLED).toBe(false);
   });
 
-  it("has no production TaskResourceEntitlementSource implementation", async () => {
+  it("allows only the later-authorized R2D-P.2 production source", async () => {
     const implementations: string[] = [];
     for (const file of await sourceFiles(resolve(root, "services/core/src"))) {
       const source = await readFile(file, "utf8");
@@ -27,17 +27,22 @@ describe("R2D-3.2 architecture and release boundary", () => {
         implementations.push(relative(root, file));
       }
     }
-    expect(implementations).toEqual([]);
+    expect(implementations).toEqual([
+      "services/core/src/application/local-desktop-r2d-production.ts",
+    ]);
   });
 
-  it("does not wire Planner, built-in Agent or fixture into production bootstrap", async () => {
+  it("allows the later-authorized built-in Agent graph while keeping the scripted fixture demo-only", async () => {
     const bootstrap = await readFile(resolve(
       root,
       "services/core/src/bootstrap/create-desktop-private-runtime.ts",
     ), "utf8");
-    expect(bootstrap).not.toMatch(/AgentResourceDecisionPlanner|BuiltInGeneralAgentSource/u);
+    expect(bootstrap).toMatch(/BuiltInGeneralAgentSource/u);
     expect(bootstrap).toMatch(/createScriptedDesktopAgentFixture/u);
-    expect(bootstrap).not.toMatch(/runtime-selection\/v1alpha3|coordination\/v1alpha4/u);
+    expect(bootstrap).toMatch(/const fixtureMode = demoMode \|\| legacyTestMode/u);
+    expect(bootstrap).toMatch(/if \(fixtureMode\) \{\s*catalog\.registerAgent/u);
+    expect(bootstrap).toMatch(/const executionAgents = fixtureMode[\s\S]*builtInGeneralAgent/u);
+    expect(bootstrap).not.toMatch(/agent\.fixture\.desktop-scripted/u);
   });
 
   it("keeps the scripted fixture outside the Core root export", async () => {
@@ -80,7 +85,7 @@ describe("R2D-3.2 architecture and release boundary", () => {
     expect(migrations).not.toMatch(/\bid:\s*27,/u);
     const lockfile = await readFile(resolve(root, "pnpm-lock.yaml"));
     expect(createHash("sha256").update(lockfile).digest("hex")).toBe(
-      "c47641ac78aa6ccd8cfbef139e0823fbe343615b5b3749f965a20a335f815a07",
+      "5b15ae0197c6f7a1450a49551fbfb50a9e0edc32f0fbe75a9259a360ed874f31",
     );
   });
 });

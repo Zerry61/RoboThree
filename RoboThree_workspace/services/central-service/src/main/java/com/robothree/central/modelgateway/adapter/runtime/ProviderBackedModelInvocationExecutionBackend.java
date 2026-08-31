@@ -30,6 +30,8 @@ public final class ProviderBackedModelInvocationExecutionBackend
             ConnectionMode.CUSTOM_RELAY);
     private static final Set<String> DETERMINISTIC_PROVIDER_FAILURES = Set.of(
             "model_gateway.provider_request_invalid",
+            "model_gateway.reasoning_projection_invalid",
+            "model_gateway.reasoning_budget_conflict",
             "model_gateway.cache_projection_invalid",
             "model_gateway.provider_response_invalid",
             "model_gateway.provider_protocol_mismatch",
@@ -162,7 +164,8 @@ public final class ProviderBackedModelInvocationExecutionBackend
                 request.binding(),
                 request.providerRequestDeadlineAt(),
                 request.providerStreamIdleTimeout(),
-                cacheProjection);
+                cacheProjection,
+                resolved.reasoningProjection());
     }
 
     private static Result map(

@@ -39,7 +39,8 @@ final class JsonSchemaSubsetValidator {
             String contractVersion) {
         this.objectMapper = objectMapper;
         boolean supported = switch (contractFamily) {
-            case "enterprise-gateway" -> Set.of("v1alpha1", "v1alpha2").contains(contractVersion);
+            case "enterprise-gateway" -> Set.of(
+                    "v1alpha1", "v1alpha2", "v1alpha3").contains(contractVersion);
             case "enterprise-identity-composition", "enterprise-session" ->
                     "v1alpha1".equals(contractVersion);
             default -> false;
@@ -273,6 +274,19 @@ final class JsonSchemaSubsetValidator {
             for (JsonNode field : required) {
                 if (!value.has(field.asText())) {
                     errors.add("missing required " + field.asText());
+                }
+            }
+        }
+        JsonNode dependentRequired = schema.get("dependentRequired");
+        if (dependentRequired != null && dependentRequired.isObject()) {
+            Iterator<String> triggers = dependentRequired.fieldNames();
+            while (triggers.hasNext()) {
+                String trigger = triggers.next();
+                if (!value.has(trigger)) continue;
+                for (JsonNode dependency : dependentRequired.path(trigger)) {
+                    if (!value.has(dependency.asText())) {
+                        errors.add("missing dependent " + dependency.asText());
+                    }
                 }
             }
         }

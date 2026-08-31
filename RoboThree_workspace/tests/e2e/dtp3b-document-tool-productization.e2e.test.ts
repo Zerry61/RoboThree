@@ -30,6 +30,7 @@ describe("DTP-3B Document Tool productization", () => {
     const runtime = createDesktopPrivateRuntime({
       databasePath: join(directory, "robothree.sqlite"),
       authorizationToken: "b".repeat(48),
+      demoMode: "legacy_test",
     });
     await runtime.start();
     cleanup.push(async () => {
@@ -168,6 +169,7 @@ describe("DTP-3B Document Tool productization", () => {
     const runtime = createDesktopPrivateRuntime({
       databasePath: join(directory, "robothree.sqlite"),
       authorizationToken: "d".repeat(48),
+      demoMode: "legacy_test",
     });
     await runtime.start();
     cleanup.push(async () => {

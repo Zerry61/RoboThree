@@ -1,6 +1,6 @@
 {
   "name": "@robothree/document-worker",
-  "version": "0.0.0-ptx.1",
+  "version": "0.0.0-wfw.1",
   "private": true,
   "type": "module",
   "exports": {

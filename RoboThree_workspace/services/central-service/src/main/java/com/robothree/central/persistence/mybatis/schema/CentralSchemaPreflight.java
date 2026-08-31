@@ -53,6 +53,18 @@ public final class CentralSchemaPreflight {
     private static final LegacyScript V0009_UPGRADE = new LegacyScript(
             "U0009__prompt_cache_planning_from_v0008.sql",
             "9c158e5621b618dec85655e778383e0869245c7815bf999cc1c161400daa29f6");
+    private static final LegacyScript V0010_FRESH = new LegacyScript(
+            "B0010__enterprise_session_persistence.sql",
+            "5fb746ec65281894a47747ea10f0615feb88a3c818ace959951a8e1103205ae6");
+    private static final LegacyScript V0010_UPGRADE = new LegacyScript(
+            "U0010__enterprise_session_persistence_from_v0009.sql",
+            "1f276a223d9853be28a6d4f0ca0a3afff7cc42fc35dc46669e8b4289bda6af49");
+    private static final LegacyScript V0011_FRESH = new LegacyScript(
+            "B0011__admin_model_management.sql",
+            "5d9335c2bf07ff605ddb3e42146cedba2c48d6806c01fa0e6b854f0383bd3e4f");
+    private static final LegacyScript V0011_UPGRADE = new LegacyScript(
+            "U0011__admin_model_management_from_v0010.sql",
+            "7ebb73e1d06171805457576882b9fc79218ae0dd6e6658d9fbf38beb37cd3bf5");
 
     private final SchemaInspectionMapper mapper;
     private final SchemaManifest manifest;
@@ -127,6 +139,14 @@ public final class CentralSchemaPreflight {
         Map<Integer, SchemaInspectionMapper.SchemaVersionRow> byVersion = rows.stream()
                 .collect(Collectors.toUnmodifiableMap(
                         SchemaInspectionMapper.SchemaVersionRow::version, row -> row));
+        if (manifest.targetSchemaVersion() == 12) {
+            validateV0012UpgradeHistory(rows, byVersion);
+            return;
+        }
+        if (manifest.targetSchemaVersion() == 11) {
+            validateV0011UpgradeHistory(rows, byVersion);
+            return;
+        }
         if (manifest.targetSchemaVersion() == 10) {
             validateV0010UpgradeHistory(rows, byVersion);
             return;
@@ -140,6 +160,42 @@ public final class CentralSchemaPreflight {
             return;
         }
         validateV0007UpgradeHistory(rows, byVersion);
+    }
+
+    private static void validateV0012UpgradeHistory(
+            List<SchemaInspectionMapper.SchemaVersionRow> rows,
+            Map<Integer, SchemaInspectionMapper.SchemaVersionRow> byVersion) {
+        SchemaInspectionMapper.SchemaVersionRow v0011 = byVersion.get(11);
+        if (v0011 == null
+                || !(matches(v0011, V0011_FRESH) || matches(v0011, V0011_UPGRADE))
+                || !v0011.releaseVersion().equals("0.0.0-mvp.admin.vs1")) {
+            throw integrity("persistence.schema_unsupported_history",
+                    "v0011 history row does not match frozen facts");
+        }
+        List<SchemaInspectionMapper.SchemaVersionRow> priorRows = rows.stream()
+                .filter(row -> row.version() != 12).toList();
+        Map<Integer, SchemaInspectionMapper.SchemaVersionRow> prior = byVersion.entrySet().stream()
+                .filter(entry -> entry.getKey() != 12)
+                .collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, Map.Entry::getValue));
+        validateV0011UpgradeHistory(priorRows, prior);
+    }
+
+    private static void validateV0011UpgradeHistory(
+            List<SchemaInspectionMapper.SchemaVersionRow> rows,
+            Map<Integer, SchemaInspectionMapper.SchemaVersionRow> byVersion) {
+        SchemaInspectionMapper.SchemaVersionRow v0010 = byVersion.get(10);
+        if (v0010 == null
+                || !(matches(v0010, V0010_FRESH) || matches(v0010, V0010_UPGRADE))
+                || !v0010.releaseVersion().equals("0.0.0-eipc.1.1.2")) {
+            throw integrity("persistence.schema_unsupported_history",
+                    "v0010 history row does not match frozen facts");
+        }
+        List<SchemaInspectionMapper.SchemaVersionRow> priorRows = rows.stream()
+                .filter(row -> row.version() != 11).toList();
+        Map<Integer, SchemaInspectionMapper.SchemaVersionRow> prior = byVersion.entrySet().stream()
+                .filter(entry -> entry.getKey() != 11)
+                .collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, Map.Entry::getValue));
+        validateV0010UpgradeHistory(priorRows, prior);
     }
 
     private static void validateV0010UpgradeHistory(

@@ -1,0 +1,85 @@
+{
+  "contractVersion": "v1alpha3",
+  "clientRequestId": "30000000-0000-4000-8000-000000000011",
+  "requestId": "30000000-0000-4000-8000-000000000012",
+  "requestDigest": "1e6539c375d63b650848d64912883f8f6b16f5d81004a23fa7d1e4814931ab8b",
+  "audience": "enterprise-model-gateway",
+  "requiredPermission": "model.use",
+  "modelRequest": {
+    "snapshotId": "30000000-0000-4000-8000-000000000013",
+    "contextSourceDigest": "1313131313131313131313131313131313131313131313131313131313131313",
+    "model": {
+      "modelId": "model.enterprise.general",
+      "modelRevision": "1414141414141414141414141414141414141414141414141414141414141414",
+      "configurationRevision": "1515151515151515151515151515151515151515151515151515151515151515",
+      "runtimeRegistryGeneration": "1616161616161616161616161616161616161616161616161616161616161616"
+    },
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Summarize the explicitly confirmed task input."
+          }
+        ]
+      }
+    ],
+    "tools": [
+      {
+        "capabilityId": "tool.workspace.read",
+        "capabilityRevision": "1717171717171717171717171717171717171717171717171717171717171717",
+        "name": "workspace_read",
+        "description": "Read a confirmed workspace file.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "relativePath": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "relativePath"
+          ],
+          "additionalProperties": false
+        },
+        "inputSchemaDigest": "21c6354fd67ec25655b64c9330f356ea562cbcc04e73716fce3868cdea29803d"
+      }
+    ],
+    "maxOutputTokens": 8192,
+    "reasoning": {
+      "mode": "locked_max_strategy",
+      "reasoningModeLockId": "30000000-0000-4000-8000-000000000016",
+      "reasoningModeLockDigest": "2121212121212121212121212121212121212121212121212121212121212121",
+      "profileId": "reasoning.profile.enterprise",
+      "profileRevision": "2222222222222222222222222222222222222222222222222222222222222222",
+      "profileDigest": "2222222222222222222222222222222222222222222222222222222222222222",
+      "strategyId": "reasoning.strategy.enterprise",
+      "strategyRevision": "2323232323232323232323232323232323232323232323232323232323232323",
+      "strategyDigest": "2424242424242424242424242424242424242424242424242424242424242424",
+      "mappingRevision": "2525252525252525252525252525252525252525252525252525252525252525",
+      "mappingDigest": "2525252525252525252525252525252525252525252525252525252525252525",
+      "timeoutPolicyRef": "timeout.enterprise.model.v1"
+    }
+  },
+  "admission": {
+    "type": "user_confirmed",
+    "taskId": "30000000-0000-4000-8000-000000000014",
+    "confirmationId": "30000000-0000-4000-8000-000000000015",
+    "externalTarget": "gateway.enterprise.model",
+    "dataCategories": [
+      "user_text",
+      "tool_schema"
+    ],
+    "dataScopeDigest": "1919191919191919191919191919191919191919191919191919191919191919",
+    "confirmationDigest": "2020202020202020202020202020202020202020202020202020202020202020"
+  },
+  "timeoutPolicy": {
+    "providerRequestDeadlineAt": "2026-07-30T12:20:00Z",
+    "providerStreamIdleTimeoutMillis": 60000
+  },
+  "cacheContext": {
+    "sessionScopeDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "cacheContextDigest": "6d93dc7d3c929d1506fc29c38137666a5dd9393cb34eeda555e815ad5fc52ee3"
+}

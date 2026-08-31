@@ -1,5 +1,6 @@
 import type { TaskCapabilityLock } from "@robothree/contracts";
-import type { ReadableTaskRuntimeSelection } from "@robothree/contracts/runtime-selection/v1alpha2";
+import type { ReadableTaskRuntimeSelectionV1Alpha4 } from
+  "@robothree/contracts/runtime-selection/v1alpha4";
 
 import type { ModelProvider } from "./model-provider.js";
 
@@ -19,7 +20,7 @@ export type ResolvedTaskModelProvider = Readonly<{
 export interface TaskLockedModelProviderResolver {
   resolve(input: Readonly<{
     taskId: string;
-    runtimeSelection: ReadableTaskRuntimeSelection;
+    runtimeSelection: ReadableTaskRuntimeSelectionV1Alpha4;
     modelLock: TaskCapabilityLock;
     purpose: TaskLockedModelPurpose;
   }>): Promise<ResolvedTaskModelProvider>;

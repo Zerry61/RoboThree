@@ -11,6 +11,7 @@ import com.robothree.central.modelgateway.adapter.http.BoundedSseEventReader;
 import com.robothree.central.modelgateway.domain.ModelEndpointBinding.Protocol;
 import com.robothree.central.modelgateway.domain.CanonicalStaticPromptMaterialPlanner;
 import com.robothree.central.modelgateway.domain.ProviderCacheProjection;
+import com.robothree.central.modelgateway.domain.ProviderReasoningProjection;
 import com.robothree.central.modelgateway.port.ModelAuthorizedHttpTransport;
 import com.robothree.central.modelgateway.port.ModelOutboundTraceContext;
 import com.robothree.central.modelgateway.port.ModelProviderAdapter;
@@ -55,6 +56,7 @@ public final class AnthropicCompatibleModelProviderAdapter
                 request.requestDocument(),
                 request.binding().upstreamModelId(),
                 request.cacheProjection());
+        projectReasoning(body, request.reasoningProjection());
         BoundedModelStreamSink bounded = new BoundedModelStreamSink(
                 sink,
                 4096,
@@ -107,6 +109,25 @@ public final class AnthropicCompatibleModelProviderAdapter
                     "model_gateway.cache_projection_invalid");
         }
         return enabledRequestBody(source, upstreamModelId, explicit);
+    }
+
+    private static void projectReasoning(
+            ObjectNode body,
+            ProviderReasoningProjection projection) {
+        if (projection instanceof ProviderReasoningProjection.Omit) return;
+        if (!(projection
+                instanceof ProviderReasoningProjection.AnthropicThinkingBudget thinking)) {
+            throw ProviderAdapterSupport.protocol(
+                    "model_gateway.reasoning_projection_invalid");
+        }
+        int maxOutputTokens = body.path("max_tokens").asInt(-1);
+        if (thinking.budgetTokens() >= maxOutputTokens) {
+            throw ProviderAdapterSupport.protocol(
+                    "model_gateway.reasoning_budget_conflict");
+        }
+        body.putObject("thinking")
+                .put("type", "enabled")
+                .put("budget_tokens", thinking.budgetTokens());
     }
 
     private static ObjectNode disabledRequestBody(

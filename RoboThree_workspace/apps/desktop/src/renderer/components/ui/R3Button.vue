@@ -28,7 +28,7 @@ withDefaults(defineProps<{
   min-height: 34px;
   border: 1px solid var(--r3-color-border-strong);
   border-radius: var(--r3-radius-md);
-  padding: 0 14px;
+  padding: 0 12px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -37,6 +37,8 @@ withDefaults(defineProps<{
   color: var(--r3-color-text);
   cursor: pointer;
   transition: background var(--r3-motion-fast), border-color var(--r3-motion-fast);
+  font-size: var(--r3-font-size-sm);
+  font-weight: 600;
 }
 
 .r3-button:hover:not(:disabled) {

@@ -65,7 +65,7 @@ describe("R2D-3.1 Contract/export/production boundary", () => {
     }
   });
 
-  it("keeps production consumer count zero", async () => {
+  it("confines production consumers to the authorized R2D-3.3 Core graph", async () => {
     const allowed = new Set([
       "services/core/src/application/runtime-selection-v1alpha3.ts",
       "services/core/src/application/submit-turn-coordination-v1alpha4.ts",
@@ -73,6 +73,21 @@ describe("R2D-3.1 Contract/export/production boundary", () => {
       "services/core/src/application/agent-resource-decision-planner.ts",
       "services/core/src/ports/task-resource-entitlement-source.ts",
       "services/core/src/ports/task-tool-candidate-policy.ts",
+      "services/core/src/adapters/memory/in-memory-submit-turn-persistence.ts",
+      "services/core/src/adapters/memory/in-memory-task-persistence.ts",
+      "services/core/src/adapters/sqlite/sqlite-submit-turn-persistence.ts",
+      "services/core/src/adapters/sqlite/sqlite-task-persistence.ts",
+      "services/core/src/application/instruction-bundle-domain.ts",
+      "services/core/src/application/r2d3-durable-acceptance-planner.ts",
+      "services/core/src/application/r2d3-durable-acceptance.ts",
+      "services/core/src/application/local-desktop-r2d-production.ts",
+      "services/core/src/application/runtime-selection-revisions.ts",
+      "services/core/src/application/submit-turn-coordinator.ts",
+      "services/core/src/persistence/r2d3-task-bundle-validation.ts",
+      "services/core/src/persistence/task-authorization-selection-record.ts",
+      "services/core/src/ports/r2d3-acceptance-authority.ts",
+      "services/core/src/ports/submit-turn-persistence.ts",
+      "services/core/src/ports/task-persistence.ts",
       "services/core/src/index.ts",
     ]);
     const unexpected: string[] = [];
@@ -117,7 +132,7 @@ describe("R2D-3.1 Contract/export/production boundary", () => {
     expect(migrations).not.toMatch(/\bid:\s*27,/u);
     const lockfile = await readFile(resolve(root, "pnpm-lock.yaml"));
     expect(createHash("sha256").update(lockfile).digest("hex")).toBe(
-      "c47641ac78aa6ccd8cfbef139e0823fbe343615b5b3749f965a20a335f815a07",
+      "5b15ae0197c6f7a1450a49551fbfb50a9e0edc32f0fbe75a9259a360ed874f31",
     );
   });
 });

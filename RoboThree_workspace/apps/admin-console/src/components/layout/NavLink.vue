@@ -1,5 +1,5 @@
 <template>
-  <a :href="href" @click.prevent="navigate">
+  <a :href="href" v-bind="ariaCurrentAttrs" @click.prevent="navigate">
     <slot />
   </a>
 </template>
@@ -18,6 +18,9 @@ export default Vue.extend({
   computed: {
     href(): string {
       return `#${this.to}`;
+    },
+    ariaCurrentAttrs(): Readonly<Record<string, string>> {
+      return this.$route.path === this.to ? { 'aria-current': 'page' } : {};
     }
   },
   methods: {

@@ -8,6 +8,49 @@ import { CorePrivateSupervisor } from "../src/main/core-private-supervisor.js";
 import type { CorePrivateClient } from "../src/main/core-private-client.js";
 
 describe("DCF-1.3A CorePrivateSupervisor lifecycle", () => {
+  it("retains the lifecycle token only in a Main Buffer across Core restart and zeroes it on stop", async () => {
+    const environmentName = "ROBOTHREE_INTERNAL_TRIAL_AGENT_LIFECYCLE_ACCESS_TOKEN";
+    const secret = "header.payload.signature";
+    process.env[environmentName] = secret;
+    const first = new FakeCoreChild("ready", "runtime.instance-first");
+    const second = new FakeCoreChild("ready", "runtime.instance-second");
+    const children = [first, second];
+    const captured: Buffer[] = [];
+    let tokenSequence = 0;
+    const supervisor = new CorePrivateSupervisor({
+      entryPath: "/fixed/core-entry.js",
+      databasePath: "/fixed/robothree.sqlite",
+      maxUnexpectedRestarts: 1,
+      dependencies: {
+        startTimeoutMs: 100,
+        stopTimeoutMs: 100,
+        restartDelayMs: 1,
+        wait: async () => undefined,
+        spawnChild: (_entryPath, internalTrial) => {
+          const lease = internalTrial?.agentLifecycleAccessToken;
+          if (lease !== undefined) captured.push(lease);
+          const child = children.shift();
+          if (child === undefined) throw new Error("unexpected extra Core spawn");
+          return child as unknown as ChildProcess;
+        },
+        createAuthorizationToken: () =>
+          `token-${String(tokenSequence++).padStart(40, "0")}`,
+        createClient: () => ({} as CorePrivateClient),
+      },
+    });
+
+    expect(process.env).not.toHaveProperty(environmentName);
+    await supervisor.start();
+    await supervisor.restart();
+    expect(captured).toHaveLength(2);
+    expect(captured[0]).toBe(captured[1]);
+    expect(captured[0]?.toString("utf8")).toBe(secret);
+
+    await supervisor.stop();
+    expect(captured[0]?.every((byte) => byte === 0)).toBe(true);
+    delete process.env[environmentName];
+  });
+
   it("uses the single automatic restart budget when startup fails before ready", async () => {
     const first = new FakeCoreChild("fail_before_ready", "runtime.instance-first");
     const second = new FakeCoreChild("ready", "runtime.instance-second");

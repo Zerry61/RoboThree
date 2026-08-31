@@ -1,6 +1,6 @@
 # AAPI-0 Admin API Contract / Projection Foundation 详细实施方案
 
-> 状态：**REVISION 1 / PLAN REVIEW PASS/CLOSED；AAPI-0.1～AAPI-0.4 CODING GATED**  
+> 状态：**REVISION 1 / AAPI-0.1～AAPI-0.4 PASS/CLOSED / AAPI-0 FOUNDATION CONFORMANCE PASS/CLOSED**
 > 日期：2026-08-24  
 > 负责人：Codex 5.6  
 > 对应前端：AFE-0/AFE-1；不自动授权 AFE 编码  
@@ -124,17 +124,23 @@ Threat Model 和安全输入通道，不属于 AAPI-0。
 
 | 子批 | 目标 | 当前状态 |
 | --- | --- | --- |
-| AAPI-0.1 | Canonical Contract、safe errors、cursor/CAS/Receipt、cross-language conformance | GATED |
-| AAPI-0.2 | test-only admin principal、capability projection、production graph exclusion | GATED |
-| AAPI-0.3 | read-only Model/Robot/Skill/Tool/Knowledge/Audit Projection inventory 与 HTTP shell | GATED |
-| AAPI-0.4 | Browser security headers、conditional registration、Admin Adapter E2E | GATED |
+| AAPI-0.1 | Canonical Contract、safe errors、cursor/CAS/Receipt、cross-language conformance | PASS/CLOSED |
+| AAPI-0.2 | test-only admin principal、capability projection、production graph exclusion | PASS/CLOSED |
+| AAPI-0.3 | read-only Model/Robot/Skill/Tool/Knowledge/Audit Projection inventory 与 HTTP shell | PASS/CLOSED |
+| AAPI-0.4 | Browser security、Admin Adapter、development/test integration | PASS/CLOSED |
 
-AAPI-0 预计 12～20 个集中工程日；业务 CRUD、技能包解析、Tool 连接、Credential、Knowledge Provider 不计入。
+AAPI-0.3 的细化估算为 7～12 日，AAPI-0.4 的当前细化估算为 7～10 日，均替代父计划中对应子批的粗估。
+AAPI-0.1～AAPI-0.4 已全部完成独立 QA 与用户接受；AAPI-0 Foundation conformance 正式关闭。已关闭子批不重新估算。
+业务 CRUD、技能包解析、Tool 连接、Credential、Knowledge Provider 不计入。
 
 ### 7.1 Conditional registration 复用规则
 
 AAPI-0.4 复用 EIPC-1.1.3.3 已验证的 activation gate 模式和通用 production bootstrap primitives，
 但不得直接把 Enterprise Session 的 feature-specific Gate 当作 Admin Gate：
+
+当前 MVP 的 AAPI-0.4 不实现 production property=true 分支：production profile 在任意 property 下均保持
+Controller/mapping/test source 为 0。下列 production dependency 完整性规则保留为未来 production Admin
+composition 的准入要求，不得被 AAPI-0.4 的 development/test conformance 宣称为已经完成。
 
 1. `property=false` 时 Admin Controller、Filter、mapping bean 数必须为 0，请求表现为 404；
 2. `property=true` 且任一 production 依赖缺失、重复或来自非生产 source set 时，必须在 HTTP ready 前失败关闭；
@@ -156,8 +162,9 @@ AAPI-0.4 复用 EIPC-1.1.3.3 已验证的 activation gate 模式和通用 produc
 禁止：
 
 - Desktop Main/Preload/Renderer、Local Core private API；
-- 已存在的 `apps/admin-console/**`；AAPI 后端批次不得修改、导入或依赖该目录，Admin Adapter 与页面消费
-  必须由 AFE 独立窗口评审、QA 和授权；
+- AAPI-0.1～AAPI-0.3 后端子批不得修改、导入或依赖已存在的 `apps/admin-console/**`；AAPI-0.4 是经独立
+  详细方案评审后允许跨 Central/Admin Browser 边界完成只读联调的唯一例外，其文件和依赖边界以 AAPI-0.4
+  详细方案为准；
 - EIPC production adapter、真实 SSO/OA/MDM；
 - Personal Credential/Keychain；
 - TGM Tool mutation、Knowledge Provider；
@@ -186,11 +193,17 @@ AAPI-0.4 复用 EIPC-1.1.3.3 已验证的 activation gate 模式和通用 produc
 ## 10. 当前门禁
 
 ```text
-AAPI-0 Plan                  REVISION 1 / PLAN REVIEW PASS/CLOSED
-AAPI-0.1～AAPI-0.4           GATED
+AAPI-0 Plan                  REVISION 1 / CONFORMANCE PASS/CLOSED
+AAPI-0.1～AAPI-0.4           PASS/CLOSED
 Cross-consumer alignment    PASS/CLOSED
 AFE-1.1                     PASS/CLOSED；独立前端门禁
 EIPC-1.2～EIPC-3             DEFERRED / OUT OF CURRENT RELEASE
 TGM                          GATED
 Knowledge Provider           GATED
 ```
+
+AAPI-0.3 详细边界见
+[AAPI-0.3 Read-only Projection Inventory / HTTP Shell 详细实施方案](./AAPI-0.3-READ-ONLY-PROJECTION-INVENTORY-HTTP-SHELL-DEVELOPMENT-PLAN.md)。
+
+AAPI-0.4 详细边界见
+[AAPI-0.4 Browser Security / Admin Adapter / Development-Test Integration 详细实施方案](./AAPI-0.4-BROWSER-SECURITY-ADMIN-ADAPTER-DEVELOPMENT-TEST-INTEGRATION-PLAN.md)。

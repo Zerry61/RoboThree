@@ -12,7 +12,11 @@ import {
   AdminControlReceiptSchema,
   AdminControlSafeErrorSchema,
   AdminModelDetailSchema,
+  AdminRobotDetailSchema,
   AdminRobotSummarySchema,
+  AdminSkillDetailSchema,
+  AdminKnowledgeDetailSchema,
+  AdminAuditEventSummarySchema,
   AdminToolDetailSchema,
   AdminToolSummarySchema,
   createAdminControlSuccessEnvelopeSchema,
@@ -235,6 +239,22 @@ describe("Admin Control v1alpha1 Contract", () => {
       testIdentityUsed: true,
       productionIdentityReady: false,
     }).testIdentityUsed).toBe(true);
+  });
+
+  it("keeps the AAPI-0.3 Java projection fixture aligned with all six TS schemas", () => {
+    const fixture = readJson(
+      "packages/contracts/fixtures/admin-control/v1alpha1/aapi03-read-projections.json",
+    ) as Record<string, unknown>;
+
+    expect(AdminModelDetailSchema.parse(fixture.modelDetail)).toEqual(fixture.modelDetail);
+    expect(AdminRobotDetailSchema.parse(fixture.robotDetail)).toEqual(fixture.robotDetail);
+    expect(AdminSkillDetailSchema.parse(fixture.skillDetail)).toEqual(fixture.skillDetail);
+    expect(AdminToolDetailSchema.parse(fixture.toolDetail)).toEqual(fixture.toolDetail);
+    expect(AdminKnowledgeDetailSchema.parse(fixture.knowledgeDetail)).toEqual(fixture.knowledgeDetail);
+    expect(AdminAuditEventSummarySchema.parse(fixture.auditSummary)).toEqual(fixture.auditSummary);
+    expect(JSON.stringify(fixture)).not.toMatch(
+      /apiKey|bearer|cookie|credentialRef|endpoint|systemPrompt|utf8Content|workspacePath|stack/iu,
+    );
   });
 });
 

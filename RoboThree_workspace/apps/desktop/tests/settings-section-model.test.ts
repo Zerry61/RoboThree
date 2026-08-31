@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { productionRouteNames } from "../src/renderer/app/router.js";
 import {
-  getSettingsGateConfig,
-  settingsGatePages,
   settingsSections,
 } from "../src/renderer/pages/settings/settings-section-model.js";
 
@@ -14,31 +12,21 @@ describe("DFE-5B.2 settings section view model", () => {
       "personalization",
       "memory",
       "feedback",
-      "identity",
     ]);
     expect(settingsSections.map((item) => item.routeName)).toEqual([
       productionRouteNames.settingsModels,
       productionRouteNames.settingsPersonalization,
       productionRouteNames.settingsMemory,
       productionRouteNames.settingsFeedback,
-      productionRouteNames.settingsIdentity,
     ]);
   });
 
-  it("separates runtime readiness from gated capability state", () => {
-    for (const config of Object.values(settingsGatePages)) {
-      expect(config.dataOrigin).toBe("static_product_copy");
-      expect(config.capabilityState).toBe("gated");
-      expect(config.capabilityLabel).toBe("功能尚未接入");
-      expect(config.runtimeStatusLabel).toBe("Desktop/Core 正常");
-      expect(JSON.stringify(config)).not.toMatch(/保存成功|提交成功|同步完成|登录成功|查看成功/u);
+  it("keeps only model management available while preview pages remain explicit", () => {
+    expect(settingsSections).toHaveLength(4);
+    expect(settingsSections[0]?.capabilityState).toBe("available");
+    for (const item of settingsSections.slice(1)) {
+      expect(item.capabilityState).toBe("gated");
+      expect(item.statusLabel).toBe("待接入");
     }
-  });
-
-  it("keeps all DFE-5B.2 gated pages static and non-interactive", () => {
-    expect(getSettingsGateConfig("personalization").disabledReason).toContain("尚未接入");
-    expect(getSettingsGateConfig("memory").noticeText).toContain("不展示假记忆");
-    expect(getSettingsGateConfig("feedback").noticeText).toContain("不声明提交结果");
-    expect(getSettingsGateConfig("identity").noticeText).toContain("不展示身份凭据");
   });
 });

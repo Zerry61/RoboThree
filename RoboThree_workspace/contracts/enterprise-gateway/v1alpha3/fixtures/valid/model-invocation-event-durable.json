@@ -1,0 +1,16 @@
+{
+  "contractVersion": "v1alpha3",
+  "invocationId": "30000000-0000-4000-8000-000000000021",
+  "eventId": "30000000-0000-4000-8000-000000000041",
+  "eventClass": "durable",
+  "durableSequence": 2,
+  "eventType": "dispatch_decided",
+  "eventPayload": {
+    "status": "running",
+    "statusRevision": 1
+  },
+  "eventDigest": "2323232323232323232323232323232323232323232323232323232323232323",
+  "durableCursor": "model-invocation:opaque:event:2",
+  "occurredAt": "2026-07-30T12:00:01Z"
+}
+

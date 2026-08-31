@@ -52,6 +52,45 @@ describe("DFE-3A task detail model", () => {
     expect(JSON.stringify(view)).not.toContain("workspaceRoot");
   });
 
+  it("can project the full session message history for continuous chat", () => {
+    const view = buildTaskDetailView({
+      detail: taskDetail("completed"),
+      snapshot: {
+        sessionId: "session:one",
+        sessionRevision: 2,
+        messages: [{
+          messageId: "message:previous",
+          sessionId: "session:one",
+          sequence: 1,
+          role: "assistant",
+          status: "completed",
+          content: "上一轮回复",
+          taskId: "task:previous",
+          createdAt: timestamp,
+        }, {
+          messageId: "message:current",
+          sessionId: "session:one",
+          sequence: 2,
+          role: "user",
+          status: "completed",
+          content: "继续修改",
+          taskId: "task:one",
+          createdAt: timestamp,
+        }],
+        activeTaskSummaries: [],
+        latestDurableCursor: "cursor:conversation",
+        hasMoreBefore: false,
+      },
+      streamingAssistant: undefined,
+      includeSessionMessages: true,
+    });
+
+    expect(view.messages.map((message) => message.presentation.content)).toEqual([
+      "上一轮回复",
+      "继续修改",
+    ]);
+  });
+
   it("maps uncertain tool activity and manual attention task status to user language", () => {
     const view = buildTaskDetailView({
       detail: {
@@ -119,7 +158,147 @@ describe("DFE-3A task detail model", () => {
     });
     expect(JSON.stringify(view)).not.toContain("workspaceRoot");
   });
+
+  it("projects exact workspace read and PPTX write activities as two business steps", () => {
+    const detail = taskDetail("manual_attention");
+    const view = buildTaskDetailView({
+      detail: {
+        ...detail,
+        toolActivities: [
+          toolActivity("read:docx", "tool.document.docx.read", "completed"),
+          toolActivity("write:pptx", "tool.document.pptx.write", "completed"),
+        ],
+        artifacts: [pptxArtifact()],
+      },
+      snapshot: undefined,
+      streamingAssistant: undefined,
+    });
+
+    expect(view.steps).toEqual([
+      expect.objectContaining({ sequence: 1, title: "读取资料", statusLabel: "成功" }),
+      expect.objectContaining({ sequence: 2, title: "生成成果", statusLabel: "成功" }),
+    ]);
+  });
+
+  it("keeps the write business step pending until a write activity exists and a PPTX is available", () => {
+    const detail = taskDetail("manual_attention");
+    const withoutWrite = buildTaskDetailView({
+      detail: {
+        ...detail,
+        toolActivities: [toolActivity("read:docx", "tool.document.docx.read", "completed")],
+        artifacts: [],
+      },
+      snapshot: undefined,
+      streamingAssistant: undefined,
+    });
+    const withoutArtifact = buildTaskDetailView({
+      detail: {
+        ...detail,
+        toolActivities: [
+          toolActivity("read:docx", "tool.document.docx.read", "completed"),
+          toolActivity("write:pptx", "tool.document.pptx.write", "completed"),
+        ],
+        artifacts: [],
+      },
+      snapshot: undefined,
+      streamingAssistant: undefined,
+    });
+
+    expect(withoutWrite.steps).toEqual([
+      expect.objectContaining({ title: "读取资料", statusLabel: "成功" }),
+      expect.objectContaining({ title: "生成成果", statusLabel: "等待开始" }),
+    ]);
+    expect(withoutArtifact.steps[1]).toEqual(
+      expect.objectContaining({ title: "生成成果", statusLabel: "准备中" }),
+    );
+  });
+
+  it.each([
+    ["uncertain", "需要人工处理"],
+    ["failed", "失败"],
+    ["timed_out", "超时"],
+    ["cancelled", "已取消"],
+    ["waiting_confirmation", "等待确认"],
+    ["running", "执行中"],
+    ["preparing", "准备中"],
+  ] as const)("aggregates mixed read activities with %s precedence", (status, label) => {
+    const detail = taskDetail("manual_attention");
+    const view = buildTaskDetailView({
+      detail: {
+        ...detail,
+        toolActivities: [
+          toolActivity("read:completed", "tool.document.docx.read", "completed"),
+          toolActivity(`read:${status}`, "tool.document.pdf.extract_text", status),
+        ],
+        artifacts: [],
+      },
+      snapshot: undefined,
+      streamingAssistant: undefined,
+    });
+
+    expect(view.steps[0]).toEqual(
+      expect.objectContaining({ title: "读取资料", statusLabel: label }),
+    );
+  });
+
+  it("keeps generic task steps for tasks outside the workspace-source flow", () => {
+    const view = buildTaskDetailView({
+      detail: taskDetail("waiting_confirmation"),
+      snapshot: undefined,
+      streamingAssistant: undefined,
+    });
+
+    expect(view.steps).toEqual([
+      expect.objectContaining({ title: "写入表格", statusLabel: "等待确认" }),
+    ]);
+  });
 });
+
+function toolActivity(
+  id: string,
+  toolName: string,
+  status: "preparing" | "waiting_confirmation" | "running" | "completed" | "failed" | "cancelled" | "timed_out" | "uncertain",
+) {
+  const terminal = ["completed", "failed", "cancelled", "timed_out", "uncertain"].includes(status);
+  return {
+    activityId: `activity:${id}`,
+    taskId: "task:one",
+    toolName: "adapter.tool.document-worker",
+    operationType: toolName,
+    status,
+    startedAt: timestamp,
+    updatedAt: timestamp,
+    ...(terminal ? { endedAt: timestamp } : {}),
+  };
+}
+
+function pptxArtifact() {
+  return {
+    artifactId: `artifact:${"c".repeat(64)}`,
+    taskId: "task:one",
+    sourceKind: "tool_observation" as const,
+    sourceId: "019fa000-0000-7000-8000-000000000222",
+    sourceDigest: `sha256:${"d".repeat(64)}`,
+    displayName: "deck.pptx",
+    kind: "document" as const,
+    mediaType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    relativePath: "reports/deck.pptx",
+    byteSize: 4096,
+    createdAt: timestamp,
+    previewState: "available" as const,
+    lifecycle: {
+      revision: 1,
+      pinned: false,
+      dismissed: false,
+      deleted: false,
+      sourceDeleted: false,
+    },
+    metadata: {
+      capabilityId: "tool.document.pptx.write",
+      slideCount: 2,
+    },
+  };
+}
 
 function taskDetail(displayStatus: "waiting_confirmation" | "manual_attention") {
   return {

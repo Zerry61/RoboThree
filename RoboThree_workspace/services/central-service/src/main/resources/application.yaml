@@ -9,6 +9,8 @@ spring:
       - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
 
 robothree:
+  agent-lifecycle:
+    internal-trial-enabled: false
   enterprise-session:
     enabled: false
 

@@ -4,8 +4,8 @@ import type {
   ModelExternalDataCategory,
   TaskCapabilityLock,
 } from "@robothree/contracts";
-import type { ReadableTaskRuntimeSelection } from
-  "@robothree/contracts/runtime-selection/v1alpha2";
+import type { ReadableTaskRuntimeSelectionV1Alpha4 } from
+  "@robothree/contracts/runtime-selection/v1alpha4";
 
 import { sha256CanonicalJson } from "../persistence/digest.js";
 import type { ContextAssemblyReceipt } from "./context-types.js";
@@ -43,7 +43,7 @@ export class ModelContextProvenanceClassifier {
   public classify(input: Readonly<{
     receipt: ContextAssemblyReceipt;
     conversationMessages: readonly ConversationMessage[];
-    runtimeSelection: ReadableTaskRuntimeSelection;
+    runtimeSelection: ReadableTaskRuntimeSelectionV1Alpha4;
     modelLock: TaskCapabilityLock;
     externalTarget: string;
     assistantProvenance?: readonly AssistantMessageProvenance[];

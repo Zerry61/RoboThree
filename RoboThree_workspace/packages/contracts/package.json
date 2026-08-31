@@ -1,6 +1,6 @@
 {
   "name": "@robothree/contracts",
-  "version": "0.0.0-r2d.3.1",
+  "version": "0.0.0-mvp.rsl.1",
   "private": true,
   "type": "module",
   "exports": {
@@ -12,9 +12,37 @@
       "types": "./dist/admin-control/v1alpha1/index.d.ts",
       "import": "./dist/admin-control/v1alpha1/index.js"
     },
+    "./admin-control/v1alpha2": {
+      "types": "./dist/admin-control/v1alpha2/index.d.ts",
+      "import": "./dist/admin-control/v1alpha2/index.js"
+    },
+    "./agent-lifecycle/v1alpha1": {
+      "types": "./dist/agent-lifecycle/v1alpha1/index.d.ts",
+      "import": "./dist/agent-lifecycle/v1alpha1/index.js"
+    },
     "./desktop-private/personal-credential-broker-v1": {
       "types": "./dist/desktop-private/personal-credential-broker-v1/index.d.ts",
       "import": "./dist/desktop-private/personal-credential-broker-v1/index.js"
+    },
+    "./desktop-local/v1alpha4": {
+      "types": "./dist/desktop-local/v1alpha4/index.d.ts",
+      "import": "./dist/desktop-local/v1alpha4/index.js"
+    },
+    "./desktop-local/v1alpha5": {
+      "types": "./dist/desktop-local/v1alpha5/index.d.ts",
+      "import": "./dist/desktop-local/v1alpha5/index.js"
+    },
+    "./desktop-local/task-reasoning/v1alpha1": {
+      "types": "./dist/desktop-local/task-reasoning/v1alpha1/index.d.ts",
+      "import": "./dist/desktop-local/task-reasoning/v1alpha1/index.js"
+    },
+    "./desktop-local/personal-model-management/v1alpha1": {
+      "types": "./dist/desktop-local/personal-model-management/v1alpha1/index.d.ts",
+      "import": "./dist/desktop-local/personal-model-management/v1alpha1/index.js"
+    },
+    "./desktop-local/personal-model-management/v1alpha2": {
+      "types": "./dist/desktop-local/personal-model-management/v1alpha2/index.d.ts",
+      "import": "./dist/desktop-local/personal-model-management/v1alpha2/index.js"
     },
     "./desktop-private/personal-credential-transport-v1": {
       "types": "./dist/desktop-private/personal-credential-transport-v1/index.d.ts",
@@ -23,6 +51,10 @@
     "./reasoning-mode/v1alpha1": {
       "types": "./dist/reasoning-mode/index.d.ts",
       "import": "./dist/reasoning-mode/index.js"
+    },
+    "./reasoning-mode/v1alpha2": {
+      "types": "./dist/reasoning-mode/v1alpha2/index.d.ts",
+      "import": "./dist/reasoning-mode/v1alpha2/index.js"
     },
     "./model-protocol/v1alpha2": {
       "types": "./dist/model-protocol/v1alpha2.d.ts",
@@ -36,6 +68,10 @@
       "types": "./dist/runtime-selection/v1alpha3/index.d.ts",
       "import": "./dist/runtime-selection/v1alpha3/index.js"
     },
+    "./runtime-selection/v1alpha4": {
+      "types": "./dist/runtime-selection/v1alpha4/index.d.ts",
+      "import": "./dist/runtime-selection/v1alpha4/index.js"
+    },
     "./runtime-selection/agent-definition/v1alpha2": {
       "types": "./dist/runtime-selection/agent-definition/v1alpha2/index.d.ts",
       "import": "./dist/runtime-selection/agent-definition/v1alpha2/index.js"
@@ -47,6 +83,10 @@
     "./submit-turn-coordination/v1alpha4": {
       "types": "./dist/submit-turn-coordination/v1alpha4/index.d.ts",
       "import": "./dist/submit-turn-coordination/v1alpha4/index.js"
+    },
+    "./submit-turn-coordination/v1alpha5": {
+      "types": "./dist/submit-turn-coordination/v1alpha5/index.d.ts",
+      "import": "./dist/submit-turn-coordination/v1alpha5/index.js"
     }
   },
   "files": ["dist"],

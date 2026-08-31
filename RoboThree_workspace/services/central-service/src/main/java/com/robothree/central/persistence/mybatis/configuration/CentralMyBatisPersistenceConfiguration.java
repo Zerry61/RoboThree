@@ -1,10 +1,14 @@
 package com.robothree.central.persistence.mybatis.configuration;
 
 import com.robothree.central.persistence.mybatis.adapter.MyBatisAuthenticationPersistence;
+import com.robothree.central.persistence.mybatis.adapter.MyBatisAdminModelStore;
+import com.robothree.central.persistence.mybatis.adapter.MyBatisAgentLifecycleStore;
 import com.robothree.central.persistence.mybatis.adapter.MyBatisConfigurationPersistence;
 import com.robothree.central.persistence.mybatis.adapter.MyBatisEnterpriseSessionPersistence;
 import com.robothree.central.persistence.mybatis.adapter.MyBatisModelInvocationPersistence;
 import com.robothree.central.persistence.mybatis.mapper.AuthenticationPersistenceMapper;
+import com.robothree.central.persistence.mybatis.mapper.AdminModelPersistenceMapper;
+import com.robothree.central.persistence.mybatis.mapper.AgentLifecyclePersistenceMapper;
 import com.robothree.central.persistence.mybatis.mapper.ConfigurationPersistenceMapper;
 import com.robothree.central.persistence.mybatis.mapper.EnterpriseSessionPersistenceMapper;
 import com.robothree.central.persistence.mybatis.mapper.ModelInvocationPersistenceMapper;
@@ -42,6 +46,17 @@ public class CentralMyBatisPersistenceConfiguration {
     MyBatisConfigurationPersistence myBatisConfigurationPersistence(
             ConfigurationPersistenceMapper mapper) {
         return new MyBatisConfigurationPersistence(mapper);
+    }
+
+    @Bean
+    MyBatisAdminModelStore myBatisAdminModelStore(AdminModelPersistenceMapper mapper) {
+        return new MyBatisAdminModelStore(mapper);
+    }
+
+    @Bean
+    MyBatisAgentLifecycleStore myBatisAgentLifecycleStore(
+            AgentLifecyclePersistenceMapper mapper) {
+        return new MyBatisAgentLifecycleStore(mapper);
     }
 
     @Bean

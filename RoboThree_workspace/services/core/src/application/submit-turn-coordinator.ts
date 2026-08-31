@@ -30,12 +30,30 @@ import type {
   TaskExecutionSelectionIdentity,
 } from "@robothree/contracts";
 import {
+  RuntimeSelectionSummaryV1Alpha4Schema,
+  SubmitTurnCommandV1Alpha4Schema,
+  SubmitTurnReceiptV1Alpha4Schema,
+  type RuntimeSelectionSummaryV1Alpha4,
+  type SubmitTurnCommandV1Alpha4,
+  type SubmitTurnReceiptV1Alpha4,
+} from "@robothree/contracts/desktop-local/v1alpha4";
+import {
+  SubmitTurnCommandV1Alpha5Schema,
+  type SubmitTurnCommandV1Alpha5,
+  type SubmitTurnReceiptV1Alpha5,
+} from "@robothree/contracts/desktop-local/v1alpha5";
+import {
   PersistedSubmitTurnReceiptV1Alpha3Schema,
-  ReadableSubmitTurnRecordSchema,
   SubmitTurnRecordV1Alpha3Schema,
-  type ReadablePersistedSubmitTurnReceipt,
-  type ReadableSubmitTurnRecord,
 } from "@robothree/contracts/submit-turn-coordination/v1alpha3";
+import {
+  type SubmitTurnRecordV1Alpha4,
+} from "@robothree/contracts/submit-turn-coordination/v1alpha4";
+import {
+  ReadableSubmitTurnRecordV1Alpha5Schema as ReadableSubmitTurnRecordSchema,
+  type ReadablePersistedSubmitTurnReceiptV1Alpha5 as ReadablePersistedSubmitTurnReceipt,
+  type ReadableSubmitTurnRecordV1Alpha5 as ReadableSubmitTurnRecord,
+} from "@robothree/contracts/submit-turn-coordination/v1alpha5";
 
 import type { AgentLoopStarter } from "../ports/agent-loop-starter.js";
 import type { Clock } from "../ports/clock.js";
@@ -53,6 +71,7 @@ import type {
 import type {
   PersistedAuthorizationAwareSubmitTurnTaskBundle,
   PersistedReasoningAwareAuthorizationSubmitTurnTaskBundle,
+  PersistedR2D3SubmitTurnTaskBundle,
   PersistedSubmitTurnTaskBundle,
   TaskPersistence,
 } from "../ports/task-persistence.js";
@@ -74,24 +93,37 @@ import {
 } from "./task-authorization-selection-service.js";
 import type { TaskAuthorizationRequest } from
   "./task-authorization-selection-service.js";
+import type { R2D3DurableAcceptancePlanner } from
+  "./r2d3-durable-acceptance-planner.js";
 
 export type SubmitTurnCoordinatorResult =
   | {
     ok: true;
-    receipt: SubmitTurnReceipt | SubmitTurnReceiptV1Alpha2 | SubmitTurnReceiptV1Alpha3;
+    receipt: SubmitTurnReceipt | SubmitTurnReceiptV1Alpha2 | SubmitTurnReceiptV1Alpha3
+      | SubmitTurnReceiptV1Alpha4 | SubmitTurnReceiptV1Alpha5;
   }
   | { ok: false; error: RuntimeError };
+
+export interface Dfi541SubmitTurnHandler {
+  submit(input: SubmitTurnCommandV1Alpha5): Promise<SubmitTurnCoordinatorResult>;
+  resume(submitTurnCommandId: string): Promise<SubmitTurnCoordinatorResult>;
+}
 
 type SubmitTurnCommandAny =
   | SubmitTurnCommand
   | SubmitTurnCommandV1Alpha2
-  | SubmitTurnCommandV1Alpha3;
+  | SubmitTurnCommandV1Alpha3
+  | SubmitTurnCommandV1Alpha4
+  | SubmitTurnCommandV1Alpha5;
 type PreparedSelection =
   | Extract<PreparedRuntimeSelectionResult, { ok: true }>["value"]
   | Extract<PreparedRuntimeSelectionV1Alpha2Result, { ok: true }>["value"];
 type PersistedReadableAuthorizationBundle =
   | PersistedAuthorizationAwareSubmitTurnTaskBundle
   | PersistedReasoningAwareAuthorizationSubmitTurnTaskBundle;
+type PersistedReasoningReceiptBundle =
+  | PersistedReasoningAwareAuthorizationSubmitTurnTaskBundle
+  | PersistedR2D3SubmitTurnTaskBundle;
 
 export type SubmitTurnCoordinatorFaultPoint =
   | "submit_turn.coordinator.after_plan_before_accept"
@@ -117,6 +149,10 @@ export class SubmitTurnCoordinator {
   readonly #authorizationPolicies: TaskAuthorizationModePolicyProvider;
   readonly #authorizationSelection: TaskAuthorizationSelectionService;
   readonly #faultInjector: SubmitTurnCoordinatorFaultInjector | undefined;
+  readonly #r2dCoreDeltaEnabled: boolean;
+  readonly #r2d3AcceptancePlanner: R2D3DurableAcceptancePlanner | undefined;
+  readonly #dfi541MaxEnabled: boolean;
+  readonly #dfi541SubmitHandler: Dfi541SubmitTurnHandler | undefined;
   readonly #mailboxes = new Map<string, Promise<void>>();
 
   constructor(input: {
@@ -131,6 +167,10 @@ export class SubmitTurnCoordinator {
     loopStarter: AgentLoopStarter;
     authorizationPolicies?: TaskAuthorizationModePolicyProvider;
     authorizationSelection?: TaskAuthorizationSelectionService;
+    r2dCoreDeltaEnabled?: boolean;
+    r2d3AcceptancePlanner?: R2D3DurableAcceptancePlanner;
+    dfi541MaxEnabled?: boolean;
+    dfi541SubmitHandler?: Dfi541SubmitTurnHandler;
     faultInjector?: SubmitTurnCoordinatorFaultInjector;
   }) {
     this.#clock = input.clock;
@@ -147,6 +187,16 @@ export class SubmitTurnCoordinator {
     this.#authorizationSelection = input.authorizationSelection
       ?? new TaskAuthorizationSelectionService();
     this.#faultInjector = input.faultInjector;
+    this.#r2dCoreDeltaEnabled = input.r2dCoreDeltaEnabled ?? false;
+    this.#r2d3AcceptancePlanner = input.r2d3AcceptancePlanner;
+    this.#dfi541MaxEnabled = input.dfi541MaxEnabled ?? false;
+    this.#dfi541SubmitHandler = input.dfi541SubmitHandler;
+    if (this.#r2dCoreDeltaEnabled && this.#r2d3AcceptancePlanner === undefined) {
+      throw new Error("R2D3 activation requires the complete durable acceptance planner");
+    }
+    if (this.#dfi541MaxEnabled && this.#dfi541SubmitHandler === undefined) {
+      throw new Error("DFI-5.4.1 activation requires the complete durable acceptance handler");
+    }
   }
 
   async submit(
@@ -197,10 +247,69 @@ export class SubmitTurnCoordinator {
         "validation",
       );
     }
-    return this.#enqueue(
-      parsed.data.commandId,
-      () => this.#submit(parsed.data, "v1alpha3"),
+    return this.#enqueue(parsed.data.commandId, () =>
+      this.#r2dCoreDeltaEnabled
+        ? this.#submitR2D3(parsed.data)
+        : this.#submit(parsed.data, "v1alpha3"));
+  }
+
+  async submitV1Alpha4(
+    input: SubmitTurnCommandV1Alpha4,
+  ): Promise<SubmitTurnCoordinatorResult> {
+    const parsed = SubmitTurnCommandV1Alpha4Schema.safeParse(input);
+    if (!parsed.success) {
+      return failed(
+        "submit_turn.invalid_command",
+        parsed.error.issues[0]?.message ?? "SubmitTurn command is invalid",
+        false,
+        "validation",
+      );
+    }
+    if (!this.#r2dCoreDeltaEnabled) {
+      return failed(
+        "contract.feature_unavailable",
+        "R2D SubmitTurn is unavailable in this runtime",
+        true,
+        "configuration",
+      );
+    }
+    const normalized = normalizeSubmitTurnV1Alpha4(parsed.data);
+    const result = await this.#enqueue(
+      normalized.commandId,
+      () => this.#submitR2D3(normalized),
     );
+    return result.ok
+      ? {
+        ok: true,
+        receipt: projectSubmitTurnReceiptV1Alpha4(
+          SubmitTurnReceiptV1Alpha3Schema.parse(result.receipt),
+        ),
+      }
+      : result;
+  }
+
+  async submitV1Alpha5(
+    input: SubmitTurnCommandV1Alpha5,
+  ): Promise<SubmitTurnCoordinatorResult> {
+    const parsed = SubmitTurnCommandV1Alpha5Schema.safeParse(input);
+    if (!parsed.success) {
+      return failed(
+        "submit_turn.invalid_command",
+        "SubmitTurn command is invalid",
+        false,
+        "validation",
+      );
+    }
+    if (!this.#dfi541MaxEnabled || this.#dfi541SubmitHandler === undefined) {
+      return failed(
+        "contract.feature_unavailable",
+        "Max SubmitTurn is unavailable in this runtime",
+        true,
+        "configuration",
+      );
+    }
+    return this.#enqueue(parsed.data.commandId, () =>
+      this.#dfi541SubmitHandler!.submit(parsed.data));
   }
 
   async resume(
@@ -216,8 +325,240 @@ export class SubmitTurnCoordinator {
           "persistence",
         );
       }
-      return this.#progress(record);
+      if (record.schemaVersion === "v1alpha5") {
+        return this.#dfi541SubmitHandler === undefined
+          ? failed("contract.feature_unavailable",
+            "Max SubmitTurn recovery is unavailable", true, "configuration")
+          : this.#dfi541SubmitHandler.resume(submitTurnCommandId);
+      }
+      return record.schemaVersion === "v1alpha4"
+        ? this.#progressR2D3(record)
+        : this.#progress(record);
     });
+  }
+
+  async #submitR2D3(
+    command: SubmitTurnCommandV1Alpha3,
+  ): Promise<SubmitTurnCoordinatorResult> {
+    const requestDigest = sha256CanonicalJson(JsonValueSchema.parse(command));
+    const existingByCommand = await this.#coordination.loadRecord(command.commandId);
+    const existingByClientTurn = await this.#coordination
+      .loadRecordByClientTurnId(command.clientTurnId);
+    const existing = existingByCommand ?? existingByClientTurn;
+    if (existing !== undefined) {
+      if (
+        existing.schemaVersion !== "v1alpha4"
+        || existing.submitTurnCommandId !== command.commandId
+        || existing.clientTurnId !== command.clientTurnId
+        || existing.requestDigest !== requestDigest
+      ) return r2dConflict();
+      return this.#progressR2D3(existing, true);
+    }
+    const session = await this.#sessions.loadDesktopSession(command.sessionId);
+    if (session === undefined || session.summary.tombstoned) {
+      return failed(
+        "submit_turn.session_unavailable",
+        "Desktop Session is missing or tombstoned",
+        false,
+        "validation",
+      );
+    }
+    if (await this.#conversation.loadSession(session.internalSessionId) === undefined) {
+      return failed(
+        "submit_turn.session_integrity",
+        "Desktop Session does not reference a Conversation SessionHead",
+        false,
+        "persistence",
+      );
+    }
+    const planned = await this.#r2d3AcceptancePlanner!.prepare({
+      command,
+      requestDigest,
+      internalSessionId: session.internalSessionId,
+    });
+    if (!planned.ok) return planned;
+    const plan = planned.value.envelope.acceptedPlan;
+    const userMessage = {
+      schemaVersion: "v1alpha1" as const,
+      role: "user" as const,
+      content: [{ type: "text" as const, text: command.userInput }],
+    };
+    const messageIntent = await this.#conversation.prepareMessage({
+      messageId: plan.userMessageId,
+      sessionId: plan.internalSessionId,
+      taskId: plan.internalTaskId,
+      messageDigest: sha256CanonicalJson(JsonValueSchema.parse(userMessage)),
+      message: userMessage,
+      createdAt: plan.acceptedAt,
+    });
+    if (!messageIntent.ok) return { ok: false, error: messageIntent.error };
+    this.#faultInjector?.("submit_turn.coordinator.after_plan_before_accept");
+    const accepted = await this.#coordination.prepareAcceptedR2D3(
+      planned.value.envelope,
+    );
+    if (!accepted.ok) return { ok: false, error: accepted.error };
+    return this.#progressR2D3(requireR2D3Record(accepted.value));
+  }
+
+  async #progressR2D3(
+    initial: SubmitTurnRecordV1Alpha4,
+    replayResponse = false,
+  ): Promise<SubmitTurnCoordinatorResult> {
+    let record = initial;
+    while (true) {
+      const envelope = await this.#coordination.loadR2D3Envelope(
+        record.submitTurnCommandId,
+      );
+      if (envelope === undefined) {
+        return failed(
+          "r2d.acceptance_plan_unavailable",
+          "任务运行配置暂不可用",
+          false,
+          "persistence",
+        );
+      }
+      record = envelope.record;
+      const plan = envelope.acceptedPlan;
+      if (record.status === "failed_terminal") {
+        const receipt = await this.#coordination.loadReceipt(
+          record.submitTurnCommandId,
+        );
+        return receipt === undefined
+          ? failed("submit_turn.receipt_missing", "terminal receipt is missing", false,
+            "persistence")
+          : { ok: true, receipt: publicReceipt(receipt, replayResponse) };
+      }
+      if (record.status === "accepted") {
+        const appended = await this.#conversation.appendPreparedMessage(
+          plan.userMessageId,
+          plan.acceptedAt,
+        );
+        if (!appended.ok) return { ok: false, error: appended.error };
+        this.#faultInjector?.("submit_turn.coordinator.after_message_append");
+        const transitioned = await this.#coordination.transition(
+          parseReadableRecord({
+            ...record,
+            status: "message_appended",
+            updatedAt: this.#clock.now(),
+          }),
+          "accepted",
+        );
+        if (!transitioned.ok) return { ok: false, error: transitioned.error };
+        record = requireR2D3Record(transitioned.value);
+        continue;
+      }
+      if (record.status === "message_appended") {
+        const message = await this.#conversation.loadMessageById(plan.userMessageId);
+        if (message === undefined
+          || message.envelope.sessionId !== plan.internalSessionId
+          || message.envelope.taskId !== plan.internalTaskId
+          || message.message.role !== "user") {
+          return failed("submit_turn.message_integrity", "persisted user message is invalid",
+            false, "persistence");
+        }
+        const task = createInitialPersistedTask({
+          taskId: plan.internalTaskId,
+          sessionId: plan.internalSessionId,
+          agentDefinition: {
+            agentDefinitionId: plan.exactAgent.agentDefinitionId,
+            version: plan.exactAgent.revision,
+          },
+          goal: message.message.content.map((part) => part.text).join("\n"),
+          createdAt: plan.acceptedAt,
+        }, plan.initialCheckpointId);
+        if (task.head.initializationDigest !== plan.taskHead.initializationDigest
+          || task.checkpoint.stateDigest !== plan.initialTaskStateDigest) {
+          return failed("r2d.acceptance_plan_invalid", "任务运行配置无法验证", false,
+            "persistence");
+        }
+        const committed = await this.#tasks.commitR2D3SubmitTurnTaskBundle({
+          submitTurnCommandId: plan.submitTurnCommandId,
+          userMessageId: plan.userMessageId,
+          task,
+          capabilityLocks: plan.capabilityLocks,
+          runtimeSelection: plan.runtimeSelection,
+          selection: plan.authorizationSelection,
+          executionIdentity: plan.executionSelectionIdentity,
+          submitTurnBinding: plan.submitTurnBinding,
+          taskInstructionBinding: plan.taskInstructionBinding,
+          committedAt: plan.acceptedAt,
+        });
+        if (!committed.ok) return { ok: false, error: committed.error };
+        this.#faultInjector?.("submit_turn.coordinator.after_task_bundle");
+        const transitioned = await this.#coordination.transition(
+          parseReadableRecord({
+            ...record,
+            status: "task_committed",
+            updatedAt: this.#clock.now(),
+          }),
+          "message_appended",
+        );
+        if (!transitioned.ok) return { ok: false, error: transitioned.error };
+        record = requireR2D3Record(transitioned.value);
+        continue;
+      }
+      if (record.status === "task_committed") {
+        const bundle = await this.#tasks.loadR2D3SubmitTurnTaskBundle(
+          record.submitTurnCommandId,
+        );
+        if (bundle === undefined
+          || bundle.binding.bundleDigest !== plan.submitTurnBinding.bundleDigest
+          || bundle.taskInstructionBinding.bindingDigest
+            !== plan.taskInstructionBinding.bindingDigest
+          || bundle.runtimeSelection.selectionDigest
+            !== plan.runtimeSelection.selectionDigest) {
+          return failed("r2d.task_bundle_invalid", "任务配置无法验证", false,
+            "persistence");
+        }
+        const completedAt = this.#clock.now();
+        const receipt = acceptedReceiptR2D3(record, bundle, completedAt);
+        const completedRecord = requireR2D3Record(parseReadableRecord({
+          ...record,
+          status: "completed",
+          updatedAt: completedAt,
+        }));
+        const completed = await this.#coordination.complete({
+          record: completedRecord,
+          expectedStatus: "task_committed",
+          receipt,
+          delivery: acceptedDelivery(
+            record,
+            completedAt,
+            plan.preallocatedDeliveryId,
+          ),
+        });
+        if (!completed.ok) return { ok: false, error: completed.error };
+        this.#faultInjector?.("submit_turn.coordinator.after_completion");
+        record = completedRecord;
+        continue;
+      }
+      const receipt = await this.#coordination.loadReceipt(
+        record.submitTurnCommandId,
+      );
+      if (receipt === undefined) {
+        return failed("submit_turn.receipt_missing", "completed receipt is missing", false,
+          "persistence");
+      }
+      if (record.loopStartedAt === undefined && receipt.status === "accepted") {
+        try {
+          await this.#loopStarter.start({
+            submitTurnCommandId: record.submitTurnCommandId,
+            taskId: record.internalTaskId,
+            runtimeSelectionId: record.internalRuntimeSelectionId,
+            sessionId: record.internalSessionId,
+            userMessageId: record.internalUserMessageId,
+          });
+          this.#faultInjector?.("submit_turn.coordinator.after_loop_start");
+          await this.#coordination.markLoopStarted(
+            record.submitTurnCommandId,
+            this.#clock.now(),
+          );
+        } catch {
+          // The completed receipt is durable; recovery retries the idempotent starter.
+        }
+      }
+      return { ok: true, receipt: publicReceipt(receipt, replayResponse) };
+    }
   }
 
   async #submit(
@@ -972,6 +1313,29 @@ function acceptedReceipt(
   });
 }
 
+function acceptedReceiptR2D3(
+  record: SubmitTurnRecordV1Alpha4,
+  bundle: PersistedR2D3SubmitTurnTaskBundle,
+  completedAt: string,
+): ReadablePersistedSubmitTurnReceipt {
+  return PersistedSubmitTurnReceiptV1Alpha3Schema.parse({
+    contractVersion: "v1alpha3",
+    submitTurnCommandId: record.submitTurnCommandId,
+    clientTurnId: record.clientTurnId,
+    userMessageId: publicId("message", record.internalUserMessageId),
+    taskId: publicId("task", record.internalTaskId),
+    runtimeSelectionId: publicId(
+      "runtime-selection",
+      record.internalRuntimeSelectionId,
+    ),
+    status: "accepted",
+    runtimeSelectionSummary: selectionSummaryV1Alpha3(bundle),
+    acceptedAt: record.createdAt,
+    requestDigest: record.requestDigest,
+    completedAt,
+  });
+}
+
 function isReasoningPersistedBundle(
   bundle: PersistedReadableAuthorizationBundle,
 ): bundle is PersistedReasoningAwareAuthorizationSubmitTurnTaskBundle {
@@ -1070,7 +1434,7 @@ function selectionSummary(
 }
 
 function selectionSummaryV1Alpha3(
-  bundle: PersistedReasoningAwareAuthorizationSubmitTurnTaskBundle,
+  bundle: PersistedReasoningReceiptBundle,
 ): RuntimeSelectionSummaryV1Alpha3 {
   const authorization = validatePersistedAuthorizationPlan({
     selection: bundle.selection,
@@ -1104,7 +1468,9 @@ function selectionSummaryV1Alpha3(
           resolutionReason: "capability_unknown" as const,
         };
   return RuntimeSelectionSummaryV1Alpha3Schema.parse({
-    ...selectionSummary(bundle),
+    ...(isR2D3PersistedBundle(bundle)
+      ? selectionSummaryR2D3(bundle)
+      : selectionSummary(bundle)),
     resolvedAuthorization: {
       requestedMode: bundle.selection.requestedMode,
       resolvedMode: bundle.selection.resolvedMode,
@@ -1120,6 +1486,131 @@ function selectionSummaryV1Alpha3(
       reasoningModeLockId: lock.reasoningModeLockId,
       reasoningModeLockDigest: lock.reasoningModeLockDigest,
     },
+  });
+}
+
+export function normalizeSubmitTurnV1Alpha4(
+  command: SubmitTurnCommandV1Alpha4,
+): SubmitTurnCommandV1Alpha3 {
+  return SubmitTurnCommandV1Alpha3Schema.parse({
+    contractVersion: "v1alpha3",
+    commandId: command.commandId,
+    correlationId: command.correlationId,
+    clientInstanceId: command.clientInstanceId,
+    type: "submit_turn",
+    clientTurnId: command.clientTurnId,
+    sessionId: command.sessionId,
+    userInput: command.userInput,
+    selectionRequest: {
+      agentId: command.selectionRequest.agentId,
+      ...(command.selectionRequest.requestedModelId === undefined
+        ? {}
+        : { requestedModelId: command.selectionRequest.requestedModelId }),
+      selectedSkillIds: command.selectionRequest.selectedSkillIds,
+      selectedKnowledgeIds: command.selectionRequest.selectedKnowledgeIds,
+      ...(command.selectionRequest.workspaceGrantId === undefined
+        ? {}
+        : { workspaceGrantId: command.selectionRequest.workspaceGrantId }),
+      authorizationPreference: command.selectionRequest.authorizationPreference,
+      reasoningPreference: { requestedMode: "default" },
+    },
+  });
+}
+
+export function projectSubmitTurnReceiptV1Alpha4(
+  receipt: Readonly<{
+    submitTurnCommandId: string;
+    clientTurnId: string;
+    userMessageId: string;
+    taskId: string;
+    runtimeSelectionId: string;
+    status: "accepted" | "replayed" | "rejected";
+    runtimeSelectionSummary?: SubmitTurnReceiptV1Alpha3["runtimeSelectionSummary"];
+    acceptedAt: string;
+  }>,
+): SubmitTurnReceiptV1Alpha4 {
+  const summary = receipt.runtimeSelectionSummary;
+  const projectedSummary: RuntimeSelectionSummaryV1Alpha4 | undefined = summary === undefined
+    ? undefined
+    : RuntimeSelectionSummaryV1Alpha4Schema.parse({
+      runtimeSelectionId: summary.runtimeSelectionId,
+      digest: summary.digest,
+      agent: summary.agent,
+      ...(summary.requestedModelId === undefined
+        ? {}
+        : { requestedModelId: summary.requestedModelId }),
+      resolvedModel: summary.resolvedModel,
+      activeSkills: summary.activeSkills,
+      allowedTools: summary.allowedTools,
+      knowledge: summary.knowledge,
+      ...(summary.workspaceGrantId === undefined
+        ? {}
+        : { workspaceGrantId: summary.workspaceGrantId }),
+      ...(summary.enterpriseConfigRevision === undefined
+        ? {}
+        : { enterpriseConfigRevision: summary.enterpriseConfigRevision }),
+      resolvedAuthorization: summary.resolvedAuthorization,
+      executionSelectionDigest: summary.executionSelectionDigest,
+    });
+  return SubmitTurnReceiptV1Alpha4Schema.parse({
+    contractVersion: "v1alpha4",
+    submitTurnCommandId: receipt.submitTurnCommandId,
+    clientTurnId: receipt.clientTurnId,
+    userMessageId: receipt.userMessageId,
+    taskId: receipt.taskId,
+    runtimeSelectionId: receipt.runtimeSelectionId,
+    status: receipt.status,
+    ...(projectedSummary === undefined ? {} : { runtimeSelectionSummary: projectedSummary }),
+    acceptedAt: receipt.acceptedAt,
+  });
+}
+
+function isR2D3PersistedBundle(
+  bundle: PersistedReasoningReceiptBundle,
+): bundle is PersistedR2D3SubmitTurnTaskBundle {
+  return bundle.runtimeSelection.schemaVersion === "v1alpha3";
+}
+
+function selectionSummaryR2D3(
+  bundle: PersistedR2D3SubmitTurnTaskBundle,
+): RuntimeSelectionSummary {
+  const selection = bundle.runtimeSelection;
+  const locks = new Map(bundle.capabilityLocks.map((lock) => [lock.lockId, lock]));
+  const modelLock = locks.get(selection.resolvedModelLock.lockId);
+  if (modelLock === undefined) throw new Error("R2D3 Model lock is missing");
+  return RuntimeSelectionSummarySchema.parse({
+    runtimeSelectionId: publicId("runtime-selection", selection.runtimeSelectionId),
+    digest: selection.selectionDigest,
+    agent: { id: selection.agent.agentDefinitionId, revision: selection.agent.revision },
+    // The v1alpha3 Desktop receipt still requires this legacy projection field.
+    // Runtime Selection v1alpha3 remains authoritative and does not bind an Agent default.
+    defaultModelId: selection.resolvedModelLock.capabilityId,
+    ...(selection.requestedModelId === undefined
+      ? {}
+      : { requestedModelId: selection.requestedModelId }),
+    resolvedModel: {
+      id: selection.resolvedModelLock.capabilityId,
+      revision: modelLock.definitionSnapshot.revision,
+    },
+    activeSkills: selection.activeSkillRevisions.map((reference) => ({
+      id: reference.skillId,
+      revision: reference.revision,
+    })),
+    allowedTools: selection.toolLocks.map((reference) => {
+      const lock = locks.get(reference.lockId);
+      if (lock === undefined) throw new Error("R2D3 Tool lock is missing");
+      return { id: reference.capabilityId, revision: lock.definitionSnapshot.revision };
+    }),
+    knowledge: selection.knowledgeRevisions.map((reference) => ({
+      id: reference.knowledgeId,
+      revision: reference.revision,
+    })),
+    ...(selection.workspaceGrantId === undefined
+      ? {}
+      : { workspaceGrantId: selection.workspaceGrantId }),
+    ...(selection.enterpriseConfigRevision === undefined
+      ? {}
+      : { enterpriseConfigRevision: selection.enterpriseConfigRevision }),
   });
 }
 
@@ -1361,6 +1852,24 @@ function idempotencyConflict(): SubmitTurnCoordinatorResult {
     false,
     "persistence",
   );
+}
+
+function r2dConflict(): SubmitTurnCoordinatorResult {
+  return failed(
+    "r2d.acceptance_conflict",
+    "该请求与已接受任务不一致",
+    false,
+    "persistence",
+  );
+}
+
+function requireR2D3Record(
+  input: ReadableSubmitTurnRecord,
+): SubmitTurnRecordV1Alpha4 {
+  if (input.schemaVersion !== "v1alpha4") {
+    throw new Error("R2D3 coordination unexpectedly changed schema version");
+  }
+  return input;
 }
 
 function failed(

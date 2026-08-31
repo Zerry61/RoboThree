@@ -15,12 +15,20 @@ import {
 } from "../shared/foundation-api.js";
 import { CorePrivateClient } from "./core-private-client.js";
 import { PersonalCredentialBrokerClient } from "./personal-credential-broker-client.js";
+import type { SensitiveTransportActivationDescriptor } from
+  "../shared/sensitive-transport-activation.js";
 
 const START_TIMEOUT_MS = 8_000;
 const STOP_TIMEOUT_MS = 3_000;
 const STOP_KILL_GRACE_MS = 1_000;
 const RESTART_DELAY_MS = 150;
 const STDERR_LIMIT_BYTES = 4_096;
+const INTERNAL_TRIAL_DEPLOYMENT_ENV =
+  "ROBOTHREE_INTERNAL_TRIAL_ENTERPRISE_MODEL_DEPLOYMENT" as const;
+const INTERNAL_TRIAL_TOKEN_ENV =
+  "ROBOTHREE_INTERNAL_TRIAL_ENTERPRISE_ACCESS_TOKEN" as const;
+const INTERNAL_TRIAL_AGENT_LIFECYCLE_TOKEN_ENV =
+  "ROBOTHREE_INTERNAL_TRIAL_AGENT_LIFECYCLE_ACCESS_TOKEN" as const;
 
 type CoreReadyMessage = Readonly<{
   type: "desktop.core.ready";
@@ -30,17 +38,53 @@ type CoreReadyMessage = Readonly<{
   coreVersion: string;
 }>;
 
-type SpawnCoreChild = (entryPath: string) => ChildProcess;
+type SpawnCoreChild = (
+  entryPath: string,
+  internalTrial?: InternalTrialCoreEnvironmentLease,
+) => ChildProcess;
 type CreateCoreClient = (input: {
   baseUrl: string;
   authorizationToken: string;
 }) => CorePrivateClient;
 type Wait = (milliseconds: number) => Promise<void>;
+type Fetch = typeof globalThis.fetch;
+export type InternalTrialCoreEnvironmentLease = Readonly<{
+  deployment?: string;
+  accessToken?: Buffer;
+  agentLifecycleAccessToken?: Buffer;
+}>;
+type Dfi543TestHarness = Readonly<{
+  credentialHelperDescriptor: Readonly<{
+    helperPath: string;
+    packageRootPath: string;
+    manifestSha256: `sha256:${string}`;
+    protocolVersion: "personal-keychain-helper.v1";
+    activation: "test_isolated";
+    testKeychainPath: string;
+  }>;
+  providerCaPem: string;
+  providerPort: number;
+}>;
+
+export type ProductionPersonalCredentialHelperDescriptor = Readonly<{
+  helperPath: string;
+  packageRootPath: string;
+  manifestSha256: `sha256:${string}`;
+  protocolVersion: "personal-keychain-helper.v1";
+  activation: "production_verified";
+  designatedRequirement: string;
+  teamIdentifier: string;
+}>;
 
 export class CorePrivateSupervisor {
   readonly #entryPath: string;
   readonly #databasePath: string;
-  readonly #demoMode: "dcf2c" | undefined;
+  readonly #demoMode: "dcf2c" | "legacy_test" | undefined;
+  readonly #credentialHelperDescriptor:
+    ProductionPersonalCredentialHelperDescriptor | undefined;
+  readonly #dfi543TestHarness: Dfi543TestHarness | undefined;
+  readonly #sensitiveTransportActivationDescriptor:
+    SensitiveTransportActivationDescriptor | undefined;
   readonly #maxUnexpectedRestarts: number;
   readonly #startTimeoutMs: number;
   readonly #stopTimeoutMs: number;
@@ -48,7 +92,9 @@ export class CorePrivateSupervisor {
   readonly #spawnChild: SpawnCoreChild;
   readonly #createClient: CreateCoreClient;
   readonly #wait: Wait;
+  readonly #fetch: Fetch;
   readonly #createAuthorizationToken: () => string;
+  readonly #internalTrialEnvironment: InternalTrialCoreEnvironmentLease | undefined;
   readonly #clientInstanceId = randomUUID();
   #child: ChildProcess | undefined;
   #client: CorePrivateClient | undefined;
@@ -66,7 +112,10 @@ export class CorePrivateSupervisor {
   constructor(input: {
     entryPath: string;
     databasePath: string;
-    demoMode?: "dcf2c";
+    demoMode?: "dcf2c" | "legacy_test";
+    credentialHelperDescriptor?: ProductionPersonalCredentialHelperDescriptor;
+    dfi543TestHarness?: Dfi543TestHarness;
+    sensitiveTransportActivationDescriptor?: SensitiveTransportActivationDescriptor;
     maxUnexpectedRestarts?: number;
     dependencies?: {
       startTimeoutMs?: number;
@@ -75,22 +124,34 @@ export class CorePrivateSupervisor {
       spawnChild?: SpawnCoreChild;
       createClient?: CreateCoreClient;
       wait?: Wait;
+      fetch?: Fetch;
       createAuthorizationToken?: () => string;
     };
   }) {
     this.#entryPath = input.entryPath;
     this.#databasePath = input.databasePath;
     this.#demoMode = input.demoMode;
+    this.#credentialHelperDescriptor = input.credentialHelperDescriptor;
+    this.#dfi543TestHarness = input.dfi543TestHarness;
+    this.#sensitiveTransportActivationDescriptor =
+      input.sensitiveTransportActivationDescriptor;
     this.#maxUnexpectedRestarts = input.maxUnexpectedRestarts ?? 1;
     this.#startTimeoutMs = input.dependencies?.startTimeoutMs ?? START_TIMEOUT_MS;
     this.#stopTimeoutMs = input.dependencies?.stopTimeoutMs ?? STOP_TIMEOUT_MS;
     this.#restartDelayMs = input.dependencies?.restartDelayMs ?? RESTART_DELAY_MS;
-    this.#spawnChild = input.dependencies?.spawnChild ?? spawnCoreChild;
+    this.#internalTrialEnvironment = captureInternalTrialCoreEnvironment(process.env);
+    this.#spawnChild = input.dependencies?.spawnChild
+      ?? ((entryPath, internalTrial) => spawnCoreChild(
+        entryPath,
+        input.dfi543TestHarness !== undefined,
+        internalTrial,
+      ));
     this.#createClient = input.dependencies?.createClient
       ?? ((clientInput) => new CorePrivateClient(clientInput));
     this.#wait = input.dependencies?.wait ?? (async (milliseconds) => {
       await delay(milliseconds);
     });
+    this.#fetch = input.dependencies?.fetch ?? globalThis.fetch;
     this.#createAuthorizationToken = input.dependencies?.createAuthorizationToken
       ?? (() => randomBytes(32).toString("base64url"));
   }
@@ -178,6 +239,8 @@ export class CorePrivateSupervisor {
       const child = this.#detachActiveChild();
       await this.#shutdownChild(child);
       await Promise.allSettled(pending);
+      this.#internalTrialEnvironment?.accessToken?.fill(0);
+      this.#internalTrialEnvironment?.agentLifecycleAccessToken?.fill(0);
       this.#state = "stopped";
     })();
     this.#stopPromise = operation;
@@ -263,7 +326,11 @@ export class CorePrivateSupervisor {
   async #launch(state: "starting" | "restarting"): Promise<void> {
     this.#state = state;
     const authorizationToken = this.#createAuthorizationToken();
-    const child = this.#spawnChild(this.#entryPath);
+    const internalTrialEnvironment = await resolveInternalTrialCoreEnvironment(
+      this.#internalTrialEnvironment,
+      this.#fetch,
+    );
+    const child = this.#spawnChild(this.#entryPath, internalTrialEnvironment);
     this.#child = child;
     const sensitiveChannelInstanceId = randomUUID();
     const sensitiveStreams = getSensitiveStreams(child);
@@ -303,6 +370,18 @@ export class CorePrivateSupervisor {
         ...(this.#demoMode === undefined
           ? {}
           : { demoMode: this.#demoMode }),
+        ...(this.#credentialHelperDescriptor === undefined
+          ? {}
+          : { credentialHelperDescriptor: this.#credentialHelperDescriptor }),
+        ...(this.#dfi543TestHarness === undefined
+          ? {}
+          : { dfi543TestHarness: this.#dfi543TestHarness }),
+        ...(this.#sensitiveTransportActivationDescriptor === undefined
+          ? {}
+          : {
+            sensitiveTransportActivationDescriptor:
+              this.#sensitiveTransportActivationDescriptor,
+          }),
       })) {
         throw new Error("Local Core IPC channel is unavailable during startup");
       }
@@ -426,17 +505,180 @@ export type CorePrivateConnectionLease = Readonly<{
   transportClientInstanceId: string;
 }>;
 
-function spawnCoreChild(entryPath: string): ChildProcess {
+function spawnCoreChild(
+  entryPath: string,
+  testHarness = false,
+  internalTrial?: InternalTrialCoreEnvironmentLease,
+): ChildProcess {
   return fork(entryPath, [], {
     cwd: dirname(entryPath),
     env: {
       ELECTRON_RUN_AS_NODE: "1",
-      NODE_ENV: "production",
+      NODE_ENV: testHarness ? "test" : "production",
+      ...(internalTrial?.deployment === undefined
+        ? {}
+        : { [INTERNAL_TRIAL_DEPLOYMENT_ENV]: internalTrial.deployment }),
+      ...(internalTrial?.accessToken === undefined
+        ? {}
+        : { [INTERNAL_TRIAL_TOKEN_ENV]: internalTrial.accessToken.toString("utf8") }),
+      ...(internalTrial?.agentLifecycleAccessToken === undefined
+        ? {}
+        : {
+          [INTERNAL_TRIAL_AGENT_LIFECYCLE_TOKEN_ENV]:
+            internalTrial.agentLifecycleAccessToken.toString("utf8"),
+        }),
     },
     execArgv: [],
     serialization: "json",
     stdio: ["ignore", "ignore", "pipe", "ipc", "pipe", "pipe"],
   });
+}
+
+function captureInternalTrialCoreEnvironment(
+  environment: NodeJS.ProcessEnv,
+): InternalTrialCoreEnvironmentLease | undefined {
+  const deployment = environment[INTERNAL_TRIAL_DEPLOYMENT_ENV];
+  const token = environment[INTERNAL_TRIAL_TOKEN_ENV];
+  const agentLifecycleToken = environment[INTERNAL_TRIAL_AGENT_LIFECYCLE_TOKEN_ENV];
+  delete environment[INTERNAL_TRIAL_DEPLOYMENT_ENV];
+  delete environment[INTERNAL_TRIAL_TOKEN_ENV];
+  delete environment[INTERNAL_TRIAL_AGENT_LIFECYCLE_TOKEN_ENV];
+  if (deployment === undefined && token === undefined && agentLifecycleToken === undefined) {
+    return undefined;
+  }
+  // The supervisor supports stop/start reuse, so this privileged lease has the
+  // Main-process lifetime and is never projected through IPC or Renderer.
+  return Object.freeze({
+    ...(deployment === undefined ? {} : { deployment }),
+    ...(token === undefined ? {} : { accessToken: Buffer.from(token, "utf8") }),
+    ...(agentLifecycleToken === undefined
+      ? {}
+      : { agentLifecycleAccessToken: Buffer.from(agentLifecycleToken, "utf8") }),
+  });
+}
+
+export async function resolveInternalTrialCoreEnvironment(
+  lease: InternalTrialCoreEnvironmentLease | undefined,
+  fetchImpl: Fetch,
+): Promise<InternalTrialCoreEnvironmentLease | undefined> {
+  if (lease?.deployment === undefined) return lease;
+  const discovery = parseAdminModelDiscoveryRequest(lease.deployment);
+  if (discovery === undefined) return lease;
+  if (lease.accessToken === undefined) return undefined;
+  const origin = validateInternalTrialCentralOrigin(discovery.centralBaseUrl);
+  try {
+    const response = await fetchImpl(new URL(
+      "/internal-trial/v1/admin-models/default",
+      origin,
+    ), {
+      method: "GET",
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${lease.accessToken.toString("utf8")}`,
+      },
+      redirect: "error",
+      cache: "no-store",
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (response.status !== 200) {
+      await response.body?.cancel();
+      return undefined;
+    }
+    const declaredLength = response.headers.get("content-length");
+    if (declaredLength !== null && Number(declaredLength) > 32_768) {
+      await response.body?.cancel();
+      return undefined;
+    }
+    const body = await response.text();
+    if (Buffer.byteLength(body, "utf8") > 32_768) return undefined;
+    const model = parseAdminModelDiscoveryResponse(body);
+    return Object.freeze({
+      deployment: JSON.stringify({ ...model, centralBaseUrl: origin.toString() }),
+      accessToken: lease.accessToken,
+    });
+  } catch {
+    return undefined;
+  }
+}
+
+function parseAdminModelDiscoveryRequest(
+  encoded: string,
+): Readonly<{ centralBaseUrl: string }> | undefined {
+  if (Buffer.byteLength(encoded, "utf8") > 16_384) return undefined;
+  try {
+    const value = JSON.parse(encoded) as unknown;
+    if (!isRecord(value)
+      || !hasExactKeys(value, ["centralBaseUrl", "schemaVersion"])
+      || value.schemaVersion !== "mvp-admin-vs1.discovery.v1"
+      || typeof value.centralBaseUrl !== "string") return undefined;
+    return Object.freeze({ centralBaseUrl: value.centralBaseUrl });
+  } catch {
+    return undefined;
+  }
+}
+
+function parseAdminModelDiscoveryResponse(encoded: string): Readonly<{
+  schemaVersion: "mvp-admin-vs1.internal-trial.v1";
+  configurationRevision: string;
+  modelId: string;
+  modelCreatedAt: string;
+  displayName: string;
+  supportsToolCalling: true;
+}> {
+  const value = JSON.parse(encoded) as unknown;
+  if (!isRecord(value)
+    || !hasExactKeys(value, [
+      "configurationRevision",
+      "displayName",
+      "modelCreatedAt",
+      "modelId",
+      "schemaVersion",
+      "supportsToolCalling",
+    ])
+    || value.schemaVersion !== "mvp-admin-vs1.internal-trial.v1"
+    || typeof value.configurationRevision !== "string"
+    || !/^sha256:[a-f0-9]{64}$/u.test(value.configurationRevision)
+    || typeof value.modelId !== "string"
+    || !/^model\.[A-Za-z0-9._:-]{1,154}$/u.test(value.modelId)
+    || typeof value.modelCreatedAt !== "string"
+    || Number.isNaN(Date.parse(value.modelCreatedAt))
+    || typeof value.displayName !== "string"
+    || value.displayName.trim().length === 0
+    || value.displayName.length > 160
+    || value.supportsToolCalling !== true) {
+    throw new Error("Admin-managed internal-trial model discovery is invalid");
+  }
+  return Object.freeze({
+    schemaVersion: value.schemaVersion,
+    configurationRevision: value.configurationRevision,
+    modelId: value.modelId,
+    modelCreatedAt: value.modelCreatedAt,
+    displayName: value.displayName.trim(),
+    supportsToolCalling: true,
+  });
+}
+
+function validateInternalTrialCentralOrigin(value: string): URL {
+  const origin = new URL(value);
+  const loopback = origin.protocol === "http:"
+    && (origin.hostname === "127.0.0.1" || origin.hostname === "localhost");
+  if (origin.protocol !== "https:" && !loopback) throw new Error("invalid Central origin");
+  if (origin.username !== "" || origin.password !== ""
+    || origin.search !== "" || origin.hash !== ""
+    || (origin.pathname !== "" && origin.pathname !== "/")) {
+    throw new Error("invalid Central origin");
+  }
+  return origin;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function hasExactKeys(value: Record<string, unknown>, expected: string[]): boolean {
+  const actual = Object.keys(value).sort();
+  return actual.length === expected.length
+    && actual.every((key, index) => key === expected[index]);
 }
 
 function getSensitiveStreams(

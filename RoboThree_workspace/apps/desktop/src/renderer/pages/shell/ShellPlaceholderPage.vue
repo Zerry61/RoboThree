@@ -17,7 +17,7 @@
           <R3EmptyState
             v-if="state === 'empty'"
             title="暂无内容"
-            description="此页面等待后续批次接入真实 Projection 或明确 Mock 数据。"
+            description="此页面功能尚未开放。"
             icon="0"
           />
         </div>

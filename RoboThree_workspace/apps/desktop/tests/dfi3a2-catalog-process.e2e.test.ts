@@ -18,6 +18,7 @@ describe("DFI-3A.2 Desktop Main/Preload Catalog process chain", () => {
         import.meta.url,
       )),
       databasePath: join(directory, "robothree.sqlite"),
+      demoMode: "legacy_test",
       maxUnexpectedRestarts: 0,
     });
     try {
@@ -51,7 +52,9 @@ describe("DFI-3A.2 Desktop Main/Preload Catalog process chain", () => {
         ok: true,
         value: {
           contractVersion: "v1alpha2",
-          items: [expect.objectContaining({ robotId: "agent.general" })],
+          items: [expect.objectContaining({
+            robotId: "agent.fixture.desktop-scripted",
+          })],
         },
       });
 

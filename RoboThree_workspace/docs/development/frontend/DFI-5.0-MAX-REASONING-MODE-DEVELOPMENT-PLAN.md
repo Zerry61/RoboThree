@@ -1,11 +1,15 @@
 # DFI-5.0 Max Reasoning Mode 详细实施方案
 
-> 状态：**PLAN REVIEW PASS/CLOSED；DFI-5.1 PASS/CLOSED；DFI-5.2 PLAN REVIEW PASS/CLOSED；DFI-5.2.1 PASS/CLOSED；DFI-5.2.2 DOCUMENT REVIEW PENDING / CODING GATED**  
+> 状态：**DFI-5.0～DFI-5.4 PASS/CLOSED；DFI-5 全阶段 PASS/CLOSED**
 > 日期：2026-08-25  
 > 负责人：Codex 5.6  
-> 产品上游：PRD v1.6 Final Revision 12、Frontend Experience Spec Revision 14、Model Experience Spec Revision 3、MVP 功能基线  
+> 产品上游：PRD v1.6 Final Revision 15、Frontend Experience Spec Revision 16、Model Experience Spec Revision 4、MVP 功能基线
 > 工程上游：DFI-3A、DFI-4A.3、DFI-4A.3.1 repair.2 均 `PASS/CLOSED`  
-> 评审结论：独立文档复核 `PASS（P0=0、P1=0、P2=0、P3=0）`；DFI-5.1 独立 QA P0～P3 全 0 并由用户正式接受关闭；DFI-5.2 仅进入详细方案评审，编码仍 `GATED`
+> 评审结论：本总方案独立文档复核已 `PASS/CLOSED`；DFI-5.1～DFI-5.3 已完成独立 QA、用户接受与阶段关闭；
+> [DFI-5.4 详细方案](./DFI-5.4-DESKTOP-MAX-UI-PRODUCTION-CUTOVER-DEVELOPMENT-PLAN.md) 评审已 `PASS/CLOSED`；
+> [DFI-5.4.0 前置聚焦确认](./DFI-5.4.0-CONTRACT-RELEASE-AUTHORITY-PREFLIGHT-CONFIRMATION.md) 已 `PASS/CLOSED`；
+> 用户选择方案 A，后续先评审
+> [最小 R2D production consumption / Provider Release Admission 计划](./DFI-5.4-SCHEME-A-R2D-PRODUCTION-PROVIDER-RELEASE-PREREQUISITE-PLAN.md)
 
 ## 0. 目标与结论边界
 
@@ -586,20 +590,18 @@ Max 不涉及 Secret；但 Profile 的 raw Provider 参数、预算和 adapter i
 | --- | --- | --- | --- |
 | DFI-5.0 | 代码事实、Contract/Profile/Threat Model 与分批冻结（本文件） | `PASS/CLOSED` | `DFI5_PLAN_FROZEN` |
 | DFI-5.1 | safe Preview/Projection、独立 Experience Preference、migration 26、CAS/Receipt | `PASS/CLOSED` | `DFI51_REASONING_EXPERIENCE_FOUNDATION_CONFORMANT` |
-| DFI-5.2 | SubmitTurn v1alpha3、ReasoningModeLock、Runtime Selection v1alpha2、Model Protocol v1alpha2、main/Tool/compaction/recovery | Plan 与 5.2.1 `PASS/CLOSED`；5.2.2 document review pending；5.2.3 GATED | `DFI52_TASK_REASONING_LOCK_CONFORMANT` |
-| DFI-5.3 | Provider Profile/Mapping；至少一个真实已验证 Adapter；Enterprise Gateway v1alpha3 如进入 enterprise mapping | 7～12 日 | `DFI53_REASONING_PROVIDER_MAPPING_CONFORMANT` |
-| DFI-5.4 | Main/Preload safe API、Composer UI、只读摘要、换模/漂移/retry/restart 联合 E2E | 5～8 日 | `DFI5_MAX_REASONING_MODE_CONFORMANT` |
+| DFI-5.2 | SubmitTurn v1alpha3、ReasoningModeLock、Runtime Selection v1alpha2、Model Protocol v1alpha2、main/Tool/compaction/recovery | `PASS/CLOSED` | `DFI52_TASK_REASONING_LOCK_CONFORMANT` |
+| DFI-5.3 | Provider Profile/Mapping、Enterprise Gateway v1alpha3、三 Provider mapping 与 stage closure | `PASS/CLOSED` | `DFI53_REASONING_PROVIDER_MAPPING_CONFORMANT` |
+| DFI-5.4 | additive SubmitTurn/lock/Runtime Selection/coordination、production release、Main/Preload safe API、Composer UI 与真实 Desktop E2E | 父方案与5.4.0已关闭；方案A前置评审中 | `DFI5_MAX_REASONING_MODE_CONFORMANT` |
 
-结合 DFI-5.2.2 详细代码事实，全线集中工程粗估更新为约 37～61 日；DFI-5.1 已完成，DFI-5.2～5.4 剩余
-约 30～49 日，不含独立 QA 与返工。若首发只交付 Local Personal 的单一已验证 Profile，DFI-5.3 可缩小到
-4～7 日，剩余约 27～44 日；不得把未验证 Enterprise OpenAI-compatible / Anthropic-compatible 投影为 supported。
+DFI-5.1～DFI-5.3 已完成并关闭。DFI-5.4.1～5.4.3 当前估算为11～19个集中工程日；方案A新增的
+R2D production consumption与Provider admission关键路径另计8～15日，不含独立QA与返工。
 
-每个子批必须单独详细方案/差异复核、用户授权、独立 QA 与用户接受。DFI-5.1、DFI-5.2.1 已关闭；
-DFI-5.2 父计划见
-[DFI-5.2 Task Reasoning Lock 详细实施方案](./DFI-5.2-TASK-REASONING-LOCK-DEVELOPMENT-PLAN.md)，DFI-5.2.2
-细化见
-[DFI-5.2.2 Planner / Stale CAS / Task Bundle 详细方案](./DFI-5.2.2-REASONING-PLANNER-TASK-BUNDLE-DEVELOPMENT-PLAN.md)。
-当前只进入 DFI-5.2.2 文档评审，不自动解锁其编码、DFI-5.2.3 或 DFI-5.3～5.4。
+每个子批必须单独详细方案/差异复核、用户授权、独立 QA 与用户接受。DFI-5.4 见
+[Desktop Max UI / Safe Preview / Production Cutover 详细实施方案](./DFI-5.4-DESKTOP-MAX-UI-PRODUCTION-CUTOVER-DEVELOPMENT-PLAN.md)；
+父方案与[DFI-5.4.0 前置聚焦确认](./DFI-5.4.0-CONTRACT-RELEASE-AUTHORITY-PREFLIGHT-CONFIRMATION.md)
+均已关闭；当前等待[方案 A 前置详细计划](./DFI-5.4-SCHEME-A-R2D-PRODUCTION-PROVIDER-RELEASE-PREREQUISITE-PLAN.md)
+文档复核，不自动解锁 DFI-5.4.1～DFI-5.4.3 编码。
 
 ## 12. 文件所有权与禁止范围
 
@@ -725,13 +727,18 @@ DFI-5.0                       PLAN REVIEW PASS/CLOSED
 DFI-5.1                       PASS/CLOSED
 DFI-5.2                       REVISION 1 PLAN REVIEW PASS/CLOSED
 DFI-5.2.1                     PASS/CLOSED
-DFI-5.2.2                     DOCUMENT REVIEW PENDING / CODING GATED
-DFI-5.2.3                     GATED
-DFI-5.3～DFI-5.4              GATED
-AAPI-0.3～AAPI-0.4            GATED
+DFI-5.2.2～DFI-5.2.3          PASS/CLOSED
+DFI-5.3                       PASS/CLOSED
+DFI-5.4                       PASS/CLOSED
+DFI-5.4.0                     PASS/CLOSED
+Scheme A prerequisite plan   PLAN REVIEW PASS/CLOSED
+DFI-5.4.1～DFI-5.4.2          PASS/CLOSED
+DFI-5.4.3                    PASS/CLOSED
+AAPI-0 Foundation             PASS/CLOSED（development/test conformance only）
 TGM / Knowledge Provider      GATED
 ```
 
-DFI-5.2 Revision 1 已通过独立复核并由用户接受；DFI-5.2.1 独立 QA P0～P3 全 0，已由用户正式接受并
-`PASS/CLOSED`。DFI-5.2.2 当前仅进入详细方案评审，后续子批不得自动解锁。
-DFI-5.3～5.4、AAPI-0.3～0.4、TGM 与 Knowledge Provider 继续 `GATED`。
+DFI-5.1～DFI-5.3 已完成独立 QA、用户接受与阶段关闭。DFI-5.4 父方案、5.4.0、方案 A 前置计划与
+DFI-5.4.1～5.4.2 已关闭；LDA/R2D-P/PRA 前置线均已完成。DFI-5.4.3 已完成独立 QA 与用户接受，
+DFI-5.4 和 DFI-5 全阶段正式关闭。TGM、Knowledge Provider、Agent Lifecycle、DFI-4A.4 public CRUD/Reveal
+与 Admin v2 consumption 继续 `GATED`。

@@ -25,6 +25,7 @@ describe("DCF-1.2B workbench bridge", () => {
     const runtime = createDesktopPrivateRuntime({
       databasePath: join(directory, "robothree.sqlite"),
       authorizationToken: "a".repeat(48),
+      demoMode: "legacy_test",
     });
     await runtime.start();
     cleanup.push(async () => {

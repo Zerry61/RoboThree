@@ -23,6 +23,7 @@ const CommonFields = {
   dataScopeDigest: Sha256DigestSchema,
   clientRequestId: EntityIdSchema,
   centralAcceptRequestDigest: Sha256DigestSchema,
+  providerRequestDeadlineAt: TimestampSchema.optional(),
   invocationId: EntityIdSchema.optional(),
   statusRevision: z.number().int().nonnegative().optional(),
   durableCursor: z.string().min(1).max(1024).optional(),

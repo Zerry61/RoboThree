@@ -3,6 +3,7 @@ package com.robothree.central.modelgateway.provider;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.robothree.central.modelgateway.adapter.http.JdkModelAuthorizedHttpTransport;
@@ -237,6 +238,55 @@ class ModelProviderAdapterConformanceTest {
     }
 
     @Test
+    void projectsOpenAiToolCallsAndResultsWithoutLeakingNeutralMetadata()
+            throws Exception {
+        try (StubProviderServer server = new StubProviderServer()) {
+            server.respond(
+                    path(Protocol.OPENAI_COMPATIBLE),
+                    StubResponse.stream(openAiEmptyAndBlankContentStream()));
+            String canonical = providerNeutralToolResultRequest();
+
+            adapter(Protocol.OPENAI_COMPATIBLE, server, new CredentialSource())
+                    .stream(
+                            new ModelProviderRequest(
+                                    UUID.randomUUID(),
+                                    CanonicalJson.sha256(canonical),
+                                    canonical,
+                                    binding(server, Protocol.OPENAI_COMPATIBLE),
+                                    Instant.now().plusSeconds(3),
+                                    Duration.ofSeconds(1)),
+                            new CollectingSink());
+
+            ObjectNode body = JSON.readValue(
+                    server.request(path(Protocol.OPENAI_COMPATIBLE)).body(),
+                    ObjectNode.class);
+            assertThat(body.path("messages")).hasSize(3);
+            JsonNode assistant = body.path("messages").get(1);
+            assertThat(assistant.path("role").asText()).isEqualTo("assistant");
+            assertThat(assistant.path("tool_calls")).hasSize(1);
+            assertThat(assistant.path("tool_calls").get(0).path("id").asText())
+                    .isEqualTo("22222222-2222-4222-8222-222222222222");
+            assertThat(assistant.path("tool_calls").get(0).path("type").asText())
+                    .isEqualTo("function");
+            assertThat(assistant.path("tool_calls").get(0)
+                            .path("function").path("name").asText())
+                    .isEqualTo("echo");
+            assertThat(assistant.path("tool_calls").get(0)
+                            .path("function").path("arguments").asText())
+                    .isEqualTo("{\"alpha\":1,\"zeta\":2}");
+            JsonNode tool = body.path("messages").get(2);
+            assertThat(tool.path("role").asText()).isEqualTo("tool");
+            assertThat(tool.path("tool_call_id").asText())
+                    .isEqualTo("22222222-2222-4222-8222-222222222222");
+            assertThat(tool.path("content").asText()).isEqualTo("工具执行完成");
+            assertThat(body.toString())
+                    .doesNotContain("argumentsDigest")
+                    .doesNotContain("resultDigest")
+                    .doesNotContain("outcome");
+        }
+    }
+
+    @Test
     void rejectsCacheProjectionProtocolMismatchBeforeSending() throws Exception {
         try (StubProviderServer server = new StubProviderServer()) {
             var anthropic = ProviderCacheProjection.AnthropicExplicit.of(markerPolicy(
@@ -321,6 +371,74 @@ class ModelProviderAdapterConformanceTest {
                     new ModelProviderStreamEvent.TextDelta("最终答案"),
                     new ModelProviderStreamEvent.Usage(8, 6),
                     new ModelProviderStreamEvent.Terminal("stop"));
+        }
+    }
+
+    @Test
+    void ignoresOpenAiEmptyToolCallDeltasAfterTheCallHasStarted() throws Exception {
+        try (StubProviderServer server = new StubProviderServer()) {
+            String stream = openAiHappyStream().replace(
+                    "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,"
+                            + "\"function\":{\"arguments\":\"{\\\"value\\\":1}\"}}]},",
+                    "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,"
+                            + "\"function\":{\"arguments\":\"\"}}]},"
+                            + "\"finish_reason\":null}]}\n\n"
+                            + "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,"
+                            + "\"function\":{\"arguments\":\"{\\\"value\\\":1}\"}}]},");
+            server.respond(
+                    path(Protocol.OPENAI_COMPATIBLE),
+                    StubResponse.stream(stream));
+
+            List<ModelProviderStreamEvent> events = invoke(
+                    server,
+                    Protocol.OPENAI_COMPATIBLE,
+                    new CredentialSource());
+
+            assertThat(events).containsExactly(
+                    new ModelProviderStreamEvent.TextDelta("你好"),
+                    new ModelProviderStreamEvent.ToolCallDelta(
+                            0,
+                            "tool-1",
+                            "echo",
+                            null),
+                    new ModelProviderStreamEvent.ToolCallDelta(
+                            0,
+                            null,
+                            null,
+                            "{\"value\":1}"),
+                    new ModelProviderStreamEvent.Usage(8, 4),
+                    new ModelProviderStreamEvent.Terminal("tool_use"));
+        }
+    }
+
+    @Test
+    void preservesWhitespaceOnlyOpenAiToolArgumentFragments() throws Exception {
+        try (StubProviderServer server = new StubProviderServer()) {
+            String stream = openAiHappyStream().replace(
+                    "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,"
+                            + "\"function\":{\"arguments\":\"{\\\"value\\\":1}\"}}]},",
+                    "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,"
+                            + "\"function\":{\"arguments\":\"{\\\"value\\\":\"}}]},"
+                            + "\"finish_reason\":null}]}\n\n"
+                            + "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,"
+                            + "\"function\":{\"arguments\":\" \"}}]},"
+                            + "\"finish_reason\":null}]}\n\n"
+                            + "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,"
+                            + "\"function\":{\"arguments\":\"1}\"}}]},");
+            server.respond(
+                    path(Protocol.OPENAI_COMPATIBLE),
+                    StubResponse.stream(stream));
+
+            List<ModelProviderStreamEvent> events = invoke(
+                    server,
+                    Protocol.OPENAI_COMPATIBLE,
+                    new CredentialSource());
+
+            assertThat(events).contains(
+                    new ModelProviderStreamEvent.ToolCallDelta(0, null, null, " "));
+            assertThat(events).endsWith(
+                    new ModelProviderStreamEvent.Usage(8, 4),
+                    new ModelProviderStreamEvent.Terminal("tool_use"));
         }
     }
 
@@ -961,6 +1079,36 @@ class ModelProviderAdapterConformanceTest {
                 .put("type", "integer");
         tool.put("inputSchemaDigest", "c".repeat(64));
         root.put("maxOutputTokens", 64);
+        return CanonicalJson.canonicalize(root);
+    }
+
+    private static String providerNeutralToolResultRequest() {
+        ObjectNode root = CanonicalJson.parseObject(providerNeutralRequest(), 64 * 1024);
+        var messages = root.putArray("messages");
+        messages.addObject()
+                .put("role", "user")
+                .putArray("content")
+                .addObject()
+                .put("type", "text")
+                .put("text", "执行一个工具");
+        ObjectNode assistant = messages.addObject().put("role", "assistant");
+        assistant.putArray("content");
+        ObjectNode toolCall = assistant.putArray("toolCalls").addObject();
+        toolCall.put("toolCallId", "22222222-2222-4222-8222-222222222222");
+        toolCall.put("name", "echo");
+        ObjectNode arguments = toolCall.putObject("arguments");
+        arguments.put("zeta", 2);
+        arguments.put("alpha", 1);
+        toolCall.put("argumentsDigest", CanonicalJson.sha256(
+                CanonicalJson.canonicalize(arguments)));
+        ObjectNode tool = messages.addObject().put("role", "tool");
+        tool.put("toolCallId", "22222222-2222-4222-8222-222222222222");
+        tool.put("outcome", "succeeded");
+        tool.put("resultDigest", "d".repeat(64));
+        tool.putArray("content")
+                .addObject()
+                .put("type", "text")
+                .put("text", "工具执行完成");
         return CanonicalJson.canonicalize(root);
     }
 

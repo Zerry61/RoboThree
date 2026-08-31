@@ -11,6 +11,7 @@ export type DocumentCapabilityId = (typeof DOCUMENT_CAPABILITIES)[number];
 
 export const DOCUMENT_WORKER_PRIVATE_CAPABILITIES = [
   "tool.document.pptx.write",
+  "tool.workspace.file.write_text",
 ] as const;
 
 export type DocumentWorkerPrivateCapabilityId =

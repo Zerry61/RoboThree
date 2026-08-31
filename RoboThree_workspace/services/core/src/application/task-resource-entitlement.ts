@@ -18,6 +18,8 @@ import { sha256CanonicalJson } from "../persistence/digest.js";
 
 export const TASK_RESOURCE_ENTITLEMENT_SNAPSHOT_DIGEST_DOMAIN =
   "robothree.task-resource-entitlement-snapshot.v1\n" as const;
+export const TASK_RESOURCE_ENTITLEMENT_SNAPSHOT_V2_DIGEST_DOMAIN =
+  "robothree.task-resource-entitlement-snapshot.v2\n" as const;
 export const AGENT_RESOURCE_DECISION_DIGEST_DOMAIN =
   "robothree.agent-resource-decision.v1\n" as const;
 export const R2D3_PRODUCTION_ENTERPRISE_ENTITLEMENT_READY = false;
@@ -86,6 +88,34 @@ export const TaskResourceEntitlementSnapshotV1Schema = z.object({
   snapshotDigest: Sha256DigestSchema,
 }).strict().superRefine(validateEntitlementSnapshotMaterial);
 
+export const TaskResourceIdentityEvidenceV2Schema = z.object({
+  localAuthorityReady: z.literal(true),
+  enterpriseIdentityReady: z.literal(false),
+  testIdentityUsed: z.literal(false),
+}).strict();
+
+const TaskResourceEntitlementSnapshotV2Fields = {
+  schemaVersion: z.literal("v2"),
+  subjectBindingDigest: Sha256DigestSchema,
+  authorityKind: z.literal("local_desktop_owner"),
+  authorityRevision: Sha256DigestSchema,
+  observedAt: TimestampSchema,
+  models: z.array(EntitledModelRefV1Schema).max(64),
+  skills: z.array(EntitledSkillRefV1Schema).max(64),
+  tools: z.array(EntitledToolRefV1Schema).max(128),
+  knowledge: z.array(EntitledKnowledgeRefV1Schema).max(64),
+  identityEvidence: TaskResourceIdentityEvidenceV2Schema,
+};
+
+export const TaskResourceEntitlementSnapshotV2MaterialSchema = z.object(
+  TaskResourceEntitlementSnapshotV2Fields,
+).strict().superRefine(validateEntitlementSnapshotMaterial);
+
+export const TaskResourceEntitlementSnapshotV2Schema = z.object({
+  ...TaskResourceEntitlementSnapshotV2Fields,
+  snapshotDigest: Sha256DigestSchema,
+}).strict().superRefine(validateEntitlementSnapshotMaterial);
+
 export const AgentResourceModelSelectionSourceV1Schema = z.enum([
   "explicit",
   "user_preference",
@@ -147,6 +177,85 @@ export function hasValidTaskResourceEntitlementSnapshotV1(
   const parsed = TaskResourceEntitlementSnapshotV1Schema.parse(input);
   const { snapshotDigest, ...material } = parsed;
   return snapshotDigest === calculateTaskResourceEntitlementSnapshotV1Digest(material);
+}
+
+export function calculateTaskResourceEntitlementSnapshotV2Digest(
+  material: TaskResourceEntitlementSnapshotV2Material,
+): string {
+  const parsed = TaskResourceEntitlementSnapshotV2MaterialSchema.parse(material);
+  return sha256CanonicalJson(JsonValueSchema.parse({
+    domain: TASK_RESOURCE_ENTITLEMENT_SNAPSHOT_V2_DIGEST_DOMAIN,
+    material: parsed,
+  }));
+}
+
+export function createTaskResourceEntitlementSnapshotV2(
+  material: TaskResourceEntitlementSnapshotV2Material,
+): TaskResourceEntitlementSnapshotV2 {
+  const parsed = TaskResourceEntitlementSnapshotV2MaterialSchema.parse(material);
+  return Object.freeze(TaskResourceEntitlementSnapshotV2Schema.parse({
+    ...parsed,
+    snapshotDigest: calculateTaskResourceEntitlementSnapshotV2Digest(parsed),
+  }));
+}
+
+export function hasValidTaskResourceEntitlementSnapshotV2(
+  input: TaskResourceEntitlementSnapshotV2,
+): boolean {
+  const parsed = TaskResourceEntitlementSnapshotV2Schema.parse(input);
+  const { snapshotDigest, ...material } = parsed;
+  return snapshotDigest === calculateTaskResourceEntitlementSnapshotV2Digest(material);
+}
+
+export function parseReadableTaskResourceEntitlementSnapshot(
+  input: unknown,
+): ReadableTaskResourceEntitlementSnapshot {
+  if (typeof input !== "object" || input === null || !("schemaVersion" in input)) {
+    throw new Error("selection.entitlement_version_invalid");
+  }
+  switch ((input as { schemaVersion?: unknown }).schemaVersion) {
+    case "v1": {
+      const parsed = TaskResourceEntitlementSnapshotV1Schema.parse(input);
+      if (!hasValidTaskResourceEntitlementSnapshotV1(parsed)) {
+        throw new Error("selection.entitlement_invalid");
+      }
+      return parsed;
+    }
+    case "v2": {
+      const parsed = TaskResourceEntitlementSnapshotV2Schema.parse(input);
+      if (!hasValidTaskResourceEntitlementSnapshotV2(parsed)) {
+        throw new Error("selection.entitlement_invalid");
+      }
+      return parsed;
+    }
+    default:
+      throw new Error("selection.entitlement_version_invalid");
+  }
+}
+
+export function normalizeTaskResourceEntitlementSnapshot(
+  input: ReadableTaskResourceEntitlementSnapshot,
+): NormalizedTaskResourceEntitlementSnapshot {
+  return Object.freeze({
+    schemaVersion: input.schemaVersion,
+    subjectBindingDigest: input.subjectBindingDigest,
+    authorityKind: input.authorityKind,
+    authorityRevision: input.authorityRevision,
+    observedAt: input.observedAt,
+    models: input.models,
+    skills: input.skills,
+    tools: input.tools,
+    knowledge: input.knowledge,
+    snapshotDigest: input.snapshotDigest,
+  });
+}
+
+export function parseAndNormalizeTaskResourceEntitlementSnapshot(
+  input: unknown,
+): NormalizedTaskResourceEntitlementSnapshot {
+  return normalizeTaskResourceEntitlementSnapshot(
+    parseReadableTaskResourceEntitlementSnapshot(input),
+  );
 }
 
 export function calculateAgentResourceDecisionV1Digest(
@@ -286,9 +395,38 @@ export type TaskResourceEntitlementSnapshotV1Material = z.infer<
 export type TaskResourceEntitlementSnapshotV1 = z.infer<
   typeof TaskResourceEntitlementSnapshotV1Schema
 >;
+export type TaskResourceEntitlementSnapshotV2Material = z.infer<
+  typeof TaskResourceEntitlementSnapshotV2MaterialSchema
+>;
+export type TaskResourceEntitlementSnapshotV2 = z.infer<
+  typeof TaskResourceEntitlementSnapshotV2Schema
+>;
+export type ReadableTaskResourceEntitlementSnapshot =
+  | TaskResourceEntitlementSnapshotV1
+  | TaskResourceEntitlementSnapshotV2;
+export type NormalizedTaskResourceEntitlementSnapshot = Readonly<{
+  schemaVersion: "v1" | "v2";
+  subjectBindingDigest: string;
+  authorityKind: "runtime_active_enterprise_identity" | "local_desktop_owner";
+  authorityRevision: string;
+  observedAt: string;
+  models: readonly EntitledModelRefV1[];
+  skills: readonly EntitledSkillRefV1[];
+  tools: readonly EntitledToolRefV1[];
+  knowledge: readonly EntitledKnowledgeRefV1[];
+  snapshotDigest: string;
+}>;
 export type AgentResourceDecisionV1Material = z.infer<
   typeof AgentResourceDecisionV1MaterialSchema
 >;
 export type AgentResourceDecisionV1 = z.infer<
   typeof AgentResourceDecisionV1Schema
 >;
+
+// Neutral internal aliases keep later private compositions decoupled from the
+// frozen R2D-3.1 source-boundary vocabulary. They are the same validated facts,
+// not a second schema or compatibility path.
+export type InternalTrialResourceDecision = AgentResourceDecisionV1;
+export type InternalTrialEntitlementSnapshot = TaskResourceEntitlementSnapshotV1;
+export const createInternalTrialEntitlementSnapshot =
+  createTaskResourceEntitlementSnapshotV1;

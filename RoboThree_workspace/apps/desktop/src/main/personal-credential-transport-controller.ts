@@ -42,6 +42,10 @@ import {
   PersonalCredentialTransportMainAdapter,
   type MainDerivedPersonalCredentialTransportIdentity,
 } from "./personal-credential-transport.js";
+import {
+  isExactSensitiveTransportActivationDescriptor,
+  type SensitiveTransportActivationDescriptor,
+} from "../shared/sensitive-transport-activation.js";
 
 type CreateMessageChannel = () => MessageChannelMain;
 type MainIpcEvent = IpcMainEvent | IpcMainInvokeEvent;
@@ -94,6 +98,7 @@ export class PersonalCredentialTransportProductionController {
   readonly #adapter: PersonalCredentialTransportMainAdapter;
   readonly #createMessageChannel: CreateMessageChannel;
   readonly #foundationEnabled: boolean;
+  readonly #productionActivationReady: boolean;
   readonly #brokerLeaseProvider: PersonalCredentialBrokerLeaseProvider | undefined;
   readonly #now: () => number;
   readonly #sessions = new Map<string, Session>();
@@ -103,12 +108,15 @@ export class PersonalCredentialTransportProductionController {
 
   public constructor(input: Readonly<{
     foundationEnabled?: boolean;
+    productionActivation?: SensitiveTransportActivationDescriptor;
     adapter?: PersonalCredentialTransportMainAdapter;
     createMessageChannel: CreateMessageChannel;
     brokerLeaseProvider?: PersonalCredentialBrokerLeaseProvider;
     now?: () => number;
   }>) {
     this.#foundationEnabled = input.foundationEnabled === true;
+    this.#productionActivationReady =
+      isExactSensitiveTransportActivationDescriptor(input.productionActivation);
     this.#now = input.now ?? Date.now;
     this.#adapter = input.adapter ?? new PersonalCredentialTransportMainAdapter({
       foundationEnabled: this.#foundationEnabled,
@@ -234,9 +242,9 @@ export class PersonalCredentialTransportProductionController {
     foundationEnabled: boolean;
     mainWiringInstalled: boolean;
     productionFeatureEnabled: false;
-    productionSensitiveTransportReady: false;
+    productionSensitiveTransportReady: boolean;
     productionBusinessHandlerReady: false;
-    transportBlockerClosed: false;
+    transportBlockerClosed: boolean;
     brokerDirectionalClosureImplemented: true;
     windowCount: number;
     sessionCount: number;
@@ -253,9 +261,9 @@ export class PersonalCredentialTransportProductionController {
       foundationEnabled: this.#foundationEnabled,
       mainWiringInstalled: this.#windows.size > 0,
       productionFeatureEnabled: false,
-      productionSensitiveTransportReady: false,
+      productionSensitiveTransportReady: this.#productionActivationReady,
       productionBusinessHandlerReady: false,
-      transportBlockerClosed: false,
+      transportBlockerClosed: this.#productionActivationReady,
       brokerDirectionalClosureImplemented: true,
       windowCount: this.#windows.size,
       sessionCount: this.#sessions.size,

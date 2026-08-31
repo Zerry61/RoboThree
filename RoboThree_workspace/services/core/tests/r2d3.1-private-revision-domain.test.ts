@@ -4,6 +4,7 @@ import {
   R2D3_COORDINATION_V1ALPHA4_PRODUCTION_CONSUMER_ENABLED,
   R2D3_RUNTIME_SELECTION_V1ALPHA3_PRODUCTION_CONSUMER_ENABLED,
   createSubmitTurnRecordV1Alpha4,
+  createReasoningModeLock,
   createTaskRuntimeSelectionV1Alpha3,
   hasValidTaskRuntimeSelectionV1Alpha3,
   parseReadableSubmitTurnRecordV1Alpha4,
@@ -16,7 +17,7 @@ const digest = (marker: string) => `sha256:${marker.repeat(64)}`;
 const at = "2026-08-26T08:00:00.000Z";
 
 function lock() {
-  return {
+  return createReasoningModeLock({
     schemaVersion: "v1alpha1",
     reasoningModeLockId: id("10"),
     taskId: id("2"),
@@ -24,8 +25,7 @@ function lock() {
     lockedAt: at,
     requestedMode: "default",
     resolution: "default_passthrough",
-    reasoningModeLockDigest: digest("b"),
-  } as const;
+  });
 }
 
 function selectionMaterial() {

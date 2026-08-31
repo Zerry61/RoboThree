@@ -1,13 +1,21 @@
 <template>
   <section class="intelligence-page" aria-label="智能中心">
     <R3PageHeader
-      eyebrow="Intelligence Center"
+      eyebrow="智能资源"
       title="智能中心"
-      description="浏览当前运行时提供的机器人和工具目录；技能目录、创建、发布和工具管理仍按后续批次接入。"
+      description="浏览可用的机器人、技能和工具。"
     >
       <template #actions>
-        <R3Button variant="secondary" @click="void router.push('/intelligence/create-robot')">创建机器人</R3Button>
-        <R3Button variant="secondary" @click="void router.push('/intelligence/create-skill')">创建技能</R3Button>
+        <R3Button
+          v-if="activeSection === 'robots'"
+          variant="primary"
+          @click="void router.push('/intelligence/create-robot')"
+        >创建机器人</R3Button>
+        <R3Button
+          v-else-if="activeSection === 'skills'"
+          variant="primary"
+          @click="void router.push('/intelligence/create-skill')"
+        >创建技能</R3Button>
       </template>
     </R3PageHeader>
 
@@ -19,15 +27,6 @@
       {{ persistentNotice }}
     </R3InlineNotice>
 
-    <section class="intelligence-page__summary" aria-label="智能中心统计">
-      <R3Card v-for="metric in summaryMetrics" :key="metric.label">
-        <div class="intelligence-page__metric">
-          <strong>{{ metric.value }}</strong>
-          <span>{{ metric.label }}</span>
-        </div>
-      </R3Card>
-    </section>
-
     <div class="intelligence-page__layout">
       <R3Card>
         <template #header>
@@ -37,6 +36,11 @@
               label="智能资源"
               :tabs="sectionTabs"
             />
+            <span v-if="activeSection !== 'skills'" class="intelligence-page__loaded-summary">
+              {{ activeSection === "robots"
+                ? `${summaryMetrics[0]?.label} ${summaryMetrics[0]?.value}`
+                : `${summaryMetrics[1]?.label} ${summaryMetrics[1]?.value}` }}
+            </span>
             <R3SearchField
               v-model="searchQuery"
               accessible-label="筛选已加载内容"
@@ -48,6 +52,17 @@
             </R3Button>
           </div>
         </template>
+
+        <nav v-if="activeSection === 'robots'" class="intelligence-page__subnav" aria-label="机器人分类">
+          <button type="button" :aria-current="robotViewMode === 'catalog' ? 'page' : undefined" @click="robotViewMode = 'catalog'">全部</button>
+          <button type="button" :aria-current="robotViewMode === 'mine' ? 'page' : undefined" @click="void showMyRobotDrafts()">我创建的</button>
+        </nav>
+        <nav v-else-if="activeSection === 'skills'" class="intelligence-page__subnav" aria-label="技能分类">
+          <button type="button" aria-current="page">技能广场</button>
+          <button type="button" disabled>已安装</button>
+          <button type="button" disabled>本地目录</button>
+          <button type="button" disabled>我创建的</button>
+        </nav>
 
         <R3InlineNotice
           v-if="activeSection === 'robots' && robotListState.messageTitle"
@@ -65,14 +80,49 @@
           {{ toolListState.messageDescription }}
         </R3InlineNotice>
 
-        <section v-if="activeSection === 'skills'" class="intelligence-page__gate" aria-label="技能目录">
+        <section v-if="activeSection === 'robots' && robotViewMode === 'mine'" class="intelligence-page__gate" aria-label="我创建的机器人">
+          <div v-if="draftsError" class="intelligence-page__lifecycle-reconnect">
+            <R3InlineNotice tone="danger" title="机器人生命周期服务不可用">
+              {{ draftsError }} 当前不会使用本地假数据代替。
+            </R3InlineNotice>
+            <R3Button variant="secondary" :loading="draftsLoading" @click="void showMyRobotDrafts()">
+              重新连接
+            </R3Button>
+          </div>
+          <R3EmptyState v-else-if="myRobotDrafts.length === 0" icon="R" title="还没有个人机器人" description="创建并保存第一个机器人后，它会显示在这里。" />
+          <ul v-else class="intelligence-page__cards" aria-label="个人机器人草稿">
+            <li v-for="draft in myRobotDrafts" :key="draft.robotId" class="intelligence-page__card">
+              <button class="intelligence-page__card-button" type="button" @click="void router.push({ path: '/intelligence/create-robot', query: { robotId: draft.robotId } })">
+                <span class="intelligence-page__icon" aria-hidden="true">R</span>
+                <span class="intelligence-page__card-body">
+                  <strong>{{ draft.name }}</strong>
+                  <small>{{ draft.submissionState === 'approved' ? '已发布到企业机器人目录' : '个人草稿' }}</small>
+                  <span>{{ draft.description || '发布前补充简介' }}</span>
+                  <span class="intelligence-page__tags">
+                    <R3Tag :tone="presentRobotTestState(draft.testState).tone">
+                      {{ presentRobotTestState(draft.testState).label }}
+                    </R3Tag>
+                    <R3Tag
+                      v-if="presentRobotSubmissionState(draft.submissionState)"
+                      :tone="presentRobotSubmissionState(draft.submissionState)?.tone"
+                    >
+                      {{ presentRobotSubmissionState(draft.submissionState)?.label }}
+                    </R3Tag>
+                  </span>
+                </span>
+              </button>
+            </li>
+          </ul>
+        </section>
+
+        <section v-else-if="activeSection === 'skills'" class="intelligence-page__gate" aria-label="技能目录">
           <R3EmptyState
             icon="S"
             :title="skillGate.title"
             :description="skillGate.description"
           />
           <R3InlineNotice tone="warning" title="能力状态">
-            Skill Catalog 仍为 GATED。本页不展示生产 Mock Skill 条目。
+            技能数据服务尚未接入，当前不会展示示例条目。
           </R3InlineNotice>
         </section>
 
@@ -145,14 +195,13 @@
         </template>
       </R3Card>
 
-      <R3Card>
+      <R3Card v-if="selectedSection !== undefined">
         <template #header>
           <div class="intelligence-page__detail-title">
             <div>
               <h3>详情</h3>
               <p>{{ detailSubtitle }}</p>
             </div>
-            <R3Tag tone="neutral">v1alpha2 Catalog</R3Tag>
           </div>
         </template>
 
@@ -160,7 +209,7 @@
           <R3EmptyState
             icon="S"
             title="技能详情待接入"
-            description="当前版本尚未提供真实 Skill Catalog detail。"
+            description="当前版本尚未提供技能详情。"
           />
         </section>
 
@@ -239,10 +288,6 @@
           <p>{{ detailState.tool.description }}</p>
           <dl class="intelligence-page__facts">
             <div>
-              <dt>能力 ID</dt>
-              <dd>{{ detailState.tool.id }}</dd>
-            </div>
-            <div>
               <dt>读写边界</dt>
               <dd>{{ detailState.tool.readOnlyLabel }}</dd>
             </div>
@@ -276,6 +321,7 @@ import type {
   RobotCatalogSummary,
   ToolCatalogSummary,
 } from "@robothree/contracts";
+import type { RobotDraftSummary } from "@robothree/contracts/agent-lifecycle/v1alpha1";
 import { computed, inject, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
@@ -290,6 +336,11 @@ import {
   R3Tabs,
   R3Tag,
 } from "../../components/ui";
+import {
+  agentLifecycleAdapterKey,
+  AgentLifecycleAdapterError,
+  desktopAgentLifecycleAdapter,
+} from "../../adapters/agent-lifecycle-adapter.js";
 import {
   desktopIntelligenceAdapter,
   DesktopIntelligenceAdapterError,
@@ -312,6 +363,11 @@ import {
   type RobotDetailView,
   type ToolDetailView,
 } from "./intelligence-model.js";
+import {
+  presentAgentLifecycleError,
+  presentRobotSubmissionState,
+  presentRobotTestState,
+} from "../../presentation/agent-lifecycle-presentation.js";
 
 type ListState = {
   status: CatalogMessageState;
@@ -333,14 +389,19 @@ type DetailState = {
 };
 
 const adapter = inject(intelligenceAdapterKey, desktopIntelligenceAdapter);
+const lifecycleAdapter = inject(agentLifecycleAdapterKey, desktopAgentLifecycleAdapter);
 const route = useRoute();
 const router = useRouter();
 
-const activeSection = ref<IntelligenceSection>("robots");
+const activeSection = ref<IntelligenceSection>(sectionFromQuery(route.query.section));
 const searchQuery = ref("");
 const persistentNotice = ref("");
 const runtimeInstanceId = ref("");
 const robots = ref<RobotCatalogSummary[]>([]);
+const robotViewMode = ref<"catalog" | "mine">("catalog");
+const myRobotDrafts = ref<RobotDraftSummary[]>([]);
+const draftsError = ref("");
+const draftsLoading = ref(false);
 const tools = ref<ToolCatalogSummary[]>([]);
 const robotListState = reactive<ListState>(createListState());
 const toolListState = reactive<ListState>(createListState());
@@ -409,15 +470,19 @@ const summaryMetrics = computed(() => [
   { label: "可用工具", value: catalogSummary.value.availableTools },
 ]);
 const detailSubtitle = computed(() => {
-  if (activeSection.value === "skills") return "Skill Catalog 仍未接入。";
-  if (selectedSection.value === "robots") return "机器人详情来自真实 Catalog detail。";
-  if (selectedSection.value === "tools") return "工具详情来自真实 Catalog detail。";
+  if (activeSection.value === "skills") return "技能详情尚未接入。";
+  if (selectedSection.value === "robots") return "机器人可用范围和资源信息。";
+  if (selectedSection.value === "tools") return "工具用途、读写边界和风险摘要。";
   return "资源详情会在这里显示。";
 });
 
 watch(selectedSection, (section) => {
   if (section !== undefined) activeSection.value = section;
 }, { immediate: true });
+
+watch(() => route.query.section, (value) => {
+  if (selectedSection.value === undefined) activeSection.value = sectionFromQuery(value);
+});
 
 watch([selectedSection, selectedId], () => {
   void loadSelectedDetail();
@@ -426,6 +491,24 @@ watch([selectedSection, selectedId], () => {
 onMounted(() => {
   void refreshCatalog();
 });
+
+async function showMyRobotDrafts(): Promise<void> {
+  if (draftsLoading.value) return;
+  robotViewMode.value = "mine";
+  draftsError.value = "";
+  draftsLoading.value = true;
+  try {
+    const page = await lifecycleAdapter.listDrafts();
+    myRobotDrafts.value = [...page.items];
+  } catch (caught) {
+    myRobotDrafts.value = [];
+    draftsError.value = caught instanceof AgentLifecycleAdapterError
+      ? presentAgentLifecycleError(caught.code, caught.message)
+      : "个人机器人草稿暂时不可用，请稍后重试。";
+  } finally {
+    draftsLoading.value = false;
+  }
+}
 
 async function refreshCatalog(): Promise<void> {
   const epoch = ++catalogRequestEpoch;
@@ -573,7 +656,11 @@ async function loadSelectedDetail(): Promise<void> {
 }
 
 async function openCard(card: IntelligenceCard): Promise<void> {
-  await router.push(card.detailPath);
+  await router.push({ path: card.detailPath, query: { from: activeSection.value } });
+}
+
+function sectionFromQuery(value: unknown): IntelligenceSection {
+  return value === "skills" || value === "tools" ? value : "robots";
 }
 
 function applyListError(state: ListState, caught: unknown): void {
@@ -732,25 +819,13 @@ function iconFor(section: IntelligenceSection): string {
 <style scoped>
 .intelligence-page {
   display: grid;
-  gap: 18px;
+  align-content: start;
+  gap: 14px;
+  width: min(100%, 1120px);
+  margin: 0 auto;
+  padding: 24px;
 }
 
-.intelligence-page__summary {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.intelligence-page__metric {
-  display: grid;
-  gap: 4px;
-}
-
-.intelligence-page__metric strong {
-  font-size: var(--r3-font-size-2xl);
-}
-
-.intelligence-page__metric span,
 .intelligence-page__detail-title p,
 .intelligence-page__card-body small,
 .intelligence-page__detail header p,
@@ -760,9 +835,13 @@ function iconFor(section: IntelligenceSection): string {
 
 .intelligence-page__layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
-  gap: 14px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
   align-items: start;
+}
+
+.intelligence-page__layout > :deep(.r3-card) {
+  min-width: 0;
 }
 
 .intelligence-page__toolbar,
@@ -779,14 +858,54 @@ function iconFor(section: IntelligenceSection): string {
   min-width: 180px;
 }
 
+.intelligence-page__loaded-summary {
+  color: var(--r3-color-text-tertiary);
+  font-size: var(--r3-font-size-xs);
+  white-space: nowrap;
+}
+
 .intelligence-page__loading,
 .intelligence-page__cards,
 .intelligence-page__gate {
   margin-top: 14px;
 }
 
+.intelligence-page__lifecycle-reconnect {
+  display: flex;
+  gap: var(--r3-space-3);
+  align-items: center;
+}
+
+.intelligence-page__lifecycle-reconnect .r3-inline-notice {
+  flex: 1;
+}
+
+.intelligence-page__subnav {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.intelligence-page__subnav button {
+  min-height: 28px;
+  border: 0;
+  border-radius: var(--r3-radius-sm);
+  padding: 0 9px;
+  background: var(--r3-color-surface-hover);
+  color: var(--r3-color-text-secondary);
+  font-size: var(--r3-font-size-xs);
+}
+
+.intelligence-page__subnav button[aria-current="page"] {
+  background: #e9edf6;
+  color: var(--r3-color-text);
+  font-weight: 700;
+}
+
 .intelligence-page__cards {
   display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 10px;
   padding: 0;
   list-style: none;
@@ -796,18 +915,20 @@ function iconFor(section: IntelligenceSection): string {
   border: 1px solid var(--r3-color-border);
   border-radius: var(--r3-radius-md);
   background: var(--r3-color-surface);
+  overflow: hidden;
 }
 
 .intelligence-page__card--active {
   border-color: var(--r3-color-primary);
+  box-shadow: inset 3px 0 0 var(--r3-color-primary);
 }
 
 .intelligence-page__card-button {
   width: 100%;
   border: 0;
   display: flex;
-  gap: 12px;
-  padding: 12px;
+  gap: 10px;
+  padding: 11px;
   background: transparent;
   color: inherit;
   text-align: left;
@@ -819,21 +940,21 @@ function iconFor(section: IntelligenceSection): string {
 }
 
 .intelligence-page__icon {
-  width: 32px;
-  height: 32px;
-  flex: 0 0 32px;
-  border-radius: var(--r3-radius-md);
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  border-radius: 7px;
   display: grid;
   place-items: center;
-  background: var(--r3-color-primary-subtle);
-  color: var(--r3-color-primary);
+  background: #edf1f5;
+  color: #4c5869;
   font-weight: 700;
 }
 
 .intelligence-page__card-body {
   min-width: 0;
   display: grid;
-  gap: 6px;
+  gap: 4px;
 }
 
 .intelligence-page__card-body strong,
@@ -880,18 +1001,28 @@ function iconFor(section: IntelligenceSection): string {
 }
 
 @media (max-width: 920px) {
-  .intelligence-page__summary,
   .intelligence-page__layout {
     grid-template-columns: 1fr;
   }
 
   .intelligence-page__toolbar {
-    align-items: stretch;
-    flex-direction: column;
+    align-items: center;
+    flex-wrap: wrap;
   }
 
   .intelligence-page__toolbar > .r3-search-field {
     width: 100%;
+  }
+}
+
+@media (max-width: 680px) {
+  .intelligence-page {
+    padding: 18px 14px;
+  }
+
+  .intelligence-page__toolbar {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 </style>

@@ -34,6 +34,7 @@ describe("DCF-2C Desktop/Core/SSE recovery Harness", () => {
     runtime = createDesktopPrivateRuntime({
       databasePath,
       authorizationToken: firstToken,
+      demoMode: "legacy_test",
     });
     await runtime.start();
     const firstClient = new CorePrivateClient({
@@ -119,6 +120,7 @@ describe("DCF-2C Desktop/Core/SSE recovery Harness", () => {
     runtime = createDesktopPrivateRuntime({
       databasePath,
       authorizationToken: secondToken,
+      demoMode: "legacy_test",
     });
     await runtime.start();
     const restartedClient = new CorePrivateClient({
@@ -178,7 +180,7 @@ async function submit(
     sessionId,
     userInput: "Execute the bounded DCF-2C recovery turn.",
     selectionRequest: {
-      agentId: "agent.general",
+      agentId: "agent.fixture.desktop-scripted",
       selectedSkillIds: [],
       selectedKnowledgeIds: [],
     },

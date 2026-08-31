@@ -20,6 +20,7 @@ describe("DCF-1.2C real Desktop Main/Core/SQLite process chain", () => {
         import.meta.url,
       )),
       databasePath: join(directory, "robothree.sqlite"),
+      demoMode: "legacy_test",
       maxUnexpectedRestarts: 0,
     });
     try {
@@ -56,7 +57,7 @@ describe("DCF-1.2C real Desktop Main/Core/SQLite process chain", () => {
         sessionId: session.value.sessionId,
         userInput: "验证断线恢复",
         selectionRequest: {
-          agentId: "agent.general",
+          agentId: "agent.fixture.desktop-scripted",
           selectedSkillIds: [],
           selectedKnowledgeIds: [],
         },

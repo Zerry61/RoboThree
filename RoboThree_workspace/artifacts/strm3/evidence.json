@@ -1,0 +1,195 @@
+{
+  "status": "PASS",
+  "outcome": "STRM3_SENSITIVE_TRANSPORT_PRODUCTION_CONFORMANT",
+  "transportDecision": "SENSITIVE_TRANSPORT_READY",
+  "activationSchemaVersion": "strm3-sensitive-transport-activation.v1",
+  "activationRevision": "sha256:05518b25b34c0554a029a435a93680f4cead19c16cf8bd9ad96ae80d4cc2edbf",
+  "transportProtocolVersion": "personal-credential-transport.v1",
+  "transportProfileRevision": "personal-credential.route-a.structured-clone.v1",
+  "normalProductionGraphActivated": true,
+  "normalProductSensitiveCallerCount": 0,
+  "productionSensitiveTransportReady": true,
+  "transportBlockerClosed": true,
+  "productionFeatureEnabled": false,
+  "productionBusinessHandlerReady": false,
+  "productionHelperAssetPresent": false,
+  "personalModelCrudReady": false,
+  "credentialRevealReady": false,
+  "rendererPersonalModelUiReady": false,
+  "enterpriseIdentityReady": false,
+  "adminV2Ready": false,
+  "tgmReady": false,
+  "knowledgeProviderReady": false,
+  "agentLifecycleReady": false,
+  "zeroCopyClaimed": false,
+  "structuredCloneInternalCopiesReliablyClearable": false,
+  "normalGraphScenarioCount": 3,
+  "controlledDataPathScenarioCount": 6,
+  "semanticReplayCount": 3,
+  "semanticEvidenceDigest": "sha256:e64ed15d8bed7738c84e87d15292212f900eb04a466ef6c4bcb5c6e8a9e52cd8",
+  "authorityDriftDigest": "sha256:2f08b9b396f4b8384ca983f090c7f8bddcf213b3c95e259fcd6e4756312d152c",
+  "negativeLeakInjectionDetectionCount": 80,
+  "fourChannelLeakageMatchCounts": {
+    "parentStdout": 0,
+    "childStderr": 0,
+    "machineEvidence": 0,
+    "safeTrace": 0
+  },
+  "resourceCounts": {
+    "electronProcessCount": 0,
+    "browserWindowCount": 0,
+    "webContentsCount": 0,
+    "messagePortCount": 0,
+    "ipcListenerCount": 0,
+    "navigationListenerCount": 0,
+    "timerCount": 0,
+    "transportSessionCount": 0,
+    "transportRegistryCount": 0,
+    "brokerInflightCount": 0,
+    "brokerTombstoneCount": 0,
+    "coreChildProcessCount": 0,
+    "sensitiveStreamCount": 0,
+    "helperProcessCount": 0,
+    "listeningPortCount": 0,
+    "temporaryDirectoryCount": 0
+  },
+  "historicalDfi4a41EvidenceDigest": "sha256:69bdb4003e29c1bbe0d51b1dd987041c806babfea1b3ef6c1de282623c328750",
+  "historicalStrm23EvidenceArtifactPresent": false,
+  "parentQaLedgerStatus": "qa_061_080_executed_by_strm3",
+  "parentQaLedger": [
+    {
+      "qaId": "QA-061",
+      "ownerTest": "run-strm3-process-electron.mjs",
+      "evidenceKey": "mutationBypassesOrdinaryInvoke",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-062",
+      "ownerTest": "run-strm3-process-electron.mjs",
+      "evidenceKey": "updateSharesSensitiveMutationRoute",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-063",
+      "ownerTest": "run-strm3-process-electron.mjs",
+      "evidenceKey": "revealBypassesCoreHttp",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-064",
+      "ownerTest": "run-strm3-electron.mjs",
+      "evidenceKey": "productCallersRemainUnavailable",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-065",
+      "ownerTest": "strm2.2-personal-credential-directional-closure.test.ts",
+      "evidenceKey": "preloadBodyLengthBound",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-066",
+      "ownerTest": "strm2.2-personal-credential-directional-closure.test.ts",
+      "evidenceKey": "mainTicketBound",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-067",
+      "ownerTest": "strm2.1-personal-credential-lifecycle.test.ts",
+      "evidenceKey": "perWebContentsInflightBound",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-068",
+      "ownerTest": "strm2.1-personal-credential-lifecycle.test.ts",
+      "evidenceKey": "globalInflightBound",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-069",
+      "ownerTest": "strm2.2-personal-credential-directional-closure.test.ts",
+      "evidenceKey": "exactFrameAuthorization",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-070",
+      "ownerTest": "strm2.1-personal-credential-lifecycle.test.ts",
+      "evidenceKey": "staleTicketRejected",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-071",
+      "ownerTest": "strm2.1-personal-credential-lifecycle.test.ts",
+      "evidenceKey": "duplicateTicketRejected",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-072",
+      "ownerTest": "strm2.2-personal-credential-directional-closure.test.ts",
+      "evidenceKey": "lateBodyRejected",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-073",
+      "ownerTest": "strm2.1-personal-credential-lifecycle.test.ts",
+      "evidenceKey": "cancelSingleTerminal",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-074",
+      "ownerTest": "strm2.1-personal-credential-lifecycle.test.ts",
+      "evidenceKey": "deadlineSingleTerminal",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-075",
+      "ownerTest": "run-strm3-electron.mjs",
+      "evidenceKey": "oldCorePortInvalidAfterRestart",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-076",
+      "ownerTest": "strm2.2-personal-credential-directional-closure.test.ts",
+      "evidenceKey": "navigationAndCloseScrub",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-077",
+      "ownerTest": "strm2.3-personal-credential-transport-closure.test.ts",
+      "evidenceKey": "helperFrameStrict",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-078",
+      "ownerTest": "run-strm3-process-electron.mjs",
+      "evidenceKey": "helperStderrFailClosed",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-079",
+      "ownerTest": "run-strm3-process-electron.mjs",
+      "evidenceKey": "revealExactConsumerNoFanout",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-080",
+      "ownerTest": "run-strm3-harness.mjs",
+      "evidenceKey": "clipboardCacheBroadcastZero",
+      "result": "pass"
+    }
+  ],
+  "parentRemainingQaCount": 100,
+  "qaMatrixCount": 96,
+  "migrationMax": 26,
+  "lockfileDigest": "sha256:5b15ae0197c6f7a1450a49551fbfb50a9e0edc32f0fbe75a9259a360ed874f31",
+  "versions": {
+    "root": "0.0.0-strm.3",
+    "core": "0.0.0-strm.3",
+    "contracts": "0.0.0-dfi.4a.4.1",
+    "desktop": "0.0.0-strm.3",
+    "admin": "0.0.0-afe.6c"
+  },
+  "testFileCount": 5,
+  "testCount": 25,
+  "evidenceDigest": "sha256:f1a42004058f14ae3e1178dd2243d95a379874a62a11d4392784066bcff90722"
+}

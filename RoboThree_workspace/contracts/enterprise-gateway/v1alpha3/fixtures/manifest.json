@@ -1,0 +1,15 @@
+{
+  "contractVersion": "v1alpha3",
+  "cases": [
+    { "schema": "model-invocation", "file": "valid/model-invocation-accept-default.json", "valid": true },
+    { "schema": "model-invocation", "file": "valid/model-invocation-accept-max-cache.json", "valid": true },
+    { "schema": "model-invocation", "file": "invalid/model-invocation-accept-raw-reasoning.json", "valid": false },
+    { "schema": "model-invocation", "file": "invalid/model-invocation-accept-half-cache.json", "valid": false },
+    { "schema": "compatibility", "file": "valid/compatibility.json", "valid": true },
+    { "schema": "model-invocation", "file": "valid/model-invocation-accepted.json", "valid": true },
+    { "schema": "model-invocation", "file": "valid/model-invocation-cancel.json", "valid": true },
+    { "schema": "model-invocation", "file": "valid/model-invocation-event-durable.json", "valid": true },
+    { "schema": "model-invocation", "file": "valid/model-invocation-event-text-delta.json", "valid": true },
+    { "schema": "model-invocation", "file": "valid/model-invocation-status-running.json", "valid": true }
+  ]
+}

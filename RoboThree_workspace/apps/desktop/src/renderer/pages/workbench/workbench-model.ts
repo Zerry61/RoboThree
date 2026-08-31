@@ -3,6 +3,7 @@ import type {
   ArtifactCatalogItemProjection,
   ModelProjection,
   SessionSummary,
+  TaskDisplayStatus,
   TaskSummaryProjection,
   WorkspaceGrantProjection,
 } from "@robothree/contracts";
@@ -41,6 +42,20 @@ export type WorkbenchComposerState = {
   selectedKnowledgeCount: number;
 };
 
+const CONVERSATION_INPUT_STATUSES = new Set<TaskDisplayStatus>([
+  "waiting_input",
+  "completed",
+  "failed",
+  "cancelled",
+  "timed_out",
+]);
+
+export function canSubmitConversationTurn(
+  status: TaskDisplayStatus | undefined,
+): boolean {
+  return status === undefined || CONVERSATION_INPUT_STATUSES.has(status);
+}
+
 export const authorizationModes: ReadonlyArray<{
   value: WorkbenchAuthorizationMode;
   label: string;
@@ -74,7 +89,6 @@ export function normalizeWorkbenchSelection(
   const activeWorkspaces = catalog.workspaces.filter((workspace) =>
     workspace.status === "active");
   const liveSessions = catalog.sessions.filter((session) => !session.tombstoned);
-  const runnableAgents = catalog.agents.filter((agent) => agent.runnable);
 
   const hasInitializedAgentSelection = previous.agentSelectionInitialized === true;
   const hasPreviousAgent = hasInitializedAgentSelection
@@ -82,14 +96,13 @@ export function normalizeWorkbenchSelection(
     && previous.agentId !== "";
   const agent = hasPreviousAgent
     ? catalog.agents.find((item) => item.agentId === previous.agentId)
-    : hasInitializedAgentSelection
-      ? undefined
-    : runnableAgents[0];
+    : undefined;
   const modelId = agent === undefined
-    ? ""
+    ? (hasInitializedAgentSelection
+      ? ""
+      : selectModelId(catalog.models, undefined, previous.requestedModelId))
     : selectModelId(catalog.models, agent, previous.requestedModelId);
-  const agentSelectionInitialized = hasInitializedAgentSelection
-    || catalog.agents.length > 0;
+  const agentSelectionInitialized = hasInitializedAgentSelection;
 
   return {
     workspaceGrantId: activeWorkspaces.some((workspace) =>
@@ -98,7 +111,7 @@ export function normalizeWorkbenchSelection(
       : activeWorkspaces[0]?.workspaceGrantId ?? "",
     sessionId: liveSessions.some((session) => session.sessionId === previous.sessionId)
       ? String(previous.sessionId)
-      : liveSessions[0]?.sessionId ?? "",
+      : "",
     agentId: agent?.agentId ?? "",
     agentSelectionInitialized,
     requestedModelId: modelId,
@@ -132,28 +145,42 @@ export function presentWorkbenchComposer(input: {
   let disabledReason = "";
   if (input.busy) {
     disabledReason = "任务正在提交中。";
-  } else if (input.selection.workspaceGrantId === "") {
-    disabledReason = "请选择一个已授权工作区。";
-  } else if (agent === undefined) {
-    disabledReason = "请选择可运行的机器人。";
+  } else if (agent === undefined && input.selection.agentId !== "") {
+    disabledReason = "原机器人已不可用，请重新选择。";
+  } else if (
+    agent === undefined
+    && input.selection.agentId === ""
+    && input.selection.agentSelectionInitialized
+  ) {
+    disabledReason = "请选择机器人，或切换为通用机器人。";
   } else if (!hasEligibleModel) {
-    disabledReason = "该机器人当前没有可用模型，请更换机器人或联系管理员。";
-  } else if (!agent.runnable) {
+    disabledReason = agent === undefined
+      ? "当前没有可用模型，请联系管理员。"
+      : "该机器人当前没有可用模型，请更换机器人或联系管理员。";
+  } else if (agent !== undefined && !agent.runnable) {
     disabledReason = "请选择可运行的机器人。";
-  } else if (model === undefined || !model.available || !modelAllowedForAgent) {
+  } else if (
+    agent !== undefined
+    && (model === undefined || !model.available || !modelAllowedForAgent)
+  ) {
     disabledReason = "请选择该机器人可用的模型。";
-  } else if (input.composerText.trim() === "") {
-    disabledReason = "输入任务内容后即可提交。";
+  } else if (
+    agent === undefined
+    && input.selection.requestedModelId !== ""
+    && (model === undefined || !model.available || !modelAllowedForAgent)
+  ) {
+    disabledReason = "请选择该机器人可用的模型。";
   }
 
   return {
-    sendDisabled: disabledReason !== "",
+    sendDisabled: disabledReason !== "" || input.composerText.trim() === "",
     disabledReason,
     selectionSummary: [
-      `${selectedToolCount} Tools`,
-      `${selectedSkillCount}/${availableSkillCount} Skills`,
-      `${selectedKnowledgeCount}/${availableKnowledgeCount} Knowledge`,
-      input.selection.workspaceGrantId === "" ? "No Workspace" : "Workspace Bound",
+      agent === undefined ? "通用机器人" : agent.name,
+      `${selectedToolCount} 个工具`,
+      `${selectedSkillCount}/${availableSkillCount} 个技能`,
+      `${selectedKnowledgeCount}/${availableKnowledgeCount} 个知识源`,
+      input.selection.workspaceGrantId === "" ? "RoboThree 默认工作区" : "已选择工作区",
     ].join(" · "),
     availableSkillCount,
     selectedSkillCount,
@@ -199,7 +226,8 @@ export function selectModelId(
 ): string {
   if (agent !== undefined) {
     const eligibleIds = eligibleAvailableModelIds(models, agent);
-    if (requestedModelId !== undefined && eligibleIds.includes(requestedModelId)) {
+    if (requestedModelId !== undefined && requestedModelId !== "") {
+      if (!eligibleIds.includes(requestedModelId)) return "";
       return requestedModelId;
     }
     if (eligibleIds.includes(agent.defaultModelId)) {
@@ -210,6 +238,7 @@ export function selectModelId(
 
   if (
     requestedModelId !== undefined
+    && requestedModelId !== ""
     && models.some((model) => model.modelId === requestedModelId && model.available)
   ) {
     return requestedModelId;

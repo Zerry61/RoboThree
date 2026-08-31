@@ -2,6 +2,9 @@ import {
   NdjsonFrameDecoder,
   encodeDocumentWorkerMessage,
   parseDocumentWorkerInvoke,
+  parseDocumentWorkerTextWriteInspect,
+  createDocumentWorkerTextWritePostconditionMessage,
+  createErrorMessage,
   createReadyMessage,
 } from "./protocol/index.js";
 import { DocumentWorkerRuntime } from "./runtime/index.js";
@@ -11,6 +14,13 @@ import {
   computeErrorDigest,
 } from "./common/index.js";
 import { DocumentCapabilityRouter } from "./handlers/index.js";
+import {
+  computeTextFileWriteRequestDigest,
+  createRecoveredTextFileWriteResult,
+  inspectTextFileWritePostcondition,
+  normalizeTextFileWriteRequest,
+} from "./text/index.js";
+import { DocumentCapabilityHandlerError } from "./runtime/index.js";
 
 import type { DocumentWorkerProtocolMessage } from "./protocol/index.js";
 
@@ -67,7 +77,10 @@ process.on("exit", (code) => {
 function handleFrame(frame: string): void {
   let terminalPromise: Promise<DocumentWorkerProtocolMessage>;
   try {
-    terminalPromise = runtime.invoke(parseDocumentWorkerInvoke(frame));
+    const envelope = JSON.parse(frame) as { type?: unknown };
+    terminalPromise = envelope.type === "inspect_text_write_postcondition"
+      ? inspectTextWrite(frame)
+      : runtime.invoke(parseDocumentWorkerInvoke(frame));
   } catch {
     logError(
       "internal_failure",
@@ -84,6 +97,91 @@ function handleFrame(frame: string): void {
     scheduleExitWhenIdle();
   });
   pendingTerminals.add(writePromise);
+}
+
+async function inspectTextWrite(frame: string): Promise<DocumentWorkerProtocolMessage> {
+  const request = parseDocumentWorkerTextWriteInspect(frame);
+  if (runtime.snapshot().active || pendingTerminals.size > 0) {
+    return createErrorMessage(
+      request.requestId,
+      request.actionId,
+      request.effectAttemptId,
+      "worker_busy",
+      "Document Worker is already processing another request",
+      undefined,
+      undefined,
+      request.protocolVersion,
+    );
+  }
+  try {
+    const normalized = normalizeTextFileWriteRequest(
+      request.relativePath,
+      request.options,
+      request.limits,
+    );
+    const expectedDigest = computeTextFileWriteRequestDigest({
+      idempotencyKey: request.idempotencyKey,
+      workspaceGrantId: normalized.options.workspaceGrantId,
+      relativePath: normalized.relativePath,
+      mode: normalized.options.mode,
+      contentSha256: normalized.contentSha256,
+      ...(normalized.options.expectedPreviousSha256 === undefined
+        ? {}
+        : { expectedPreviousSha256: normalized.options.expectedPreviousSha256 }),
+      ...(normalized.options.ownedArtifactProofDigest === undefined
+        ? {}
+        : { ownedArtifactProofDigest: normalized.options.ownedArtifactProofDigest }),
+      limitsRevision: normalized.options.limitsRevision,
+    });
+    if (expectedDigest !== request.requestDigest) {
+      throw new DocumentCapabilityHandlerError(
+        "invalid_format",
+        "Text write request digest mismatch",
+        undefined,
+        "invalid_arguments",
+      );
+    }
+    const startedAt = Date.now();
+    const postcondition = await inspectTextFileWritePostcondition({
+      workspaceRoot: request.workspaceRoot,
+      relativePath: request.relativePath,
+      options: request.options,
+      limits: request.limits,
+    });
+    const recovered = postcondition.decision === "recovered_success"
+      ? createRecoveredTextFileWriteResult({
+        relativePath: request.relativePath,
+        options: request.options,
+        limits: request.limits,
+        postcondition,
+        timingMs: Date.now() - startedAt,
+      })
+      : undefined;
+    return createDocumentWorkerTextWritePostconditionMessage({
+      request,
+      decision: postcondition.decision,
+      ...(recovered === undefined ? {} : recovered),
+    });
+  } catch (error) {
+    const normalized = error instanceof DocumentCapabilityHandlerError
+      ? error
+      : new DocumentCapabilityHandlerError(
+        "internal_failure",
+        "Text write postcondition inspection failed",
+        undefined,
+        "recovery_uncertain",
+      );
+    return createErrorMessage(
+      request.requestId,
+      request.actionId,
+      request.effectAttemptId,
+      normalized.code,
+      normalized.message,
+      normalized.digest,
+      normalized.detailCode,
+      request.protocolVersion,
+    );
+  }
 }
 
 function scheduleExitWhenIdle(): void {

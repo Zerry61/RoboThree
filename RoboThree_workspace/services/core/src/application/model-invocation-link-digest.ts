@@ -34,6 +34,7 @@ export function samePreparedModelInvocationLink(
   const recordV2 = "schemaVersion" in record;
   const inputV2 = "schemaVersion" in input;
   if (recordV2 !== inputV2) return false;
+  if (record.providerRequestDeadlineAt !== input.providerRequestDeadlineAt) return false;
   if (!recordV2 || !inputV2) return true;
   return record.schemaVersion === input.schemaVersion
     && record.contextAssemblyReceiptDigest === input.contextAssemblyReceiptDigest

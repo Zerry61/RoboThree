@@ -1,13 +1,11 @@
 import {
-  AgentDefinitionRevisionSchema,
   JsonValueSchema,
   ModelInstructionMessageSchema,
   canonicalJsonStringify,
-  type AgentDefinitionRevision,
   type ModelInstructionMessage,
 } from "@robothree/contracts";
-import type { ReadableTaskRuntimeSelection } from
-  "@robothree/contracts/runtime-selection/v1alpha2";
+import type { ReadableTaskRuntimeSelectionV1Alpha4 } from
+  "@robothree/contracts/runtime-selection/v1alpha4";
 
 import type { LockedSkillInstructionResolver } from
   "../ports/locked-skill-instruction-resolver.js";
@@ -20,6 +18,7 @@ import {
   createInstructionBundleDescriptorV1,
   createInstructionSourceV1,
   deriveTaskInstructionBindingV1FromValidatedSelection,
+  deriveTaskInstructionBindingV1FromValidatedSelectionV1Alpha4,
   validateTaskInstructionBindingV1,
   type InstructionBundleDescriptorV1,
   type InstructionSourceV1,
@@ -30,10 +29,11 @@ import {
   PLATFORM_PROMPT_V1_SOURCE_ID,
 } from "./platform-prompt-source.js";
 import { ContextBudgetPolicy } from "./context-budget-policy.js";
+import { parseReadableTaskRuntimeSelectionV1Alpha4 } from "./runtime-selection-revisions.js";
 import {
-  hasValidAgentDefinitionRevision,
-  parseReadableTaskRuntimeSelection,
-} from "./runtime-selection-revisions.js";
+  parseReadableAgentDefinitionRevision,
+  type ReadableAgentDefinitionRevision,
+} from "./agent-definition-v1alpha2.js";
 
 export const INSTRUCTION_BUNDLE_MESSAGE_SOURCE_ID =
   "core.instruction-bundle.v1";
@@ -50,11 +50,11 @@ export type CompiledInstructionBundleV1 = Readonly<{
 
 export class TaskBoundaryInstructionMaterializer {
   public materialize(
-    runtimeSelection: ReadableTaskRuntimeSelection,
+    runtimeSelection: ReadableTaskRuntimeSelectionV1Alpha4,
   ): InstructionSourceV1 {
-    let selection: ReadableTaskRuntimeSelection;
+    let selection: ReadableTaskRuntimeSelectionV1Alpha4;
     try {
-      selection = parseReadableTaskRuntimeSelection(runtimeSelection);
+      selection = parseReadableTaskRuntimeSelectionV1Alpha4(runtimeSelection);
     } catch {
       throw new CpcInstructionFoundationError(
         "context.instruction_source_invalid",
@@ -65,7 +65,7 @@ export class TaskBoundaryInstructionMaterializer {
   }
 
   public materializeValidated(
-    selection: ReadableTaskRuntimeSelection,
+    selection: ReadableTaskRuntimeSelectionV1Alpha4,
   ): InstructionSourceV1 {
     const workspace = selection.workspaceGrantId === undefined
       ? "本任务未锁定可用工作空间；不要读取、创建或修改文件。"
@@ -100,18 +100,17 @@ export class TaskBoundaryInstructionMaterializer {
 export class AgentInstructionMaterializer {
   public materialize(input: Readonly<{
     binding: TaskInstructionBindingV1;
-    agent: AgentDefinitionRevision;
+    agent: ReadableAgentDefinitionRevision;
   }>): InstructionSourceV1 {
     const binding = validateTaskInstructionBindingV1(input.binding);
-    let agent: AgentDefinitionRevision;
+    let agent: ReadableAgentDefinitionRevision;
     try {
-      agent = AgentDefinitionRevisionSchema.parse(input.agent);
+      agent = parseReadableAgentDefinitionRevision(input.agent);
     } catch {
       throw agentInvalid();
     }
     if (
-      !hasValidAgentDefinitionRevision(agent)
-      || agent.revision !== binding.agentRevision
+      agent.revision !== binding.agentRevision
       || agent.digest !== binding.agentDigest
     ) throw agentInvalid();
     return createInstructionSourceV1({
@@ -238,13 +237,13 @@ export class TaskInstructionBundleMaterializer {
   }
 
   public async materialize(input: Readonly<{
-    runtimeSelection: ReadableTaskRuntimeSelection;
+    runtimeSelection: ReadableTaskRuntimeSelectionV1Alpha4;
     submitTurnBundleDigest: string;
-    agent: AgentDefinitionRevision;
+    agent: ReadableAgentDefinitionRevision;
   }>): Promise<CompiledInstructionBundleV1> {
-    let selection: ReadableTaskRuntimeSelection;
+    let selection: ReadableTaskRuntimeSelectionV1Alpha4;
     try {
-      selection = parseReadableTaskRuntimeSelection(input.runtimeSelection);
+      selection = parseReadableTaskRuntimeSelectionV1Alpha4(input.runtimeSelection);
     } catch {
       throw new CpcInstructionFoundationError(
         "context.instruction_binding_invalid",
@@ -258,16 +257,22 @@ export class TaskInstructionBundleMaterializer {
   }
 
   public async materializeValidated(input: Readonly<{
-    runtimeSelection: ReadableTaskRuntimeSelection;
+    runtimeSelection: ReadableTaskRuntimeSelectionV1Alpha4;
     submitTurnBundleDigest: string;
-    agent: AgentDefinitionRevision;
+    agent: ReadableAgentDefinitionRevision;
   }>): Promise<CompiledInstructionBundleV1> {
     const selection = input.runtimeSelection;
-    const binding = deriveTaskInstructionBindingV1FromValidatedSelection({
-      runtimeSelection: selection,
-      submitTurnBundleDigest: input.submitTurnBundleDigest,
-      assemblyRevision: CPC1_INSTRUCTION_ASSEMBLY_REVISION,
-    });
+    const binding = selection.schemaVersion === "v1alpha4"
+      ? deriveTaskInstructionBindingV1FromValidatedSelectionV1Alpha4({
+        runtimeSelection: selection,
+        submitTurnBundleDigest: input.submitTurnBundleDigest,
+        assemblyRevision: CPC1_INSTRUCTION_ASSEMBLY_REVISION,
+      })
+      : deriveTaskInstructionBindingV1FromValidatedSelection({
+        runtimeSelection: selection,
+        submitTurnBundleDigest: input.submitTurnBundleDigest,
+        assemblyRevision: CPC1_INSTRUCTION_ASSEMBLY_REVISION,
+      });
     const sources: InstructionSourceV1[] = [
       this.#platform.materializeExact(binding.platformPromptRevision),
       this.#boundary.materializeValidated(selection),

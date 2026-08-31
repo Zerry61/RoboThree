@@ -34,16 +34,13 @@ defineOptions({ name: "RoboThreeSettingsSectionNav" });
 
 <style scoped>
 .settings-section-nav {
-  border: 1px solid var(--r3-color-border);
-  border-radius: var(--r3-radius-md);
-  padding: 8px;
+  padding: 2px 0;
   display: grid;
-  gap: 4px;
-  background: var(--r3-color-surface);
+  gap: 2px;
 }
 
 .settings-section-nav__item {
-  min-height: 36px;
+  min-height: 38px;
   border-radius: var(--r3-radius-sm);
   padding: 0 10px;
   display: flex;
@@ -56,8 +53,8 @@ defineOptions({ name: "RoboThreeSettingsSectionNav" });
 }
 
 .settings-section-nav__item--active {
-  background: var(--r3-color-primary-subtle);
-  color: var(--r3-color-primary);
+  background: #e9edf6;
+  color: var(--r3-color-text);
   font-weight: 700;
 }
 

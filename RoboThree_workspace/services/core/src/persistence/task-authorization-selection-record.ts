@@ -7,6 +7,8 @@ import {
 } from "@robothree/contracts";
 import type { ReadableTaskRuntimeSelection } from
   "@robothree/contracts/runtime-selection/v1alpha2";
+import type { ReadableTaskRuntimeSelectionV1Alpha4 } from
+  "@robothree/contracts/runtime-selection/v1alpha4";
 
 import type {
   AuthorizationAwareSubmitTurnTaskBundle,
@@ -20,6 +22,8 @@ import {
   hasValidTaskExecutionSelectionIdentity,
 } from "../application/task-authorization-selection-service.js";
 import { parseReadableTaskRuntimeSelection } from
+  "../application/runtime-selection-revisions.js";
+import { parseReadableTaskRuntimeSelectionV1Alpha4 } from
   "../application/runtime-selection-revisions.js";
 import { sha256CanonicalJson } from "./digest.js";
 import { failure } from "./validation.js";
@@ -64,10 +68,12 @@ export function parseTaskAuthorizationPersistenceRecord(
 
 export function validateTaskAuthorizationRecordAgainstRuntimeSelection(
   input: unknown,
-  runtimeSelection: ReadableTaskRuntimeSelection,
+  runtimeSelection: ReadableTaskRuntimeSelectionV1Alpha4,
 ): TaskAuthorizationPersistenceRecord {
   const record = parseTaskAuthorizationPersistenceRecord(input);
-  const parsedRuntimeSelection = parseReadableTaskRuntimeSelection(runtimeSelection);
+  const parsedRuntimeSelection = parseReadableTaskRuntimeSelectionV1Alpha4(
+    runtimeSelection,
+  );
   if (
     record.selection.taskId !== parsedRuntimeSelection.taskId
     || record.selection.runtimeSelectionId

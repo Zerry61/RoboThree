@@ -9,6 +9,7 @@ export {
   DOCUMENT_WORKER_PROTOCOL_VERSION,
   DocumentWorkerProtocolError,
   createErrorMessage,
+  createDocumentWorkerTextWritePostconditionMessage,
   createReadyMessage,
   createResultMessage,
   encodeDocumentWorkerMessage,
@@ -16,6 +17,8 @@ export {
   parseDocumentWorkerInvoke,
   parseDocumentWorkerReady,
   parseDocumentWorkerResult,
+  parseDocumentWorkerTextWriteInspect,
+  parseDocumentWorkerTextWritePostcondition,
 } from "./document-worker-protocol.js";
 
 export type {
@@ -23,6 +26,8 @@ export type {
   DocumentWorkerErrorCode,
   DocumentWorkerErrorMessage,
   DocumentWorkerInvokeMessage,
+  DocumentWorkerTextWriteInspectMessage,
+  DocumentWorkerTextWritePostconditionMessage,
   DocumentWorkerLimits,
   DocumentWorkerProtocolMessage,
   DocumentWorkerReadyMessage,

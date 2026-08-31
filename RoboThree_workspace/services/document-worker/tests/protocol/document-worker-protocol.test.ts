@@ -170,6 +170,34 @@ describe("parseDocumentWorkerInvoke", () => {
     expect(parsed.requestDigest).toBe(requestDigest);
   });
 
+  it("parses the exact private workspace text write capability only on v1alpha2", () => {
+    const privateInvoke = {
+      ...SAMPLE_INVOKE,
+      protocolVersion: DOCUMENT_WORKER_PRIVATE_PROTOCOL_VERSION,
+      capabilityId: "tool.workspace.file.write_text",
+      relativePath: "index.html",
+      options: {
+        content: "<main>ok</main>",
+        mode: "create_new",
+        workspaceGrantId: "workspace-grant",
+        limitsRevision: "workspace-text.v1",
+      },
+      idempotencyKey: "workspace-text:task:call",
+      requestDigest: "a".repeat(64),
+    };
+    expect(parseDocumentWorkerInvoke(JSON.stringify(privateInvoke)).capabilityId).toBe(
+      "tool.workspace.file.write_text",
+    );
+    expect(() => parseDocumentWorkerInvoke(JSON.stringify({
+      ...privateInvoke,
+      protocolVersion: DOCUMENT_WORKER_PROTOCOL_VERSION,
+    }))).toThrow(DocumentWorkerProtocolError);
+    expect(() => parseDocumentWorkerInvoke(JSON.stringify({
+      ...privateInvoke,
+      capabilityId: "tool.workspace.file.delete",
+    }))).toThrow(DocumentWorkerProtocolError);
+  });
+
   it("rejects malformed v1alpha2 requestDigest", () => {
     const frame = JSON.stringify({
       ...SAMPLE_INVOKE,

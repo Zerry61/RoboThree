@@ -32,12 +32,12 @@
             <dd>{{ config.runtimeStatusLabel }}</dd>
           </div>
           <div>
-            <dt>能力状态</dt>
-            <dd>{{ config.capabilityState }}</dd>
+            <dt>功能状态</dt>
+            <dd>{{ config.capabilityLabel }}</dd>
           </div>
           <div>
-            <dt>数据来源</dt>
-            <dd>{{ config.dataOrigin }}</dd>
+            <dt>页面说明</dt>
+            <dd>静态说明，不会保存或提交</dd>
           </div>
         </dl>
       </R3Card>
@@ -113,7 +113,10 @@ defineProps<{
 <style scoped>
 .settings-gate-page {
   display: grid;
-  gap: 20px;
+  align-content: start;
+  gap: 14px;
+  width: min(100%, 1080px);
+  margin: 0 auto;
   padding: 24px;
   min-width: 0;
 }
@@ -176,6 +179,12 @@ defineProps<{
   .settings-gate-page__facts,
   .settings-gate-page__fields {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .settings-gate-page {
+    padding: 18px 14px;
   }
 }
 </style>

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   authorizationModes,
+  canSubmitConversationTurn,
   normalizeKnowledgeIds,
   normalizeSkillIds,
   normalizeWorkbenchSelection,
@@ -12,6 +13,29 @@ import {
 
 const digest = "a".repeat(64);
 const timestamp = "2026-08-16T00:00:00.000Z";
+
+describe("conversation input availability", () => {
+  it.each([
+    "waiting_input",
+    "completed",
+    "failed",
+    "cancelled",
+    "timed_out",
+  ] as const)("allows a later turn after %s", (status) => {
+    expect(canSubmitConversationTurn(status)).toBe(true);
+  });
+
+  it.each([
+    "preparing",
+    "queued",
+    "running",
+    "waiting_confirmation",
+    "recovering",
+    "manual_attention",
+  ] as const)("keeps the composer locked while status is %s", (status) => {
+    expect(canSubmitConversationTurn(status)).toBe(false);
+  });
+});
 
 const catalog: WorkbenchCatalog = {
   workspaces: [{
@@ -82,7 +106,7 @@ describe("DFE-2A Workbench view model", () => {
     expect(authorizationModes.every((mode) => mode.status === "待接入")).toBe(true);
   });
 
-  it("normalizes selection to active workspace, live session and runnable agent without auto-selecting resources", () => {
+  it("uses the generic robot with the first available model and no specialist resources", () => {
     const selection = normalizeWorkbenchSelection(catalog, {
       workspaceGrantId: "missing",
       selectedSkillIds: ["skill:blocked"],
@@ -90,9 +114,10 @@ describe("DFE-2A Workbench view model", () => {
     });
 
     expect(selection.workspaceGrantId).toBe("workspace:one");
-    expect(selection.sessionId).toBe("session:one");
-    expect(selection.agentId).toBe("agent:normal");
+    expect(selection.sessionId).toBe("");
+    expect(selection.agentId).toBe("");
     expect(selection.requestedModelId).toBe("model:gpt");
+    expect(selection.agentSelectionInitialized).toBe(false);
     expect(selection.selectedSkillIds).toEqual([]);
     expect(selection.selectedKnowledgeIds).toEqual([]);
   });
@@ -114,8 +139,8 @@ describe("DFE-2A Workbench view model", () => {
       busy: false,
     })).toMatchObject({
       sendDisabled: true,
-      disabledReason: "输入任务内容后即可提交。",
-      selectionSummary: "2 Tools · 0/1 Skills · 0/1 Knowledge · Workspace Bound",
+      disabledReason: "",
+      selectionSummary: "通用机器人 · 0 个工具 · 0/0 个技能 · 0/0 个知识源 · 已选择工作区",
     });
 
     expect(presentWorkbenchComposer({
@@ -126,6 +151,30 @@ describe("DFE-2A Workbench view model", () => {
     })).toMatchObject({
       sendDisabled: false,
       disabledReason: "",
+    });
+  });
+
+  it("fails closed for the generic robot when no model is available", () => {
+    const nextCatalog = {
+      ...catalog,
+      models: [{
+        ...catalog.models[0]!,
+        available: false,
+        unavailableReason: "Model is unavailable",
+      }],
+    };
+    const selection = normalizeWorkbenchSelection(nextCatalog);
+
+    expect(selection.agentId).toBe("");
+    expect(selection.requestedModelId).toBe("");
+    expect(presentWorkbenchComposer({
+      catalog: nextCatalog,
+      selection,
+      composerText: "Do work",
+      busy: false,
+    })).toMatchObject({
+      sendDisabled: true,
+      disabledReason: "当前没有可用模型，请联系管理员。",
     });
   });
 
@@ -168,6 +217,46 @@ describe("DFE-2A Workbench view model", () => {
     });
   });
 
+  it("clears an unavailable requested model instead of silently falling back to another model", () => {
+    const fallbackModel = {
+      ...catalog.models[0]!,
+      modelId: "model:fallback",
+      name: "Fallback",
+    };
+    const requestedUnavailableModel = {
+      ...catalog.models[0]!,
+      available: false,
+      unavailableReason: "Model is unavailable",
+    };
+    const agent = {
+      ...catalog.agents[0]!,
+      defaultModelId: "model:fallback",
+      eligibleModels: [requestedUnavailableModel, fallbackModel],
+    };
+    const nextCatalog = {
+      ...catalog,
+      agents: [agent],
+      models: [requestedUnavailableModel, fallbackModel],
+    };
+    const selection = normalizeWorkbenchSelection(nextCatalog, {
+      agentId: "agent:normal",
+      agentSelectionInitialized: true,
+      requestedModelId: "model:gpt",
+    });
+
+    expect(selection.agentId).toBe("agent:normal");
+    expect(selection.requestedModelId).toBe("");
+    expect(presentWorkbenchComposer({
+      catalog: nextCatalog,
+      selection,
+      composerText: "Do work",
+      busy: false,
+    })).toMatchObject({
+      sendDisabled: true,
+      disabledReason: "请选择该机器人可用的模型。",
+    });
+  });
+
   it("clears a disappeared selected agent instead of switching to another robot", () => {
     const generalAgent = {
       ...catalog.agents[0],
@@ -198,7 +287,7 @@ describe("DFE-2A Workbench view model", () => {
       busy: false,
     })).toMatchObject({
       sendDisabled: true,
-      disabledReason: "请选择可运行的机器人。",
+      disabledReason: "请选择机器人，或切换为通用机器人。",
     });
 
     const secondRefreshSelection = normalizeWorkbenchSelection(nextCatalog, selection);

@@ -23,7 +23,8 @@ export type SettingsAdapter = {
 export const settingsAdapterKey: InjectionKey<SettingsAdapter> =
   Symbol("RoboThreeSettingsAdapter");
 
-const clientInstanceId = `renderer:dfe5a1:${randomId()}`;
+const clientInstanceId = randomId();
+const fallbackSettingsErrorMessage = "模型管理暂不可用，请稍后重试。";
 
 export const desktopSettingsAdapter: SettingsAdapter = {
   async loadSettingsModels(): Promise<SettingsModelsData> {
@@ -41,9 +42,28 @@ export const desktopSettingsAdapter: SettingsAdapter = {
 async function accept<T>(operation: Promise<RendererSafeResult<T>>): Promise<T> {
   const result = await operation;
   if (!result.ok) {
-    throw new DesktopSettingsAdapterError(result.error.safeSummary);
+    throw new DesktopSettingsAdapterError(safeSettingsErrorMessage(result.error.safeSummary));
   }
   return result.value;
+}
+
+export function safeSettingsErrorMessage(message: string): string {
+  const normalized = message.trim();
+  if (normalized.length === 0 || normalized.length > 160) return fallbackSettingsErrorMessage;
+  if (/[{}[\]]/u.test(normalized)) return fallbackSettingsErrorMessage;
+  const blockedFragments = [
+    "client" + "InstanceId",
+    "workspace" + "Root",
+    "root" + "RealPath",
+    "credential" + "Reference",
+    "request" + "Digest",
+    "stack",
+    "pattern",
+  ];
+  if (blockedFragments.some((fragment) => normalized.includes(fragment))) {
+    return fallbackSettingsErrorMessage;
+  }
+  return normalized;
 }
 
 function getDesktopApi(): RoboThreeDesktopApiV1Alpha1 {

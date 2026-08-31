@@ -57,6 +57,16 @@ final class SchemaTestInstaller {
     private static final String V0009_UPGRADE_DIGEST =
             "9c158e5621b618dec85655e778383e0869245c7815bf999cc1c161400daa29f6";
     private static final String V0009_RELEASE = "0.0.0-arh.3.2.2";
+    private static final String V0010_UPGRADE_NAME =
+            "U0010__enterprise_session_persistence_from_v0009.sql";
+    private static final String V0010_UPGRADE_DIGEST =
+            "1f276a223d9853be28a6d4f0ca0a3afff7cc42fc35dc46669e8b4289bda6af49";
+    private static final String V0010_RELEASE = "0.0.0-eipc.1.1.2";
+    private static final String V0011_UPGRADE_NAME =
+            "U0011__admin_model_management_from_v0010.sql";
+    private static final String V0011_UPGRADE_DIGEST =
+            "7ebb73e1d06171805457576882b9fc79218ae0dd6e6658d9fbf38beb37cd3bf5";
+    private static final String V0011_RELEASE = "0.0.0-mvp.admin.vs1";
     private final SchemaManifest manifest = new SchemaManifestLoader().load();
 
     InstallResult installFresh(DataSource dataSource) {
@@ -64,13 +74,17 @@ final class SchemaTestInstaller {
     }
 
     InstallResult installBridge(DataSource dataSource) {
-        if (!targetInstalled(dataSource)) {
+        if (!versionInstalled(dataSource, 10)) {
             installV0006(dataSource, V0006_BRIDGE_NAME, V0006_BRIDGE_DIGEST);
             installV0007(dataSource, V0007_UPGRADE_NAME, V0007_UPGRADE_DIGEST);
             installV0008(dataSource, V0008_UPGRADE_NAME, V0008_UPGRADE_DIGEST);
             installV0009(dataSource, V0009_UPGRADE_NAME, V0009_UPGRADE_DIGEST);
+            installV0010(dataSource);
         }
-        return install(dataSource, "v0009_upgrade", FailurePoint.NONE, null);
+        if (!versionInstalled(dataSource, 11)) {
+            installV0011(dataSource);
+        }
+        return install(dataSource, "v0011_upgrade", FailurePoint.NONE, null);
     }
 
     InstallResult installFromV0006Fresh(DataSource dataSource) {
@@ -78,25 +92,33 @@ final class SchemaTestInstaller {
         installV0007(dataSource, V0007_UPGRADE_NAME, V0007_UPGRADE_DIGEST);
         installV0008(dataSource, V0008_UPGRADE_NAME, V0008_UPGRADE_DIGEST);
         installV0009(dataSource, V0009_UPGRADE_NAME, V0009_UPGRADE_DIGEST);
-        return install(dataSource, "v0009_upgrade", FailurePoint.NONE, null);
+        installV0010(dataSource);
+        installV0011(dataSource);
+        return install(dataSource, "v0011_upgrade", FailurePoint.NONE, null);
     }
 
     InstallResult installFromV0007Fresh(DataSource dataSource) {
         installV0007(dataSource, V0007_FRESH_NAME, V0007_FRESH_DIGEST);
         installV0008(dataSource, V0008_UPGRADE_NAME, V0008_UPGRADE_DIGEST);
         installV0009(dataSource, V0009_UPGRADE_NAME, V0009_UPGRADE_DIGEST);
-        return install(dataSource, "v0009_upgrade", FailurePoint.NONE, null);
+        installV0010(dataSource);
+        installV0011(dataSource);
+        return install(dataSource, "v0011_upgrade", FailurePoint.NONE, null);
     }
 
     InstallResult installFromV0008Fresh(DataSource dataSource) {
         installV0008(dataSource, V0008_FRESH_NAME, V0008_FRESH_DIGEST);
         installV0009(dataSource, V0009_UPGRADE_NAME, V0009_UPGRADE_DIGEST);
-        return install(dataSource, "v0009_upgrade", FailurePoint.NONE, null);
+        installV0010(dataSource);
+        installV0011(dataSource);
+        return install(dataSource, "v0011_upgrade", FailurePoint.NONE, null);
     }
 
     InstallResult installFromV0009Fresh(DataSource dataSource) {
         installV0009(dataSource, V0009_FRESH_NAME, V0009_FRESH_DIGEST);
-        return install(dataSource, "v0009_upgrade", FailurePoint.NONE, null);
+        installV0010(dataSource);
+        installV0011(dataSource);
+        return install(dataSource, "v0011_upgrade", FailurePoint.NONE, null);
     }
 
     InstallResult install(
@@ -221,7 +243,7 @@ final class SchemaTestInstaller {
     private static byte[] readScript(SchemaManifest.Script script) {
         Path directory = switch (script.entryPath()) {
             case "fresh" -> SQL_ROOT.resolve("baseline");
-            case "v0009_upgrade" -> SQL_ROOT.resolve("upgrade");
+            case "v0011_upgrade" -> SQL_ROOT.resolve("upgrade");
             default -> throw new IllegalArgumentException("unsupported schema entry path");
         };
         try {
@@ -235,6 +257,10 @@ final class SchemaTestInstaller {
     }
 
     private boolean targetInstalled(DataSource dataSource) {
+        return versionInstalled(dataSource, manifest.targetSchemaVersion());
+    }
+
+    private boolean versionInstalled(DataSource dataSource, int version) {
         try (Connection connection = dataSource.getConnection()) {
             if (!tableExists(connection, "robothree_schema_version")) {
                 return false;
@@ -244,7 +270,7 @@ final class SchemaTestInstaller {
                     FROM robothree_schema_version
                     WHERE version = ?
                     """)) {
-                query.setInt(1, manifest.targetSchemaVersion());
+                query.setInt(1, version);
                 try (ResultSet rows = query.executeQuery()) {
                     rows.next();
                     return rows.getInt(1) == 1;
@@ -396,6 +422,16 @@ final class SchemaTestInstaller {
                 expectedDigest,
                 V0009_RELEASE,
                 "v0009");
+    }
+
+    private static void installV0010(DataSource dataSource) {
+        installHistoricalVersion(dataSource, 10, V0010_UPGRADE_NAME,
+                V0010_UPGRADE_DIGEST, V0010_RELEASE, "v0010");
+    }
+
+    private static void installV0011(DataSource dataSource) {
+        installHistoricalVersion(dataSource, 11, V0011_UPGRADE_NAME,
+                V0011_UPGRADE_DIGEST, V0011_RELEASE, "v0011");
     }
 
     private static void installHistoricalVersion(

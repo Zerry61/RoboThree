@@ -1,0 +1,1591 @@
+{
+  "status": "PASS",
+  "outcome": "DFI5_MAX_REASONING_MODE_CONFORMANT",
+  "focusedQaMatrixCount": 120,
+  "parentQaMatrixCount": 108,
+  "parentQaLedgerStatus": "executed_at_dfi54_stage_closure",
+  "parentQaLedger": [
+    {
+      "qaId": "QA-001",
+      "ownerTest": "historical:dfi541",
+      "evidenceKey": "maxCoreContractEvidence",
+      "result": "pass",
+      "historicalSource": "dfi541",
+      "historicalEvidenceDigest": "sha256:165d1544a66ed12578271b490767fc5be1d513c2324355adf4da6a74e9735ed4"
+    },
+    {
+      "qaId": "QA-002",
+      "ownerTest": "historical:dfi541",
+      "evidenceKey": "maxCoreContractEvidence",
+      "result": "pass",
+      "historicalSource": "dfi541",
+      "historicalEvidenceDigest": "sha256:165d1544a66ed12578271b490767fc5be1d513c2324355adf4da6a74e9735ed4"
+    },
+    {
+      "qaId": "QA-003",
+      "ownerTest": "historical:dfi541",
+      "evidenceKey": "maxCoreContractEvidence",
+      "result": "pass",
+      "historicalSource": "dfi541",
+      "historicalEvidenceDigest": "sha256:165d1544a66ed12578271b490767fc5be1d513c2324355adf4da6a74e9735ed4"
+    },
+    {
+      "qaId": "QA-004",
+      "ownerTest": "historical:dfi541",
+      "evidenceKey": "maxCoreContractEvidence",
+      "result": "pass",
+      "historicalSource": "dfi541",
+      "historicalEvidenceDigest": "sha256:165d1544a66ed12578271b490767fc5be1d513c2324355adf4da6a74e9735ed4"
+    },
+    {
+      "qaId": "QA-005",
+      "ownerTest": "historical:dfi541",
+      "evidenceKey": "maxCoreContractEvidence",
+      "result": "pass",
+      "historicalSource": "dfi541",
+      "historicalEvidenceDigest": "sha256:165d1544a66ed12578271b490767fc5be1d513c2324355adf4da6a74e9735ed4"
+    },
+    {
+      "qaId": "QA-006",
+      "ownerTest": "historical:dfi541",
+      "evidenceKey": "maxCoreContractEvidence",
+      "result": "pass",
+      "historicalSource": "dfi541",
+      "historicalEvidenceDigest": "sha256:165d1544a66ed12578271b490767fc5be1d513c2324355adf4da6a74e9735ed4"
+    },
+    {
+      "qaId": "QA-007",
+      "ownerTest": "historical:dfi541",
+      "evidenceKey": "maxCoreContractEvidence",
+      "result": "pass",
+      "historicalSource": "dfi541",
+      "historicalEvidenceDigest": "sha256:165d1544a66ed12578271b490767fc5be1d513c2324355adf4da6a74e9735ed4"
+    },
+    {
+      "qaId": "QA-008",
+      "ownerTest": "historical:dfi541",
+      "evidenceKey": "maxCoreContractEvidence",
+      "result": "pass",
+      "historicalSource": "dfi541",
+      "historicalEvidenceDigest": "sha256:165d1544a66ed12578271b490767fc5be1d513c2324355adf4da6a74e9735ed4"
+    },
+    {
+      "qaId": "QA-009",
+      "ownerTest": "historical:dfi541",
+      "evidenceKey": "maxCoreContractEvidence",
+      "result": "pass",
+      "historicalSource": "dfi541",
+      "historicalEvidenceDigest": "sha256:165d1544a66ed12578271b490767fc5be1d513c2324355adf4da6a74e9735ed4"
+    },
+    {
+      "qaId": "QA-010",
+      "ownerTest": "historical:dfi541",
+      "evidenceKey": "maxCoreContractEvidence",
+      "result": "pass",
+      "historicalSource": "dfi541",
+      "historicalEvidenceDigest": "sha256:165d1544a66ed12578271b490767fc5be1d513c2324355adf4da6a74e9735ed4"
+    },
+    {
+      "qaId": "QA-011",
+      "ownerTest": "historical:dfi541",
+      "evidenceKey": "maxCoreContractEvidence",
+      "result": "pass",
+      "historicalSource": "dfi541",
+      "historicalEvidenceDigest": "sha256:165d1544a66ed12578271b490767fc5be1d513c2324355adf4da6a74e9735ed4"
+    },
+    {
+      "qaId": "QA-012",
+      "ownerTest": "historical:dfi541",
+      "evidenceKey": "maxCoreContractEvidence",
+      "result": "pass",
+      "historicalSource": "dfi541",
+      "historicalEvidenceDigest": "sha256:165d1544a66ed12578271b490767fc5be1d513c2324355adf4da6a74e9735ed4"
+    },
+    {
+      "qaId": "QA-013",
+      "ownerTest": "historical:dfi541",
+      "evidenceKey": "maxCoreContractEvidence",
+      "result": "pass",
+      "historicalSource": "dfi541",
+      "historicalEvidenceDigest": "sha256:165d1544a66ed12578271b490767fc5be1d513c2324355adf4da6a74e9735ed4"
+    },
+    {
+      "qaId": "QA-014",
+      "ownerTest": "historical:dfi541",
+      "evidenceKey": "maxCoreContractEvidence",
+      "result": "pass",
+      "historicalSource": "dfi541",
+      "historicalEvidenceDigest": "sha256:165d1544a66ed12578271b490767fc5be1d513c2324355adf4da6a74e9735ed4"
+    },
+    {
+      "qaId": "QA-015",
+      "ownerTest": "historical:dfi541",
+      "evidenceKey": "maxCoreContractEvidence",
+      "result": "pass",
+      "historicalSource": "dfi541",
+      "historicalEvidenceDigest": "sha256:165d1544a66ed12578271b490767fc5be1d513c2324355adf4da6a74e9735ed4"
+    },
+    {
+      "qaId": "QA-016",
+      "ownerTest": "historical:dfi541",
+      "evidenceKey": "maxCoreContractEvidence",
+      "result": "pass",
+      "historicalSource": "dfi541",
+      "historicalEvidenceDigest": "sha256:165d1544a66ed12578271b490767fc5be1d513c2324355adf4da6a74e9735ed4"
+    },
+    {
+      "qaId": "QA-017",
+      "ownerTest": "historical:dfi541",
+      "evidenceKey": "maxCoreContractEvidence",
+      "result": "pass",
+      "historicalSource": "dfi541",
+      "historicalEvidenceDigest": "sha256:165d1544a66ed12578271b490767fc5be1d513c2324355adf4da6a74e9735ed4"
+    },
+    {
+      "qaId": "QA-018",
+      "ownerTest": "historical:dfi541",
+      "evidenceKey": "maxCoreContractEvidence",
+      "result": "pass",
+      "historicalSource": "dfi541",
+      "historicalEvidenceDigest": "sha256:165d1544a66ed12578271b490767fc5be1d513c2324355adf4da6a74e9735ed4"
+    },
+    {
+      "qaId": "QA-019",
+      "ownerTest": "historical:pra3",
+      "evidenceKey": "providerAdmissionEvidence",
+      "result": "pass",
+      "historicalSource": "pra3",
+      "historicalEvidenceDigest": "sha256:ef0fb7a58439ccc60710b9211782010d7b61481e5e3196058cf3c0f44ca21e2b"
+    },
+    {
+      "qaId": "QA-020",
+      "ownerTest": "historical:pra3",
+      "evidenceKey": "providerAdmissionEvidence",
+      "result": "pass",
+      "historicalSource": "pra3",
+      "historicalEvidenceDigest": "sha256:ef0fb7a58439ccc60710b9211782010d7b61481e5e3196058cf3c0f44ca21e2b"
+    },
+    {
+      "qaId": "QA-021",
+      "ownerTest": "historical:pra3",
+      "evidenceKey": "providerAdmissionEvidence",
+      "result": "pass",
+      "historicalSource": "pra3",
+      "historicalEvidenceDigest": "sha256:ef0fb7a58439ccc60710b9211782010d7b61481e5e3196058cf3c0f44ca21e2b"
+    },
+    {
+      "qaId": "QA-022",
+      "ownerTest": "historical:pra3",
+      "evidenceKey": "providerAdmissionEvidence",
+      "result": "pass",
+      "historicalSource": "pra3",
+      "historicalEvidenceDigest": "sha256:ef0fb7a58439ccc60710b9211782010d7b61481e5e3196058cf3c0f44ca21e2b"
+    },
+    {
+      "qaId": "QA-023",
+      "ownerTest": "historical:pra3",
+      "evidenceKey": "providerAdmissionEvidence",
+      "result": "pass",
+      "historicalSource": "pra3",
+      "historicalEvidenceDigest": "sha256:ef0fb7a58439ccc60710b9211782010d7b61481e5e3196058cf3c0f44ca21e2b"
+    },
+    {
+      "qaId": "QA-024",
+      "ownerTest": "historical:pra3",
+      "evidenceKey": "providerAdmissionEvidence",
+      "result": "pass",
+      "historicalSource": "pra3",
+      "historicalEvidenceDigest": "sha256:ef0fb7a58439ccc60710b9211782010d7b61481e5e3196058cf3c0f44ca21e2b"
+    },
+    {
+      "qaId": "QA-025",
+      "ownerTest": "historical:dfi534",
+      "evidenceKey": "providerMappingClosureEvidence",
+      "result": "pass",
+      "historicalSource": "dfi534",
+      "historicalEvidenceDigest": "sha256:bf89b2fda81f2b11cac63ca0ad58f1962bd309b587b48b0e1e19ba2c493c3a08"
+    },
+    {
+      "qaId": "QA-026",
+      "ownerTest": "historical:dfi534",
+      "evidenceKey": "providerMappingClosureEvidence",
+      "result": "pass",
+      "historicalSource": "dfi534",
+      "historicalEvidenceDigest": "sha256:bf89b2fda81f2b11cac63ca0ad58f1962bd309b587b48b0e1e19ba2c493c3a08"
+    },
+    {
+      "qaId": "QA-027",
+      "ownerTest": "historical:dfi534",
+      "evidenceKey": "providerMappingClosureEvidence",
+      "result": "pass",
+      "historicalSource": "dfi534",
+      "historicalEvidenceDigest": "sha256:bf89b2fda81f2b11cac63ca0ad58f1962bd309b587b48b0e1e19ba2c493c3a08"
+    },
+    {
+      "qaId": "QA-028",
+      "ownerTest": "historical:dfi534",
+      "evidenceKey": "providerMappingClosureEvidence",
+      "result": "pass",
+      "historicalSource": "dfi534",
+      "historicalEvidenceDigest": "sha256:bf89b2fda81f2b11cac63ca0ad58f1962bd309b587b48b0e1e19ba2c493c3a08"
+    },
+    {
+      "qaId": "QA-029",
+      "ownerTest": "historical:dfi534",
+      "evidenceKey": "providerMappingClosureEvidence",
+      "result": "pass",
+      "historicalSource": "dfi534",
+      "historicalEvidenceDigest": "sha256:bf89b2fda81f2b11cac63ca0ad58f1962bd309b587b48b0e1e19ba2c493c3a08"
+    },
+    {
+      "qaId": "QA-030",
+      "ownerTest": "historical:dfi534",
+      "evidenceKey": "providerMappingClosureEvidence",
+      "result": "pass",
+      "historicalSource": "dfi534",
+      "historicalEvidenceDigest": "sha256:bf89b2fda81f2b11cac63ca0ad58f1962bd309b587b48b0e1e19ba2c493c3a08"
+    },
+    {
+      "qaId": "QA-031",
+      "ownerTest": "historical:dfi534",
+      "evidenceKey": "providerMappingClosureEvidence",
+      "result": "pass",
+      "historicalSource": "dfi534",
+      "historicalEvidenceDigest": "sha256:bf89b2fda81f2b11cac63ca0ad58f1962bd309b587b48b0e1e19ba2c493c3a08"
+    },
+    {
+      "qaId": "QA-032",
+      "ownerTest": "historical:dfi534",
+      "evidenceKey": "providerMappingClosureEvidence",
+      "result": "pass",
+      "historicalSource": "dfi534",
+      "historicalEvidenceDigest": "sha256:bf89b2fda81f2b11cac63ca0ad58f1962bd309b587b48b0e1e19ba2c493c3a08"
+    },
+    {
+      "qaId": "QA-033",
+      "ownerTest": "historical:dfi534",
+      "evidenceKey": "providerMappingClosureEvidence",
+      "result": "pass",
+      "historicalSource": "dfi534",
+      "historicalEvidenceDigest": "sha256:bf89b2fda81f2b11cac63ca0ad58f1962bd309b587b48b0e1e19ba2c493c3a08"
+    },
+    {
+      "qaId": "QA-034",
+      "ownerTest": "historical:dfi541",
+      "evidenceKey": "maxCoreGateEvidence",
+      "result": "pass",
+      "historicalSource": "dfi541",
+      "historicalEvidenceDigest": "sha256:165d1544a66ed12578271b490767fc5be1d513c2324355adf4da6a74e9735ed4"
+    },
+    {
+      "qaId": "QA-035",
+      "ownerTest": "historical:dfi541",
+      "evidenceKey": "maxCoreGateEvidence",
+      "result": "pass",
+      "historicalSource": "dfi541",
+      "historicalEvidenceDigest": "sha256:165d1544a66ed12578271b490767fc5be1d513c2324355adf4da6a74e9735ed4"
+    },
+    {
+      "qaId": "QA-036",
+      "ownerTest": "historical:dfi541",
+      "evidenceKey": "maxCoreGateEvidence",
+      "result": "pass",
+      "historicalSource": "dfi541",
+      "historicalEvidenceDigest": "sha256:165d1544a66ed12578271b490767fc5be1d513c2324355adf4da6a74e9735ed4"
+    },
+    {
+      "qaId": "QA-037",
+      "ownerTest": "historical:r2dp3",
+      "evidenceKey": "durableDesktopCutoverEvidence",
+      "result": "pass",
+      "historicalSource": "r2dp3",
+      "historicalEvidenceDigest": "sha256:7d85a493e311d94c0512e398f67062ad77f1f37c7e6752b059529ad4942678bb"
+    },
+    {
+      "qaId": "QA-038",
+      "ownerTest": "historical:r2dp3",
+      "evidenceKey": "durableDesktopCutoverEvidence",
+      "result": "pass",
+      "historicalSource": "r2dp3",
+      "historicalEvidenceDigest": "sha256:7d85a493e311d94c0512e398f67062ad77f1f37c7e6752b059529ad4942678bb"
+    },
+    {
+      "qaId": "QA-039",
+      "ownerTest": "historical:r2dp3",
+      "evidenceKey": "durableDesktopCutoverEvidence",
+      "result": "pass",
+      "historicalSource": "r2dp3",
+      "historicalEvidenceDigest": "sha256:7d85a493e311d94c0512e398f67062ad77f1f37c7e6752b059529ad4942678bb"
+    },
+    {
+      "qaId": "QA-040",
+      "ownerTest": "historical:r2dp3",
+      "evidenceKey": "durableDesktopCutoverEvidence",
+      "result": "pass",
+      "historicalSource": "r2dp3",
+      "historicalEvidenceDigest": "sha256:7d85a493e311d94c0512e398f67062ad77f1f37c7e6752b059529ad4942678bb"
+    },
+    {
+      "qaId": "QA-041",
+      "ownerTest": "historical:r2dp3",
+      "evidenceKey": "durableDesktopCutoverEvidence",
+      "result": "pass",
+      "historicalSource": "r2dp3",
+      "historicalEvidenceDigest": "sha256:7d85a493e311d94c0512e398f67062ad77f1f37c7e6752b059529ad4942678bb"
+    },
+    {
+      "qaId": "QA-042",
+      "ownerTest": "historical:r2dp3",
+      "evidenceKey": "durableDesktopCutoverEvidence",
+      "result": "pass",
+      "historicalSource": "r2dp3",
+      "historicalEvidenceDigest": "sha256:7d85a493e311d94c0512e398f67062ad77f1f37c7e6752b059529ad4942678bb"
+    },
+    {
+      "qaId": "QA-043",
+      "ownerTest": "historical:r2dp3",
+      "evidenceKey": "durableDesktopCutoverEvidence",
+      "result": "pass",
+      "historicalSource": "r2dp3",
+      "historicalEvidenceDigest": "sha256:7d85a493e311d94c0512e398f67062ad77f1f37c7e6752b059529ad4942678bb"
+    },
+    {
+      "qaId": "QA-044",
+      "ownerTest": "historical:r2dp3",
+      "evidenceKey": "durableDesktopCutoverEvidence",
+      "result": "pass",
+      "historicalSource": "r2dp3",
+      "historicalEvidenceDigest": "sha256:7d85a493e311d94c0512e398f67062ad77f1f37c7e6752b059529ad4942678bb"
+    },
+    {
+      "qaId": "QA-045",
+      "ownerTest": "historical:r2dp3",
+      "evidenceKey": "durableDesktopCutoverEvidence",
+      "result": "pass",
+      "historicalSource": "r2dp3",
+      "historicalEvidenceDigest": "sha256:7d85a493e311d94c0512e398f67062ad77f1f37c7e6752b059529ad4942678bb"
+    },
+    {
+      "qaId": "QA-046",
+      "ownerTest": "historical:r2dp3",
+      "evidenceKey": "durableDesktopCutoverEvidence",
+      "result": "pass",
+      "historicalSource": "r2dp3",
+      "historicalEvidenceDigest": "sha256:7d85a493e311d94c0512e398f67062ad77f1f37c7e6752b059529ad4942678bb"
+    },
+    {
+      "qaId": "QA-047",
+      "ownerTest": "historical:r2dp3",
+      "evidenceKey": "durableDesktopCutoverEvidence",
+      "result": "pass",
+      "historicalSource": "r2dp3",
+      "historicalEvidenceDigest": "sha256:7d85a493e311d94c0512e398f67062ad77f1f37c7e6752b059529ad4942678bb"
+    },
+    {
+      "qaId": "QA-048",
+      "ownerTest": "historical:r2dp3",
+      "evidenceKey": "durableDesktopCutoverEvidence",
+      "result": "pass",
+      "historicalSource": "r2dp3",
+      "historicalEvidenceDigest": "sha256:7d85a493e311d94c0512e398f67062ad77f1f37c7e6752b059529ad4942678bb"
+    },
+    {
+      "qaId": "QA-049",
+      "ownerTest": "historical:r2dp3",
+      "evidenceKey": "durableDesktopCutoverEvidence",
+      "result": "pass",
+      "historicalSource": "r2dp3",
+      "historicalEvidenceDigest": "sha256:7d85a493e311d94c0512e398f67062ad77f1f37c7e6752b059529ad4942678bb"
+    },
+    {
+      "qaId": "QA-050",
+      "ownerTest": "historical:r2dp3",
+      "evidenceKey": "durableDesktopCutoverEvidence",
+      "result": "pass",
+      "historicalSource": "r2dp3",
+      "historicalEvidenceDigest": "sha256:7d85a493e311d94c0512e398f67062ad77f1f37c7e6752b059529ad4942678bb"
+    },
+    {
+      "qaId": "QA-051",
+      "ownerTest": "historical:r2dp3",
+      "evidenceKey": "durableDesktopCutoverEvidence",
+      "result": "pass",
+      "historicalSource": "r2dp3",
+      "historicalEvidenceDigest": "sha256:7d85a493e311d94c0512e398f67062ad77f1f37c7e6752b059529ad4942678bb"
+    },
+    {
+      "qaId": "QA-052",
+      "ownerTest": "historical:r2dp3",
+      "evidenceKey": "durableDesktopCutoverEvidence",
+      "result": "pass",
+      "historicalSource": "r2dp3",
+      "historicalEvidenceDigest": "sha256:7d85a493e311d94c0512e398f67062ad77f1f37c7e6752b059529ad4942678bb"
+    },
+    {
+      "qaId": "QA-053",
+      "ownerTest": "historical:r2dp3",
+      "evidenceKey": "durableDesktopCutoverEvidence",
+      "result": "pass",
+      "historicalSource": "r2dp3",
+      "historicalEvidenceDigest": "sha256:7d85a493e311d94c0512e398f67062ad77f1f37c7e6752b059529ad4942678bb"
+    },
+    {
+      "qaId": "QA-054",
+      "ownerTest": "historical:r2dp3",
+      "evidenceKey": "durableDesktopCutoverEvidence",
+      "result": "pass",
+      "historicalSource": "r2dp3",
+      "historicalEvidenceDigest": "sha256:7d85a493e311d94c0512e398f67062ad77f1f37c7e6752b059529ad4942678bb"
+    },
+    {
+      "qaId": "QA-055",
+      "ownerTest": "historical:dfi542",
+      "evidenceKey": "desktopSafeApiEvidence",
+      "result": "pass",
+      "historicalSource": "dfi542",
+      "historicalEvidenceDigest": "sha256:e0abc2a01e1192e59be9afc91fe0b701909bc794d86f82f8ef2504ecb685a8d8"
+    },
+    {
+      "qaId": "QA-056",
+      "ownerTest": "historical:dfi542",
+      "evidenceKey": "desktopSafeApiEvidence",
+      "result": "pass",
+      "historicalSource": "dfi542",
+      "historicalEvidenceDigest": "sha256:e0abc2a01e1192e59be9afc91fe0b701909bc794d86f82f8ef2504ecb685a8d8"
+    },
+    {
+      "qaId": "QA-057",
+      "ownerTest": "historical:dfi542",
+      "evidenceKey": "desktopSafeApiEvidence",
+      "result": "pass",
+      "historicalSource": "dfi542",
+      "historicalEvidenceDigest": "sha256:e0abc2a01e1192e59be9afc91fe0b701909bc794d86f82f8ef2504ecb685a8d8"
+    },
+    {
+      "qaId": "QA-058",
+      "ownerTest": "historical:dfi542",
+      "evidenceKey": "desktopSafeApiEvidence",
+      "result": "pass",
+      "historicalSource": "dfi542",
+      "historicalEvidenceDigest": "sha256:e0abc2a01e1192e59be9afc91fe0b701909bc794d86f82f8ef2504ecb685a8d8"
+    },
+    {
+      "qaId": "QA-059",
+      "ownerTest": "historical:dfi542",
+      "evidenceKey": "desktopSafeApiEvidence",
+      "result": "pass",
+      "historicalSource": "dfi542",
+      "historicalEvidenceDigest": "sha256:e0abc2a01e1192e59be9afc91fe0b701909bc794d86f82f8ef2504ecb685a8d8"
+    },
+    {
+      "qaId": "QA-060",
+      "ownerTest": "historical:dfi542",
+      "evidenceKey": "desktopSafeApiEvidence",
+      "result": "pass",
+      "historicalSource": "dfi542",
+      "historicalEvidenceDigest": "sha256:e0abc2a01e1192e59be9afc91fe0b701909bc794d86f82f8ef2504ecb685a8d8"
+    },
+    {
+      "qaId": "QA-061",
+      "ownerTest": "historical:dfi542",
+      "evidenceKey": "desktopSafeApiEvidence",
+      "result": "pass",
+      "historicalSource": "dfi542",
+      "historicalEvidenceDigest": "sha256:e0abc2a01e1192e59be9afc91fe0b701909bc794d86f82f8ef2504ecb685a8d8"
+    },
+    {
+      "qaId": "QA-062",
+      "ownerTest": "historical:dfi542",
+      "evidenceKey": "desktopSafeApiEvidence",
+      "result": "pass",
+      "historicalSource": "dfi542",
+      "historicalEvidenceDigest": "sha256:e0abc2a01e1192e59be9afc91fe0b701909bc794d86f82f8ef2504ecb685a8d8"
+    },
+    {
+      "qaId": "QA-063",
+      "ownerTest": "historical:dfi542",
+      "evidenceKey": "desktopSafeApiEvidence",
+      "result": "pass",
+      "historicalSource": "dfi542",
+      "historicalEvidenceDigest": "sha256:e0abc2a01e1192e59be9afc91fe0b701909bc794d86f82f8ef2504ecb685a8d8"
+    },
+    {
+      "qaId": "QA-064",
+      "ownerTest": "historical:dfi542",
+      "evidenceKey": "desktopSafeApiEvidence",
+      "result": "pass",
+      "historicalSource": "dfi542",
+      "historicalEvidenceDigest": "sha256:e0abc2a01e1192e59be9afc91fe0b701909bc794d86f82f8ef2504ecb685a8d8"
+    },
+    {
+      "qaId": "QA-065",
+      "ownerTest": "historical:dfi542",
+      "evidenceKey": "desktopSafeApiEvidence",
+      "result": "pass",
+      "historicalSource": "dfi542",
+      "historicalEvidenceDigest": "sha256:e0abc2a01e1192e59be9afc91fe0b701909bc794d86f82f8ef2504ecb685a8d8"
+    },
+    {
+      "qaId": "QA-066",
+      "ownerTest": "historical:dfi542",
+      "evidenceKey": "desktopSafeApiEvidence",
+      "result": "pass",
+      "historicalSource": "dfi542",
+      "historicalEvidenceDigest": "sha256:e0abc2a01e1192e59be9afc91fe0b701909bc794d86f82f8ef2504ecb685a8d8"
+    },
+    {
+      "qaId": "QA-067",
+      "ownerTest": "historical:dfi542",
+      "evidenceKey": "desktopSafeApiEvidence",
+      "result": "pass",
+      "historicalSource": "dfi542",
+      "historicalEvidenceDigest": "sha256:e0abc2a01e1192e59be9afc91fe0b701909bc794d86f82f8ef2504ecb685a8d8"
+    },
+    {
+      "qaId": "QA-068",
+      "ownerTest": "historical:dfi542",
+      "evidenceKey": "desktopSafeApiEvidence",
+      "result": "pass",
+      "historicalSource": "dfi542",
+      "historicalEvidenceDigest": "sha256:e0abc2a01e1192e59be9afc91fe0b701909bc794d86f82f8ef2504ecb685a8d8"
+    },
+    {
+      "qaId": "QA-069",
+      "ownerTest": "historical:dfi542",
+      "evidenceKey": "desktopSafeApiEvidence",
+      "result": "pass",
+      "historicalSource": "dfi542",
+      "historicalEvidenceDigest": "sha256:e0abc2a01e1192e59be9afc91fe0b701909bc794d86f82f8ef2504ecb685a8d8"
+    },
+    {
+      "qaId": "QA-070",
+      "ownerTest": "historical:dfi542",
+      "evidenceKey": "desktopSafeApiEvidence",
+      "result": "pass",
+      "historicalSource": "dfi542",
+      "historicalEvidenceDigest": "sha256:e0abc2a01e1192e59be9afc91fe0b701909bc794d86f82f8ef2504ecb685a8d8"
+    },
+    {
+      "qaId": "QA-071",
+      "ownerTest": "historical:dfi542",
+      "evidenceKey": "desktopSafeApiEvidence",
+      "result": "pass",
+      "historicalSource": "dfi542",
+      "historicalEvidenceDigest": "sha256:e0abc2a01e1192e59be9afc91fe0b701909bc794d86f82f8ef2504ecb685a8d8"
+    },
+    {
+      "qaId": "QA-072",
+      "ownerTest": "historical:dfi542",
+      "evidenceKey": "desktopSafeApiEvidence",
+      "result": "pass",
+      "historicalSource": "dfi542",
+      "historicalEvidenceDigest": "sha256:e0abc2a01e1192e59be9afc91fe0b701909bc794d86f82f8ef2504ecb685a8d8"
+    },
+    {
+      "qaId": "QA-073",
+      "ownerTest": "harness:dfi5.4.3",
+      "evidenceKey": "rendererFocusedEvidence",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-074",
+      "ownerTest": "harness:dfi5.4.3",
+      "evidenceKey": "rendererFocusedEvidence",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-075",
+      "ownerTest": "harness:dfi5.4.3",
+      "evidenceKey": "rendererFocusedEvidence",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-076",
+      "ownerTest": "harness:dfi5.4.3",
+      "evidenceKey": "rendererFocusedEvidence",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-077",
+      "ownerTest": "harness:dfi5.4.3",
+      "evidenceKey": "rendererFocusedEvidence",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-078",
+      "ownerTest": "harness:dfi5.4.3",
+      "evidenceKey": "rendererFocusedEvidence",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-079",
+      "ownerTest": "harness:dfi5.4.3",
+      "evidenceKey": "rendererFocusedEvidence",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-080",
+      "ownerTest": "harness:dfi5.4.3",
+      "evidenceKey": "rendererFocusedEvidence",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-081",
+      "ownerTest": "harness:dfi5.4.3",
+      "evidenceKey": "rendererFocusedEvidence",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-082",
+      "ownerTest": "harness:dfi5.4.3",
+      "evidenceKey": "rendererFocusedEvidence",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-083",
+      "ownerTest": "harness:dfi5.4.3",
+      "evidenceKey": "rendererFocusedEvidence",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-084",
+      "ownerTest": "harness:dfi5.4.3",
+      "evidenceKey": "rendererFocusedEvidence",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-085",
+      "ownerTest": "harness:dfi5.4.3",
+      "evidenceKey": "rendererFocusedEvidence",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-086",
+      "ownerTest": "harness:dfi5.4.3",
+      "evidenceKey": "rendererFocusedEvidence",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-087",
+      "ownerTest": "harness:dfi5.4.3",
+      "evidenceKey": "rendererFocusedEvidence",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-088",
+      "ownerTest": "harness:dfi5.4.3",
+      "evidenceKey": "rendererFocusedEvidence",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-089",
+      "ownerTest": "harness:dfi5.4.3",
+      "evidenceKey": "rendererFocusedEvidence",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-090",
+      "ownerTest": "harness:dfi5.4.3",
+      "evidenceKey": "rendererFocusedEvidence",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-091",
+      "ownerTest": "harness:dfi5.4.3",
+      "evidenceKey": "realElectronLifecycleEvidence",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-092",
+      "ownerTest": "harness:dfi5.4.3",
+      "evidenceKey": "realElectronLifecycleEvidence",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-093",
+      "ownerTest": "harness:dfi5.4.3",
+      "evidenceKey": "realElectronLifecycleEvidence",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-094",
+      "ownerTest": "harness:dfi5.4.3",
+      "evidenceKey": "realElectronLifecycleEvidence",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-095",
+      "ownerTest": "harness:dfi5.4.3",
+      "evidenceKey": "realElectronLifecycleEvidence",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-096",
+      "ownerTest": "harness:dfi5.4.3",
+      "evidenceKey": "realElectronLifecycleEvidence",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-097",
+      "ownerTest": "harness:dfi5.4.3",
+      "evidenceKey": "realElectronLifecycleEvidence",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-098",
+      "ownerTest": "harness:dfi5.4.3",
+      "evidenceKey": "realElectronLifecycleEvidence",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-099",
+      "ownerTest": "harness:dfi5.4.3",
+      "evidenceKey": "realElectronLifecycleEvidence",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-100",
+      "ownerTest": "harness:dfi5.4.3",
+      "evidenceKey": "realElectronLifecycleEvidence",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-101",
+      "ownerTest": "harness:dfi5.4.3",
+      "evidenceKey": "realElectronLifecycleEvidence",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-102",
+      "ownerTest": "harness:dfi5.4.3",
+      "evidenceKey": "realElectronLifecycleEvidence",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-103",
+      "ownerTest": "harness:dfi5.4.3",
+      "evidenceKey": "realElectronLifecycleEvidence",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-104",
+      "ownerTest": "harness:dfi5.4.3",
+      "evidenceKey": "realElectronLifecycleEvidence",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-105",
+      "ownerTest": "harness:dfi5.4.3",
+      "evidenceKey": "realElectronLifecycleEvidence",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-106",
+      "ownerTest": "harness:dfi5.4.3",
+      "evidenceKey": "realElectronLifecycleEvidence",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-107",
+      "ownerTest": "harness:dfi5.4.3",
+      "evidenceKey": "realElectronLifecycleEvidence",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-108",
+      "ownerTest": "harness:dfi5.4.3",
+      "evidenceKey": "realElectronLifecycleEvidence",
+      "result": "pass"
+    }
+  ],
+  "focusedQaLedger": [
+    {
+      "qaId": "QA-001",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-002",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-003",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-004",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-005",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-006",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-007",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-008",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-009",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-010",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-011",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-012",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-013",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-014",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-015",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-016",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-017",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-018",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-019",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-020",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-021",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-022",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-023",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-024",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-025",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-026",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-027",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-028",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-029",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-030",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-031",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-032",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-033",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-034",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-035",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-036",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-037",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-038",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-039",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-040",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-041",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-042",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-043",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-044",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-045",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-046",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-047",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-048",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-049",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-050",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-051",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-052",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-053",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-054",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-055",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-056",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-057",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-058",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-059",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-060",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-061",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-062",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-063",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-064",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-065",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-066",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-067",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-068",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-069",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-070",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-071",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-072",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-073",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-074",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-075",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-076",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-077",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-078",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-079",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-080",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-081",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-082",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-083",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-084",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-085",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-086",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-087",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-088",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-089",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-090",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-091",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-092",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-093",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-094",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-095",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-096",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-097",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-098",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-099",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-100",
+      "ownerTest": "focused-vitest",
+      "evidenceKey": "focusedTestCount",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-101",
+      "ownerTest": "real-electron-e2e",
+      "evidenceKey": "realElectronE2EPass",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-102",
+      "ownerTest": "real-electron-e2e",
+      "evidenceKey": "realElectronE2EPass",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-103",
+      "ownerTest": "real-electron-e2e",
+      "evidenceKey": "realElectronE2EPass",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-104",
+      "ownerTest": "real-electron-e2e",
+      "evidenceKey": "realElectronE2EPass",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-105",
+      "ownerTest": "real-electron-e2e",
+      "evidenceKey": "realElectronE2EPass",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-106",
+      "ownerTest": "real-electron-e2e",
+      "evidenceKey": "realElectronE2EPass",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-107",
+      "ownerTest": "real-electron-e2e",
+      "evidenceKey": "realElectronE2EPass",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-108",
+      "ownerTest": "real-electron-e2e",
+      "evidenceKey": "realElectronE2EPass",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-109",
+      "ownerTest": "real-electron-e2e",
+      "evidenceKey": "realElectronE2EPass",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-110",
+      "ownerTest": "real-electron-e2e",
+      "evidenceKey": "realElectronE2EPass",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-111",
+      "ownerTest": "real-electron-e2e",
+      "evidenceKey": "realElectronE2EPass",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-112",
+      "ownerTest": "real-electron-e2e",
+      "evidenceKey": "realElectronE2EPass",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-113",
+      "ownerTest": "real-electron-e2e",
+      "evidenceKey": "realElectronE2EPass",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-114",
+      "ownerTest": "real-electron-e2e",
+      "evidenceKey": "realElectronE2EPass",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-115",
+      "ownerTest": "real-electron-e2e",
+      "evidenceKey": "realElectronE2EPass",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-116",
+      "ownerTest": "real-electron-e2e",
+      "evidenceKey": "realElectronE2EPass",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-117",
+      "ownerTest": "real-electron-e2e",
+      "evidenceKey": "realElectronE2EPass",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-118",
+      "ownerTest": "real-electron-e2e",
+      "evidenceKey": "realElectronE2EPass",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-119",
+      "ownerTest": "real-electron-e2e",
+      "evidenceKey": "realElectronE2EPass",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-120",
+      "ownerTest": "real-electron-e2e",
+      "evidenceKey": "realElectronE2EPass",
+      "result": "pass"
+    }
+  ],
+  "focusedTestFileCount": 9,
+  "focusedTestCount": 52,
+  "realElectronE2EPass": true,
+  "semanticReplayCount": 3,
+  "uniqueSemanticReplayDigestCount": 1,
+  "semanticReplayDigest": "sha256:4676f278ed27b9c914c6859d6429719da7b8337e5fb32415572981e23d6ad47a",
+  "realSigkillCount": 3,
+  "namedCrashBarrierCount": 1,
+  "rendererV1Alpha5ConsumerCount": 3,
+  "taskReasoningProjectionReady": true,
+  "productionLocalSubjectPathAvailable": true,
+  "negativeLeakInjectionDetectionCount": 80,
+  "normalFourChannelLeakCount": 0,
+  "resourceCounts": {
+    "electronProcessCount": 0,
+    "browserWindowCount": 0,
+    "webContentsCount": 0,
+    "ipcHandlerCount": 0,
+    "coreChildCount": 0,
+    "tlsServerCount": 0,
+    "listeningPortCount": 0,
+    "temporaryDirectoryCount": 0,
+    "keychainCount": 0
+  },
+  "historicalEvidence": {
+    "dfi541": {
+      "evidenceDigest": "sha256:165d1544a66ed12578271b490767fc5be1d513c2324355adf4da6a74e9735ed4",
+      "fileSha256": "sha256:fc8fb65abd3eb2357acf6783df7bae4e0a518d6c0fadbf635695a4d8046d5eee"
+    },
+    "dfi542": {
+      "evidenceDigest": "sha256:e0abc2a01e1192e59be9afc91fe0b701909bc794d86f82f8ef2504ecb685a8d8",
+      "fileSha256": "sha256:843a427dec28f886fe23f1ea4c7e5c9c9913ad8b079520204a59baf0b60252ac"
+    },
+    "dfi534": {
+      "evidenceDigest": "sha256:bf89b2fda81f2b11cac63ca0ad58f1962bd309b587b48b0e1e19ba2c493c3a08",
+      "fileSha256": "sha256:0d548efad723594be124728b85cd649b311bca47accb3681ec26d39eb2cf843a"
+    },
+    "r2dp3": {
+      "evidenceDigest": "sha256:7d85a493e311d94c0512e398f67062ad77f1f37c7e6752b059529ad4942678bb",
+      "fileSha256": "sha256:55b6606168e36996c9a1dea2dd3a99f5465dd0f4f03ba554eb491b61d61520e5"
+    },
+    "pra3": {
+      "evidenceDigest": "sha256:ef0fb7a58439ccc60710b9211782010d7b61481e5e3196058cf3c0f44ca21e2b",
+      "fileSha256": "sha256:8f6f27b02ae4cd92b0a86d0c12f2aa2c40bc28a82198d15f2faa573f9af95582"
+    },
+    "r2d4": {
+      "evidenceDigest": "sha256:fa57187295e5d37f7fa7066fbb75cfe4270de206ba60d4d6d01a6f680ab0007b",
+      "fileSha256": "sha256:d7eaefa699ca5fe765fdfa2a830d3475934939a5338ec6e41f77188f8b89ae7e"
+    }
+  },
+  "migrationMax": 26,
+  "lockfileDigest": "sha256:5b15ae0197c6f7a1450a49551fbfb50a9e0edc32f0fbe75a9259a360ed874f31",
+  "versions": {
+    "root": "0.0.0-dfi.5.4.3",
+    "core": "0.0.0-dfi.5.4.3",
+    "contracts": "0.0.0-dfi.5.4.3",
+    "desktop": "0.0.0-dfi.5.4.3",
+    "admin": "0.0.0-afe.6c"
+  },
+  "enterpriseGatewayProductionRouteReady": false,
+  "enterpriseMaxReleaseReady": false,
+  "deepSeekAdmitted": false,
+  "tgmReady": false,
+  "knowledgeProviderReady": false,
+  "agentLifecycleReady": false,
+  "publicCrudReady": false,
+  "adminV2Ready": false,
+  "evidenceDigest": "sha256:8293bf35a3f7d5b1f03c0e5f9b633f1e0abb2d2afe5932b4a51022e049fe36b0"
+}

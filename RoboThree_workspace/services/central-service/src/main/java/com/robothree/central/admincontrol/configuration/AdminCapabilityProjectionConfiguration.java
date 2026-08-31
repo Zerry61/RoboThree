@@ -2,6 +2,7 @@ package com.robothree.central.admincontrol.configuration;
 
 import com.robothree.central.admincontrol.application.AdminCapabilityProjectionService;
 import com.robothree.central.admincontrol.application.AdminPrincipalProvider;
+import com.robothree.central.admincontrol.application.AdminReadRequestAuthorizer;
 import com.robothree.central.admincontrol.application.DevelopmentAdminPrincipalProvider;
 import org.springframework.beans.factory.ListableBeanFactory;
 import org.springframework.beans.factory.SmartInitializingSingleton;
@@ -24,6 +25,13 @@ public class AdminCapabilityProjectionConfiguration {
     AdminCapabilityProjectionService adminCapabilityProjectionService(
             AdminPrincipalProvider principalProvider) {
         return new AdminCapabilityProjectionService(principalProvider);
+    }
+
+    @Bean
+    @Profile({"development", "test"})
+    AdminReadRequestAuthorizer adminReadRequestAuthorizer(
+            AdminCapabilityProjectionService capabilityService) {
+        return new AdminReadRequestAuthorizer(capabilityService);
     }
 
     @Bean

@@ -329,6 +329,7 @@ describe("DurableEnterpriseModelProvider", () => {
         arguments: { value: "hello" },
       },
     });
+    expect(output.at(-1)).toEqual({ type: "completed", finishReason: "tool_calls" });
     const beforeCommit = await links.loadRound(
       fixture.invocation.taskId,
       fixture.invocation.runId,
@@ -906,6 +907,7 @@ describe("DurableEnterpriseModelProvider", () => {
     expect(await links.loadRound(subject.taskId, subject.runId, subject.round))
       .toMatchObject({
         schemaVersion: "v2",
+        providerRequestDeadlineAt: fixture.invocation.deadlineAt,
         dynamicRequestFacts: facts,
         contextAssemblyReceiptDigest: digest("9"),
       });
@@ -1356,7 +1358,7 @@ implements CompactionModelInvocationLinkPersistence {
 }
 
 class VersionCapturingGateway implements EnterpriseModelGatewayClient {
-  public contractVersion: "v1alpha1" | "v1alpha2" | undefined;
+  public contractVersion: "v1alpha1" | "v1alpha2" | "v1alpha3" | undefined;
   public acceptDocument: JsonObject = {};
   #clientRequestId = "";
   #requestDigest = "";
@@ -1368,7 +1370,7 @@ class VersionCapturingGateway implements EnterpriseModelGatewayClient {
 
   begin(
     _scope: Parameters<EnterpriseModelGatewayClient["begin"]>[0],
-    contractVersion: "v1alpha1" | "v1alpha2" = "v1alpha1",
+    contractVersion: "v1alpha1" | "v1alpha2" | "v1alpha3" = "v1alpha1",
   ): EnterpriseModelGatewayOperation {
     this.contractVersion = contractVersion;
     return {

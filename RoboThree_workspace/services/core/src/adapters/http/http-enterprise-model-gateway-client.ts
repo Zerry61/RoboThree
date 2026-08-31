@@ -25,7 +25,7 @@ import type {
 const UuidSchema = z.uuid();
 const DigestSchema = z.string().regex(/^[a-f0-9]{64}$/u);
 const TimestampSchema = z.iso.datetime({ offset: true });
-const ContractVersionSchema = z.enum(["v1alpha1", "v1alpha2"]);
+const ContractVersionSchema = z.enum(["v1alpha1", "v1alpha2", "v1alpha3"]);
 type GatewayContractVersion = z.infer<typeof ContractVersionSchema>;
 const StatusSchema = z.enum([
   "accepted",

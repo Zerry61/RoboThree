@@ -10,7 +10,7 @@ export type AdminActionState = Readonly<{
   disabledReason?: string;
 }>;
 
-export type AdminListState = 'loading' | 'empty' | 'ready' | 'unavailable' | 'permissionDenied' | 'error' | 'disabled' | 'partial';
+export type AdminListState = 'loading' | 'empty' | 'ready' | 'unavailable' | 'permissionDenied' | 'notFound' | 'stale' | 'error' | 'disabled' | 'partial' | 'gated';
 
 export type TableColumn = Readonly<{
   key: string;
@@ -25,4 +25,3 @@ export type PaginationPresentation = Readonly<{
   canGoNext: boolean;
   summary: string;
 }>;
-

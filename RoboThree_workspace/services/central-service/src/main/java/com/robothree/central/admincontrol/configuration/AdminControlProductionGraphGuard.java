@@ -1,6 +1,8 @@
 package com.robothree.central.admincontrol.configuration;
 
 import com.robothree.central.admincontrol.application.AdminPrincipalProvider;
+import com.robothree.central.admincontrol.application.AdminModuleInventorySource;
+import com.robothree.central.admincontrol.adapter.http.AdminReadHttpController;
 import com.robothree.central.bootstrap.production.CentralProductionStartupException;
 import java.util.Arrays;
 import java.util.Locale;
@@ -25,10 +27,18 @@ public final class AdminControlProductionGraphGuard {
         }
         String[] providerNames =
                 beanFactory.getBeanNamesForType(AdminPrincipalProvider.class, false, false);
-        if (providerNames.length == 0) {
-            return;
-        }
         Arrays.stream(providerNames).forEach(this::rejectProvider);
+        rejectAny(AdminModuleInventorySource.class,
+                "central.admin_control_inventory_source_forbidden_in_production");
+        rejectAny(AdminReadHttpController.class,
+                "central.admin_control_http_forbidden_in_production");
+    }
+
+    private void rejectAny(Class<?> type, String code) {
+        String[] names = beanFactory.getBeanNamesForType(type, false, false);
+        if (names.length > 0) {
+            throw startup(code, "Admin Control test read shell is not available for production");
+        }
     }
 
     private void rejectProvider(String beanName) {

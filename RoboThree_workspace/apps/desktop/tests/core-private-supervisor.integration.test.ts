@@ -5,9 +5,57 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { CorePrivateSupervisor } from "../src/main/core-private-supervisor.js";
+import {
+  CorePrivateSupervisor,
+  resolveInternalTrialCoreEnvironment,
+} from "../src/main/core-private-supervisor.js";
 
 describe("DCF-1.2A Electron Main CorePrivateSupervisor", () => {
+  it("discovers one safe Admin-managed default model without projecting its secret", async () => {
+    let authorization = "";
+    const resolved = await resolveInternalTrialCoreEnvironment({
+      deployment: JSON.stringify({
+        schemaVersion: "mvp-admin-vs1.discovery.v1",
+        centralBaseUrl: "http://127.0.0.1:41731",
+      }),
+      accessToken: Buffer.from("internal-trial-token", "utf8"),
+    }, async (_url, init) => {
+      authorization = new Headers(init?.headers).get("authorization") ?? "";
+      return new Response(JSON.stringify({
+        schemaVersion: "mvp-admin-vs1.internal-trial.v1",
+        configurationRevision: `sha256:${"d".repeat(64)}`,
+        modelId: "model.admin-managed",
+        modelCreatedAt: "2026-08-30T00:00:00.000Z",
+        displayName: "Admin Managed Model",
+        supportsToolCalling: true,
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    });
+
+    expect(authorization).toBe("Bearer internal-trial-token");
+    expect(JSON.parse(resolved?.deployment ?? "null")).toEqual({
+      schemaVersion: "mvp-admin-vs1.internal-trial.v1",
+      configurationRevision: `sha256:${"d".repeat(64)}`,
+      modelId: "model.admin-managed",
+      modelCreatedAt: "2026-08-30T00:00:00.000Z",
+      displayName: "Admin Managed Model",
+      supportsToolCalling: true,
+      centralBaseUrl: "http://127.0.0.1:41731/",
+    });
+    expect(resolved?.deployment).not.toContain("internal-trial-token");
+  });
+
+  it("fails closed when Admin discovery has no access token", async () => {
+    const resolved = await resolveInternalTrialCoreEnvironment({
+      deployment: JSON.stringify({
+        schemaVersion: "mvp-admin-vs1.discovery.v1",
+        centralBaseUrl: "http://127.0.0.1:41731",
+      }),
+    }, async () => {
+      throw new Error("fetch must not run");
+    });
+    expect(resolved).toBeUndefined();
+  });
+
   it("boots the formal Core child, performs the Contract handshake and stops", async () => {
     const directory = await mkdtemp(join(tmpdir(), "robothree-dcf12a-child-"));
     const supervisor = new CorePrivateSupervisor({
@@ -16,6 +64,7 @@ describe("DCF-1.2A Electron Main CorePrivateSupervisor", () => {
         import.meta.url,
       )),
       databasePath: join(directory, "robothree.sqlite"),
+      demoMode: "legacy_test",
       maxUnexpectedRestarts: 0,
     });
     try {
@@ -34,7 +83,7 @@ describe("DCF-1.2A Electron Main CorePrivateSupervisor", () => {
         clientInstanceId: supervisor.clientInstanceId,
       })).toMatchObject({
         ok: true,
-        value: [{ agentId: "agent.general", runnable: true }],
+        value: [{ agentId: "agent.fixture.desktop-scripted", runnable: true }],
       });
       expect(await supervisor.personalCredentialBroker.execute({
         commandId: id("301"),
@@ -45,7 +94,7 @@ describe("DCF-1.2A Electron Main CorePrivateSupervisor", () => {
       })).toMatchObject({
         header: {
           status: "rejected",
-          typedErrorCode: "credential_store_unavailable",
+          typedErrorCode: "credential_transport_invalid_request",
         },
       });
     } finally {
@@ -66,6 +115,7 @@ describe("DCF-1.2A Electron Main CorePrivateSupervisor", () => {
         import.meta.url,
       )),
       databasePath: join(directory, "robothree.sqlite"),
+      demoMode: "legacy_test",
       maxUnexpectedRestarts: 1,
     });
     try {
@@ -157,6 +207,7 @@ describe("DCF-1.2A Electron Main CorePrivateSupervisor", () => {
         import.meta.url,
       )),
       databasePath: join(directory, "robothree.sqlite"),
+      demoMode: "legacy_test",
       maxUnexpectedRestarts: 1,
     });
     const runtimeInstanceIds = new Set<string>();

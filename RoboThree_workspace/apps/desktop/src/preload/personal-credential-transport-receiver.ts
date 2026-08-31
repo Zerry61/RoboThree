@@ -17,6 +17,10 @@ import {
   PersonalCredentialTransportPreloadAdapter,
   PersonalCredentialTransportPreloadError,
 } from "./personal-credential-transport.js";
+import {
+  isExactSensitiveTransportActivationDescriptor,
+  type SensitiveTransportActivationDescriptor,
+} from "../shared/sensitive-transport-activation.js";
 
 export type PersonalCredentialTransportDomPort = {
   postMessage(message: unknown): void;
@@ -70,6 +74,7 @@ type ReceiverSession = {
 
 export class PersonalCredentialTransportPreloadReceiver {
   readonly #foundationEnabled: boolean;
+  readonly #productionActivationReady: boolean;
   readonly #subscribe: PersonalCredentialTransportPortSubscription;
   readonly #now: () => number;
   readonly #adapter: PersonalCredentialTransportPreloadAdapter;
@@ -79,11 +84,18 @@ export class PersonalCredentialTransportPreloadReceiver {
   readonly #processDiagnostics: PersonalCredentialTransportProcessDiagnostics | undefined;
   readonly #sessions = new Map<string, ReceiverSession>();
   readonly #tombstones = new Map<string, number>();
+  readonly #sessionWaiters = new Map<string, Set<(session: ReceiverSession) => void>>();
+  readonly #revealWaiters = new Map<string, Readonly<{
+    resolve(secret: Uint8Array): void;
+    reject(error: PersonalCredentialTransportPreloadError): void;
+  }>>();
+  readonly #revealedSecrets = new Map<string, Uint8Array>();
   #unsubscribe: (() => void) | undefined;
   #closed = false;
 
   public constructor(input: Readonly<{
     foundationEnabled?: boolean;
+    productionActivation?: SensitiveTransportActivationDescriptor;
     subscribe: PersonalCredentialTransportPortSubscription;
     now?: () => number;
     adapter?: PersonalCredentialTransportPreloadAdapter;
@@ -91,6 +103,8 @@ export class PersonalCredentialTransportPreloadReceiver {
     processDiagnostics?: PersonalCredentialTransportProcessDiagnostics;
   }>) {
     this.#foundationEnabled = input.foundationEnabled === true;
+    this.#productionActivationReady =
+      isExactSensitiveTransportActivationDescriptor(input.productionActivation);
     this.#subscribe = input.subscribe;
     this.#now = input.now ?? Date.now;
     this.#adapter = input.adapter ?? new PersonalCredentialTransportPreloadAdapter({
@@ -118,7 +132,7 @@ export class PersonalCredentialTransportPreloadReceiver {
     secret: Uint8Array,
   ): Promise<PersonalCredentialTransportControlMessage> {
     this.#assertEnabled();
-    const session = this.#sessions.get(commandId);
+    const session = await this.#waitForSession(commandId);
     if (session === undefined
       || session.state !== "ready"
       || (session.offer.ticket.operationType !== "create"
@@ -156,6 +170,38 @@ export class PersonalCredentialTransportPreloadReceiver {
     return result;
   }
 
+  /** Internal-only reveal seam. The returned bytes belong to exactly one caller. */
+  public async receiveRevealSecret(commandId: string): Promise<Uint8Array> {
+    this.#assertEnabled();
+    const buffered = this.#revealedSecrets.get(commandId);
+    if (buffered !== undefined) {
+      this.#revealedSecrets.delete(commandId);
+      return buffered;
+    }
+    await this.#waitForSession(commandId);
+    const receivedWhileWaiting = this.#revealedSecrets.get(commandId);
+    if (receivedWhileWaiting !== undefined) {
+      this.#revealedSecrets.delete(commandId);
+      return receivedWhileWaiting;
+    }
+    if (this.#revealWaiters.has(commandId)) throw duplicate();
+    return new Promise<Uint8Array>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        if (this.#revealWaiters.delete(commandId)) reject(unavailable());
+      }, 5_000);
+      this.#revealWaiters.set(commandId, {
+        resolve: (secret) => {
+          clearTimeout(timeout);
+          resolve(secret);
+        },
+        reject: (error) => {
+          clearTimeout(timeout);
+          reject(error);
+        },
+      });
+    });
+  }
+
   /** Internal-only lifecycle seam. It is not exposed through contextBridge. */
   public async cancel(commandId: string): Promise<void> {
     this.#assertEnabled();
@@ -174,8 +220,8 @@ export class PersonalCredentialTransportPreloadReceiver {
     foundationEnabled: boolean;
     preloadWiringInstalled: boolean;
     productionFeatureEnabled: false;
-    productionSensitiveTransportReady: false;
-    transportBlockerClosed: false;
+    productionSensitiveTransportReady: boolean;
+    transportBlockerClosed: boolean;
     brokerDirectionalClosureImplemented: true;
     sessionCount: number;
     messagePortCount: number;
@@ -190,8 +236,8 @@ export class PersonalCredentialTransportPreloadReceiver {
       foundationEnabled: this.#foundationEnabled,
       preloadWiringInstalled: this.#unsubscribe !== undefined,
       productionFeatureEnabled: false,
-      productionSensitiveTransportReady: false,
-      transportBlockerClosed: false,
+      productionSensitiveTransportReady: this.#productionActivationReady,
+      transportBlockerClosed: this.#productionActivationReady,
       brokerDirectionalClosureImplemented: true,
       sessionCount: this.#sessions.size,
       messagePortCount: this.#sessions.size,
@@ -213,6 +259,12 @@ export class PersonalCredentialTransportPreloadReceiver {
       this.#closeSession(session, false);
     }
     this.#tombstones.clear();
+    for (const waiters of this.#sessionWaiters.values()) waiters.clear();
+    this.#sessionWaiters.clear();
+    for (const waiter of this.#revealWaiters.values()) waiter.reject(unavailable());
+    this.#revealWaiters.clear();
+    for (const secret of this.#revealedSecrets.values()) secret.fill(0);
+    this.#revealedSecrets.clear();
     this.#adapter.close();
     this.#closed = true;
   }
@@ -268,6 +320,8 @@ export class PersonalCredentialTransportPreloadReceiver {
       };
       acceptedSession = session;
       this.#sessions.set(commandId, session);
+      for (const resolve of this.#sessionWaiters.get(commandId) ?? []) resolve(session);
+      this.#sessionWaiters.delete(commandId);
       port.onmessage = (messageEvent) => {
         void this.#handleMessage(session, messageEvent);
       };
@@ -395,16 +449,36 @@ export class PersonalCredentialTransportPreloadReceiver {
     if (authorization === undefined) throw duplicate();
     let completed = false;
     try {
-      if (this.#revealConsumer === undefined) {
-        throw new PersonalCredentialTransportPreloadError(
-          "personal_credential_transport_unavailable",
-        );
-      }
       await this.#adapter.consumeAuthorizedReveal(
         session.offer.ticket,
         authorization,
         input,
-        this.#revealConsumer,
+        async (secret) => {
+          const owned = Uint8Array.from(secret);
+          const observerCopy = this.#revealConsumer === undefined
+            ? undefined
+            : Uint8Array.from(secret);
+          try {
+            if (observerCopy !== undefined) await this.#revealConsumer?.(observerCopy);
+          } finally {
+            observerCopy?.fill(0);
+          }
+          const waiter = this.#revealWaiters.get(session.offer.ticket.commandId);
+          if (waiter === undefined) {
+            while (this.#revealedSecrets.size >= PERSONAL_CREDENTIAL_TRANSPORT_MAX_REGISTRY) {
+              const oldest = this.#revealedSecrets.entries().next().value as
+                | [string, Uint8Array]
+                | undefined;
+              if (oldest === undefined) break;
+              oldest[1].fill(0);
+              this.#revealedSecrets.delete(oldest[0]);
+            }
+            this.#revealedSecrets.set(session.offer.ticket.commandId, owned);
+          } else {
+            this.#revealWaiters.delete(session.offer.ticket.commandId);
+            waiter.resolve(owned);
+          }
+        },
       );
       completed = true;
     } finally {
@@ -430,6 +504,11 @@ export class PersonalCredentialTransportPreloadReceiver {
     session.port.onmessage = null;
     session.port.onclose = null;
     session.port.close();
+    const revealWaiter = this.#revealWaiters.get(session.offer.ticket.commandId);
+    if (revealWaiter !== undefined) {
+      this.#revealWaiters.delete(session.offer.ticket.commandId);
+      revealWaiter.reject(unavailable());
+    }
     if (tombstone) {
       this.#tombstones.set(
         session.offer.ticket.commandId,
@@ -447,6 +526,26 @@ export class PersonalCredentialTransportPreloadReceiver {
 
   #assertEnabled(): void {
     if (!this.#foundationEnabled || this.#closed) throw unavailable();
+  }
+
+  async #waitForSession(commandId: string): Promise<ReceiverSession> {
+    const current = this.#sessions.get(commandId);
+    if (current !== undefined) return current;
+    return new Promise<ReceiverSession>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        const waiters = this.#sessionWaiters.get(commandId);
+        waiters?.delete(onSession);
+        if (waiters?.size === 0) this.#sessionWaiters.delete(commandId);
+        reject(unavailable());
+      }, 5_000);
+      const onSession = (session: ReceiverSession): void => {
+        clearTimeout(timeout);
+        resolve(session);
+      };
+      const waiters = this.#sessionWaiters.get(commandId) ?? new Set();
+      waiters.add(onSession);
+      this.#sessionWaiters.set(commandId, waiters);
+    });
   }
 }
 

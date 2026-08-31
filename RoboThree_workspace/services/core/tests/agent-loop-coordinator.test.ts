@@ -304,6 +304,70 @@ describe("AgentLoopCoordinator", () => {
     });
   });
 
+  it("resumes one exact active round from a durable recovery seed", async () => {
+    const priorToolResult = {
+      schemaVersion: MODEL_PROTOCOL_VERSION,
+      role: "tool" as const,
+      toolCallId: call.toolCallId,
+      taskId: call.taskId,
+      actionId: call.actionId,
+      observationId: "019f7d00-0000-7000-8000-000000000004",
+      outcome: "succeeded" as const,
+      resultDigest: `sha256:${"b".repeat(64)}`,
+      content: [{ type: "text" as const, text: "durable observation" }],
+    };
+    const activeAssistantMessageId = "019f7d00-0000-7000-8000-000000000005";
+    const observed: Array<Readonly<{ round: number; priorCount: number }>> = [];
+    const generatedIds: number[] = [];
+    const result = await new AgentLoopCoordinator({
+      model: new ScriptedModelProvider([[
+        { type: "started" },
+        { type: "text_delta", delta: "resumed" },
+        { type: "completed", finishReason: "stop" },
+      ]]),
+      tools: new FakeAgentToolCallExecutor(),
+    }).run({
+      recoverySeed: {
+        completedRoundCount: 1,
+        activeRound: 2,
+        activeAssistantMessageId,
+        priorToolResults: [priorToolResult],
+      },
+      createAssistantMessageId: (round) => {
+        generatedIds.push(round);
+        return "019f7d00-0000-7000-8000-000000000099";
+      },
+      buildRequest: (round, prior) => {
+        observed.push({ round, priorCount: prior.length });
+        expect(prior).toEqual([priorToolResult]);
+        return request(round, prior.length);
+      },
+    });
+
+    expect(result).toMatchObject({ status: "completed", rounds: 2, text: "resumed" });
+    expect(observed).toEqual([{ round: 2, priorCount: 1 }]);
+    expect(generatedIds).toEqual([]);
+  });
+
+  it("fails closed on a drifting Agent Loop recovery round", async () => {
+    const loop = new AgentLoopCoordinator({
+      model: new ScriptedModelProvider([[
+        { type: "started" },
+        { type: "completed", finishReason: "stop" },
+      ]]),
+      tools: new FakeAgentToolCallExecutor(),
+    });
+    await expect(loop.run({
+      recoverySeed: {
+        completedRoundCount: 1,
+        activeRound: 3,
+        activeAssistantMessageId: "019f7d00-0000-7000-8000-000000000005",
+        priorToolResults: [],
+      },
+      buildRequest: () => request(1, 0),
+    })).rejects.toThrow("recovery round identity is invalid");
+  });
+
 });
 
 function rawProvider(events: readonly ModelStreamEvent[]) {

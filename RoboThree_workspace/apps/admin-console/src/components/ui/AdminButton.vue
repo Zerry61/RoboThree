@@ -2,6 +2,7 @@
   <button
     :class="presentation.className"
     :disabled="presentation.disabled"
+    v-bind="ariaLabelAttrs"
     :aria-disabled="presentation.ariaDisabled"
     :aria-busy="presentation.ariaBusy"
     type="button"
@@ -22,6 +23,7 @@ const props = withDefaults(
     loading?: boolean;
     variant?: AdminButtonVariant;
     size?: AdminComponentSize;
+    label?: string;
   }>(),
   {
     variant: 'primary',
@@ -41,6 +43,7 @@ const presentation = computed(() =>
     loading: props.loading ?? false
   })
 );
+const ariaLabelAttrs = computed(() => (props.label === undefined ? {} : { 'aria-label': props.label }));
 
 function onClick(): void {
   if (!presentation.value.disabled) {

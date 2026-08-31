@@ -1,11 +1,13 @@
 {
   "name": "@robothree/admin-console",
-  "version": "0.0.0-afe.3a",
+  "version": "0.0.0-mvp.rsl.1",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:integration": "vite build --mode integration",
+    "serve:integration": "node scripts/integration-loopback-server.mjs",
     "typecheck": "vue-tsc --noEmit -p tsconfig.json",
     "typecheck:negative": "node scripts/assert-negative-typecheck.mjs",
     "test": "vitest run",
@@ -14,6 +16,7 @@
     "smoke:dev": "node scripts/dev-startup-smoke.mjs"
   },
   "dependencies": {
+    "@robothree/contracts": "workspace:*",
     "vue": "2.7.16",
     "vue-router": "3.6.5"
   },

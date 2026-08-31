@@ -49,6 +49,11 @@ export class MacOsKeychainPersonalCredentialStore implements PersonalCredentialS
     return this.#helper?.productionReady === true;
   }
 
+  /** Verified test-isolated helpers are usable only by explicit conformance graphs. */
+  public get verifiedHelperReady(): boolean {
+    return this.#helper !== undefined;
+  }
+
   public async start(): Promise<void> {
     this.#helper = this.#descriptor === undefined
       ? undefined

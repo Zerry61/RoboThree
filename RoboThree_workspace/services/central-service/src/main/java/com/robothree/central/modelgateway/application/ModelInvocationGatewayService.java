@@ -4,6 +4,7 @@ import com.robothree.central.modelgateway.application.ModelInvocationEphemeralBu
 import com.robothree.central.modelgateway.application.ModelInvocationRuntime.AcceptCommand;
 import com.robothree.central.modelgateway.domain.ModelInvocation;
 import com.robothree.central.modelgateway.domain.ModelInvocationDurableEvent;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -13,6 +14,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.Set;
 
 public final class ModelInvocationGatewayService {
+
+    private static final int MAX_DURABLE_EVENT_QUERY_LIMIT = 1_000;
 
     private final ModelInvocationApplicationRuntime runtime;
     private final TransientModelProviderRequestSource requests;
@@ -86,14 +89,14 @@ public final class ModelInvocationGatewayService {
         Continuity continuity = new Continuity();
         AutoCloseable handle = ephemeral.subscribe(invocationId, event -> {
             if (!queue.offer(event)) {
-                continuity.lost = true;
+                continuity.markLost("subscriber_queue_overflow");
             }
         });
         List<ModelInvocationDurableEvent> durable = runtime.durableEvents(
                 compactToken,
                 invocationId,
                 afterDurableSequence,
-                1_024);
+                MAX_DURABLE_EVENT_QUERY_LIMIT);
         LiveSubscription subscription = new LiveSubscription(
                 compactToken,
                 invocationId,
@@ -106,12 +109,12 @@ public final class ModelInvocationGatewayService {
         if (initial.status().contractValue().equals("accepted")) {
             if (!startExecution(invocationId, false, continuity)
                     && ephemeral.snapshot(invocationId).lastSequence() > 0) {
-                continuity.lost = true;
+                continuity.markLost("passive_subscription_missing_output");
             }
         } else if (initial.status().contractValue().equals("running")) {
             if (!startExecution(invocationId, true, continuity)
                     && ephemeral.snapshot(invocationId).lastSequence() > 0) {
-                continuity.lost = true;
+                continuity.markLost("passive_subscription_missing_output");
             }
         }
         return subscription;
@@ -140,7 +143,7 @@ public final class ModelInvocationGatewayService {
                         // A passive subscriber cannot reconstruct ephemeral output owned by
                         // another process. Durable status remains authoritative, while the
                         // missing output is surfaced explicitly to the Core.
-                        continuity.lost = true;
+                        continuity.markLost(exception.code());
                     } finally {
                         activeExecutions.remove(invocationId);
                     }
@@ -183,16 +186,31 @@ public final class ModelInvocationGatewayService {
         public List<ModelInvocationDurableEvent> initialDurableEvents() {
             return initialDurable;
         }
-        public EphemeralEvent poll(long timeoutMillis) throws InterruptedException {
-            return queue.poll(timeoutMillis, java.util.concurrent.TimeUnit.MILLISECONDS);
+        public List<EphemeralEvent> pollAvailable(long timeoutMillis)
+                throws InterruptedException {
+            EphemeralEvent first = queue.poll(
+                    timeoutMillis,
+                    java.util.concurrent.TimeUnit.MILLISECONDS);
+            if (first == null) {
+                return List.of();
+            }
+            List<EphemeralEvent> available = new ArrayList<>();
+            available.add(first);
+            queue.drainTo(available);
+            return List.copyOf(available);
         }
         public ModelInvocation currentStatus() {
             return runtime.status(compactToken, invocationId);
         }
         public List<ModelInvocationDurableEvent> durableAfter(long sequence) {
-            return runtime.durableEvents(compactToken, invocationId, sequence, 1_024);
+            return runtime.durableEvents(
+                    compactToken,
+                    invocationId,
+                    sequence,
+                    MAX_DURABLE_EVENT_QUERY_LIMIT);
         }
         public boolean continuityLost() { return continuity.lost; }
+        public String continuityFailureCode() { return continuity.failureCode; }
 
         @Override
         public void close() {
@@ -206,5 +224,11 @@ public final class ModelInvocationGatewayService {
 
     private static final class Continuity {
         private volatile boolean lost;
+        private volatile String failureCode = "none";
+
+        private void markLost(String code) {
+            lost = true;
+            failureCode = code;
+        }
     }
 }

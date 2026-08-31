@@ -1,12 +1,39 @@
 # DFI-5.3 Provider Mapping 详细实施方案
 
-> 状态：**PLAN REVIEW PASS/CLOSED / CODING GATED**  
+> 状态：**DFI-5.3 STAGE PASS/CLOSED / DFI-5.3.1～DFI-5.3.4 PASS/CLOSED**
 > 日期：2026-08-25  
 > 负责人：Codex 5.6  
 > 上游：DFI-5.0、DFI-5.1、DFI-5.2（含 5.2.1～5.2.3）均已 `PASS/CLOSED`  
 > 本批最高输出：`DFI53_REASONING_PROVIDER_MAPPING_CONFORMANT`  
-> 下游：DFI-5.4、AAPI-0.3～0.4、TGM、Knowledge Provider 继续 `GATED`  
-> 独立技术线：Core Prompt/Context Feature Spec Revision 1 不并入本批
+> 下游：[DFI-5.4 详细方案](./DFI-5.4-DESKTOP-MAX-UI-PRODUCTION-CUTOVER-DEVELOPMENT-PLAN.md) 当前 `PLAN REVIEW PASS/CLOSED`；5.4.0 前置确认已 `PASS/CLOSED`；用户选择方案 A，
+> [最小 R2D production consumption / Provider Release Admission 计划](./DFI-5.4-SCHEME-A-R2D-PRODUCTION-PROVIDER-RELEASE-PREREQUISITE-PLAN.md)
+> 正在文档评审。TGM、Knowledge Provider、Agent Lifecycle 与 Admin v2 consumption 继续 `GATED`
+> 独立技术线：CPC 已 `PASS/CLOSED`，其生产 activation 继续 disabled；本批不得改变 Prompt/Context 语义
+
+> Revision 1 notice（2026-08-27）：§2.2 原公式把 `profileRevision` 放入 `strategyDigest` material，而现有
+> Profile revision 又由包含 `strategyDigest` 的 Profile material 派生，形成循环依赖。DFI-5.3.1 编码已按 §13
+> 停手；[聚焦修订](./DFI-5.3.1-PRIVATE-MAPPING-DIGEST-ORDERING-FOCUSED-REVISION.md) 冻结非循环双摘要顺序。
+> 聚焦复核已通过并由用户接受；DFI-5.3.1 已按该非循环顺序完成实现、通过独立 QA 并由用户正式接受，
+> 当前 `PASS/CLOSED`。下一批以
+> [DFI-5.3.2 Local Personal Reasoning Mapping 详细方案](./DFI-5.3.2-LOCAL-PERSONAL-REASONING-MAPPING-DEVELOPMENT-PLAN.md)
+> 为准；Revision 2 已完成实现与开发者门禁，独立 QA P0～P3 全 0 并已由用户正式接受，当前 `PASS/CLOSED`。
+>
+> DFI-5.3.2 Revision 1 notice（2026-08-27）：明确 Local timeout ref 为新增 code-owned identifier、对齐父八类与
+> Local 十类零副作用口径，并冻结 DFI-5.3.1 historical evidence 与 DFI-5.3.2 authorized consumer 的演进边界。
+> DFI-5.3.1 旧 Harness 的 `productionMapperConsumerCount=0/providerAdapterConnected=false` 是历史阶段事实，
+> 不得在 DFI-5.3.2 接线后要求 evidenceDigest 不变；新批通过 foundation focused regression + DFI-5.3.2
+> consumer allowlist 证明零漂移与授权演进。
+>
+> DFI-5.3.3 planning notice（2026-08-27）：DFI-5.3.2 独立 QA 已由用户接受并正式 `PASS/CLOSED`；
+> DFI-5.3.1 historical evidence/Harness 保持只读，父方案 120 项继续保留至阶段收口。为避免 Gateway v1alpha3、
+> Central private registry、cache cross-product 与 Anthropic projector 半装配，DFI-5.3.3 调整为同时完成
+> Enterprise OpenAI-compatible 与 Anthropic-compatible mapping；DFI-5.3.4 只保留 Lifecycle / Cutover /
+> Stage Closure。详细边界以
+> [DFI-5.3.3 详细方案](./DFI-5.3.3-ENTERPRISE-OPENAI-ANTHROPIC-REASONING-MAPPING-DEVELOPMENT-PLAN.md)
+> 为准；其实现与独立 QA 已由用户正式接受，当前 `PASS/CLOSED`。父方案 120 项继续保留至
+> [DFI-5.3.4 Lifecycle / Cutover / Stage Closure](./DFI-5.3.4-LIFECYCLE-CUTOVER-STAGE-CLOSURE-DEVELOPMENT-PLAN.md)
+> 执行；5.3.4 独立文档复核已 `PASS（P0～P2=0/P3=2）`，两个 P3 已作为纯文档精度项吸收，当前为
+> `USER ACCEPTANCE PENDING / CODING GATED`。
 
 ## 0. 目标与结论边界
 
@@ -141,6 +168,10 @@ ReasoningModeLock / ModelRequest:
 
 #### Provider-private mapping plane
 
+本节所有 safe/private digest 的生成顺序以
+[DFI-5.3.1 Digest Ordering 聚焦修订 §2.1～2.3](./DFI-5.3.1-PRIVATE-MAPPING-DIGEST-ORDERING-FOCUSED-REVISION.md)
+为准；不得从本节概念形状反推已废弃的循环公式。
+
 新增内部 immutable mapping material，概念形状如下，但不得作为公共 Contract 导出：
 
 ```text
@@ -164,6 +195,10 @@ ProviderReasoningMappingV1
 revision；不得在相同 digest/revision 下修改行为。
 
 ### 2.2 Strategy digest 是 raw mapping 的不可逆承诺
+
+> **Revision 1 supersession：**下述原始字段清单保留为评审历史，不再作为可编码公式。`profileRevision` 不能
+> 进入 Strategy commitment material；替代公式、完整 private mapping digest 与 exact 校验责任以
+> [DFI-5.3.1 Digest Ordering 聚焦修订](./DFI-5.3.1-PRIVATE-MAPPING-DIGEST-ORDERING-FOCUSED-REVISION.md) 为准。
 
 `ReasoningProfile` 不公开 raw mapping，但其 `strategyDigest` 必须由 Provider-private canonical material 计算：
 
@@ -195,6 +230,10 @@ usageProjection
 ```
 
 ### 2.3 Provider mapping preflight 是唯一入口
+
+本节 preflight 重算的 Strategy commitment 与 full private mapping digest，必须遵循
+[DFI-5.3.1 Digest Ordering 聚焦修订 §2.1～2.3](./DFI-5.3.1-PRIVATE-MAPPING-DIGEST-ORDERING-FOCUSED-REVISION.md)
+的非循环顺序。
 
 新增唯一 `TaskLockedReasoningProviderMapper`（名称可在编码时按现有 style 微调，但职责不得拆散）。固定顺序：
 
@@ -241,6 +280,10 @@ Provider 层统一解释为：
 6. request body serializer 必须使用 allowlist 构造，不先放 raw map 再删除字段。
 
 ### 2.5 `max_applied` 只使用 exact locked mapping
+
+本节 exact refs 校验所依赖的两层 private digest 以
+[DFI-5.3.1 Digest Ordering 聚焦修订 §2.1～2.3](./DFI-5.3.1-PRIVATE-MAPPING-DIGEST-ORDERING-FOCUSED-REVISION.md)
+为唯一可编码公式。
 
 `max_applied` 必须同时满足：
 
@@ -659,6 +702,11 @@ Parent Harness
 59. current mapping changed；60. custom Endpoint remains unknown；61. Provider kind alone不支持；
 62. failure不回退 default；63. failure不换模型；64. failure不改 support。
 
+> DFI-5.3.2 clarification（2026-08-27）：DFI-5.3.1 当前 sealed directive 只安装 OpenAI effort 与
+> Anthropic bounded budget。矩阵 42/43/46/47 继续保留，但在没有后续获批 additive sealed variant 时，验收语义是
+> “未安装 boolean/bounded variant 必须 strict reject / 保持 unknown”，不是要求 Adapter 用任意 JSON 临时实现
+> 正向映射；只有未来聚焦评审批准 exact Provider evidence 与 additive variant 后，才把对应项提升为正向 body mapping。
+
 ### 9.4 Enterprise Gateway / Adapter（65～84）
 
 65. v3 Controller disabled when graph incomplete；66. complete graph registration；67. malformed v3不 fallback；
@@ -705,25 +753,36 @@ Parent Harness
 - generic/custom 未验证模型保持 unknown；
 - 最高输出：`DFI532_LOCAL_PERSONAL_REASONING_MAPPING_CONFORMANT`。
 
-### DFI-5.3.3 Enterprise Gateway v1alpha3 + OpenAI Mapping（6～10 日）
+详细边界、96 项本批 QA、production release count=0 的诚实状态与真实 loopback TLS/SSE fixture，见
+[DFI-5.3.2 详细方案](./DFI-5.3.2-LOCAL-PERSONAL-REASONING-MAPPING-DEVELOPMENT-PLAN.md)。父方案 120 项矩阵继续
+保留到 DFI-5.3 阶段收口，不视为 DFI-5.3.1 或 DFI-5.3.2 单批已全部执行。
+
+### DFI-5.3.3 Enterprise Gateway v1alpha3 + OpenAI/Anthropic Mapping（8～13 日）
 
 - Gateway v1alpha3 schema/openapi/fixtures/TS-Java digest；
 - cache optional all-or-none 组合；
 - Central exact mapping registry与第二次校验；
 - Enterprise OpenAI typed projector + real HTTP fixture；
+- Enterprise Anthropic typed thinking projector、budget/max token fail-closed；
+- cache + reasoning 四组合与 private thinking/signature 隔离；
 - v1/v2 零漂移；
-- 最高输出：`DFI533_ENTERPRISE_OPENAI_REASONING_MAPPING_CONFORMANT`。
+- 最高输出：`DFI533_ENTERPRISE_REASONING_MAPPING_CONFORMANT`。
 
-### DFI-5.3.4 Anthropic Mapping + Lifecycle Closure（5～8 日）
+详细边界、108 项本批 focused QA 与 Gateway v1alpha3 digest 公式见
+[DFI-5.3.3 详细方案](./DFI-5.3.3-ENTERPRISE-OPENAI-ANTHROPIC-REASONING-MAPPING-DEVELOPMENT-PLAN.md)。
 
-- Anthropic typed thinking projector；
-- cache + thinking组合；
-- private thinking/signature隔离；
+### DFI-5.3.4 Lifecycle / Cutover / Stage Closure（3～5 日）
+
 - 三 Provider main/Tool/Compaction/retry/restart/terminal replay联合 Harness；
+- Gateway v1/v2/v3 与 Local/Enterprise production cutover boundary；
 - 120 项 QA、Central online/offline、阶段收口；
 - 最高输出：`DFI53_REASONING_PROVIDER_MAPPING_CONFORMANT`。
 
-总计约 **18～30 个集中工程日**，不含独立 QA、真实模型清单补证和返工。该估算替代 DFI-5.0 的 7～12 日粗估，
+详细真实进程拓扑、父方案 120 项执行账本、96 项 focused QA、三轮 semantic replay、泄漏与资源归零边界见
+[DFI-5.3.4 详细方案](./DFI-5.3.4-LIFECYCLE-CUTOVER-STAGE-CLOSURE-DEVELOPMENT-PLAN.md)。
+
+按已关闭子批与修订后的工作估算，DFI-5.3 全阶段仍约 **18～30 个集中工程日**；当前仅剩
+DFI-5.3.4 的 **3～5 日**，不含独立 QA、真实模型清单补证和返工。该估算替代 DFI-5.0 的 7～12 日粗估，
 原因是本次明确要求同时覆盖 Local Personal、Enterprise OpenAI-compatible、Enterprise Anthropic-compatible、
 additive Gateway v1alpha3、跨语言 conformance 与真实进程 Provider fixture。
 
@@ -742,6 +801,7 @@ DFI-5.3 不被取消或无限期搁置，但当前不抢占系统提示词与 Ad
 5. 编码前重新记录 CPC/DFI-5.2/Provider fixture、migration 26 与 lockfile digest 基线；
 6. DFI-5.3 门禁必须加入已关闭 CPC Harness，证明 Max mapping 不改变 System Message、Context Receipt 或
    Prompt/Reference authority。
+7. DFI-5.3.1 Digest Ordering 聚焦修订已完成独立聚焦复核并由用户接受，状态为 `PASS/CLOSED`。
 
 正常优先级为：
 
@@ -834,12 +894,17 @@ DFI-5.0                       PLAN REVIEW PASS/CLOSED
 DFI-5.1                       PASS/CLOSED
 DFI-5.2                       PASS/CLOSED
 DFI-5.2.1～DFI-5.2.3         PASS/CLOSED
-DFI-5.3                       PLAN REVIEW PASS/CLOSED / CODING GATED
-DFI-5.3.1～DFI-5.3.4         GATED
-DFI-5.4                       GATED
-AAPI-0.3～AAPI-0.4            GATED
+DFI-5.3                       PLAN REVIEW PASS/CLOSED
+DFI-5.3.1                     PASS/CLOSED
+DFI-5.3.2                     PASS/CLOSED
+DFI-5.3.3                     PASS/CLOSED
+DFI-5.3.4                     PASS/CLOSED
+DFI-5.4                       PLAN REVIEW PASS/CLOSED
+DFI-5.4.0                     PASS/CLOSED
+Scheme A prerequisite plan   DOCUMENT REVIEW PENDING / CODING GATED
+AAPI-0.3～AAPI-0.4            PASS/CLOSED
 TGM / Knowledge Provider      GATED
-Core Prompt/Context Rev 1.1   FOCUSED DIFFERENCE REVIEW PENDING / CODING GATED
+CPC-1～CPC-3 / CPC             PASS/CLOSED
 ```
 
 独立文档复核已对以下十二项全部给出接受结论，P0～P3 全 0：
@@ -855,10 +920,12 @@ Core Prompt/Context Rev 1.1   FOCUSED DIFFERENCE REVIEW PENDING / CODING GATED
 9. 是否接受 private reasoning output持续丢弃、不作为 assistant正文；
 10. 是否接受真实受控 HTTP/TLS fixture而非公网/真实用户Key；
 11. 是否接受 production SubmitTurn/Desktop Max UI继续不可达；
-12. 是否接受 18～30 日详细估算与四个串行子批。
+12. 是否接受 DFI-5.3 全阶段 18～30 日、当前仅剩 DFI-5.3.4 的 3～5 日，以及修订后的四个串行子批边界。
 
-本方案已通过独立文档复核并由用户确认可冻结，未进入 Provider、Gateway、Contract、migration、Desktop 或 Admin
-编码。只有满足 §10.1 的进入条件并由用户单独授权某个子批后，才可进入对应编码。
+本方案已通过独立文档复核并由用户确认可冻结；DFI-5.3.1～5.3.3 已分别获得授权、完成独立 QA 并
+`PASS/CLOSED`。DFI-5.3.4 独立 QA 已通过并由用户正式接受；父方案 120 项账本正式确认为
+`executed_at_dfi53_stage_closure`，DFI-5.3 阶段整体 `PASS/CLOSED`。该结论不自动授权 DFI-5.4、Desktop、
+Admin 或其他下游编码。
 
 文档作者自检：
 

@@ -21,14 +21,22 @@ import type { ReadableModelRequest } from "@robothree/contracts/model-protocol/v
 
 import type { PersonalModelDefinition } from "../../application/personal-model-domain.js";
 import { canonicalizePersonalModelEndpoint } from "../../application/personal-model-domain.js";
-import { calculateModelRequestDigest } from "../../application/model-message-converter.js";
 import {
   createModelInvocationTimeoutMaterial,
   validateModelInvocationTimeoutMaterial,
   type ModelInvocationTimeoutPolicy,
 } from "../../application/model-invocation-timeout-policy.js";
-import { requireLegacyModelRequestForUnmappedProvider } from
+import { ReasoningProtocolUnavailableError } from
   "../../application/model-reasoning-protocol.js";
+import { parseReadableModelRequest } from "../../application/model-request-revisions.js";
+import {
+  ProviderReasoningMappingIntegrityError,
+} from "../../application/provider-reasoning-mapping-domain.js";
+import {
+  LocalPersonalReasoningProjectionSchema,
+  type LocalPersonalReasoningProjection,
+  validateLocalPersonalReasoningProjection,
+} from "../../application/local-personal-reasoning-mapping.js";
 import {
   PersonalModelProviderProfileRegistry,
   type PersonalModelProviderProfile,
@@ -50,6 +58,7 @@ type LookupAddress = Readonly<{ address: string; family: 4 | 6 }>;
 export type LocalPersonalProviderTransportOptions = Readonly<{
   ca?: string | Buffer;
   testOnlyAllowLoopback?: boolean;
+  testOnlyPortOverride?: number;
   lookup?: (hostname: string) => Promise<readonly LookupAddress[]>;
 }>;
 
@@ -66,6 +75,7 @@ export interface LocalPersonalModelStreamTransport {
     signal: AbortSignal,
     invocation: ModelProviderInvocation,
     telemetry: LocalPersonalProviderAttemptTelemetry,
+    reasoningProjection?: LocalPersonalReasoningProjection,
   ): AsyncIterable<ModelStreamEvent>;
 }
 
@@ -134,8 +144,9 @@ implements ModelProvider, LocalPersonalModelStreamTransport {
     signal: AbortSignal,
     invocation: ModelProviderInvocation,
     telemetry: LocalPersonalProviderAttemptTelemetry,
+    reasoningProjection?: LocalPersonalReasoningProjection,
   ): AsyncIterable<ModelStreamEvent> {
-    yield* this.#stream(candidate, signal, invocation, telemetry);
+    yield* this.#stream(candidate, signal, invocation, telemetry, reasoningProjection);
   }
 
   async *#stream(
@@ -143,11 +154,33 @@ implements ModelProvider, LocalPersonalModelStreamTransport {
     signal: AbortSignal,
     invocation?: ModelProviderInvocation,
     telemetry?: LocalPersonalProviderAttemptTelemetry,
+    reasoningProjection?: LocalPersonalReasoningProjection,
   ): AsyncIterable<ModelStreamEvent> {
     // Keep the raw Adapter independently fail-closed when used without the
     // durable wrapper. No started event, credential read, DNS or socket may
     // occur before the DFI-5.3 mapping exists.
-    const request = requireLegacyModelRequestForUnmappedProvider(candidate);
+    const parsed = parseReadableModelRequest(candidate);
+    if (parsed.schemaVersion === "v1alpha2"
+      && (invocation === undefined || reasoningProjection === undefined)) {
+      throw new ReasoningProtocolUnavailableError();
+    }
+    if (invocation !== undefined && (
+      invocation.modelRequest.requestId !== parsed.requestId
+      || invocation.modelRequest.requestDigest !== parsed.requestDigest
+    )) throw new ProviderReasoningMappingIntegrityError("reasoning_mapping_conflict");
+    const projection = reasoningProjection ?? { mode: "omit" as const };
+    const request = parsed.schemaVersion === "v1alpha2"
+      ? validateLocalPersonalReasoningProjection({
+        request: parsed,
+        runtimeSelection: invocation?.runtimeSelection,
+        projection,
+      }).request
+      : validateLocalPersonalReasoningProjection({
+        request: parsed,
+        runtimeSelection: undefined,
+        projection,
+      }).request;
+    const requestBody = projectRequest(request, this.#definition.providerModelId, projection);
     yield ModelStreamEventSchema.parse({ type: "started" });
     const timeoutMaterial = invocation?.timeout === undefined
       ? testOnlyTimeoutMaterial(this.#timeoutPolicy, this.#clock)
@@ -164,9 +197,6 @@ implements ModelProvider, LocalPersonalModelStreamTransport {
     });
     timeout.bind(signal);
     try {
-      if (calculateModelRequestDigest(request) !== request.requestDigest) {
-        throw failure("personal_model.request_digest_invalid", "protocol", false);
-      }
       if (request.model.capabilityId !== this.#definition.personalModelId
         || request.model.capabilityRevision !== this.#lockedCapabilityRevision) {
         throw failure("personal_model.execution_identity_conflict", "permission_denied", false);
@@ -184,7 +214,7 @@ implements ModelProvider, LocalPersonalModelStreamTransport {
         const response = await openSecureStream({
           endpoint,
           authorization: `Bearer ${secret}`,
-          body: projectRequest(request, this.#definition.providerModelId),
+          body: requestBody,
           signal,
           options: this.#transport,
           timeout,
@@ -419,7 +449,19 @@ export function projectOpenAiCompatibleRequest(
   request: ModelRequest,
   providerModelId: string,
 ): JsonObject {
-  return projectRequest(ModelRequestSchema.parse(request), providerModelId);
+  return projectRequest(ModelRequestSchema.parse(request), providerModelId, { mode: "omit" });
+}
+
+export function projectLocalPersonalReasoningRequest(
+  request: ReadableModelRequest,
+  providerModelId: string,
+  reasoningProjection: LocalPersonalReasoningProjection,
+): JsonObject {
+  return projectRequest(
+    parseReadableModelRequest(request),
+    providerModelId,
+    LocalPersonalReasoningProjectionSchema.parse(reasoningProjection),
+  );
 }
 
 async function openSecureStream(input: Readonly<{
@@ -462,7 +504,10 @@ async function openSecureStream(input: Readonly<{
   const requestOptions: RequestOptions = {
     protocol: "https:",
     hostname,
-    port: input.endpoint.port === "" ? 443 : Number(input.endpoint.port),
+    port: input.options.testOnlyAllowLoopback === true
+      && input.options.testOnlyPortOverride !== undefined
+      ? input.options.testOnlyPortOverride
+      : input.endpoint.port === "" ? 443 : Number(input.endpoint.port),
     path: `${input.endpoint.pathname}${input.endpoint.search}`,
     method: "POST",
     servername: hostname,
@@ -565,7 +610,7 @@ async function openSecureStream(input: Readonly<{
 
 async function* projectOpenAiCompatibleSse(
   response: IncomingMessage & AsyncIterable<Buffer>,
-  request: ModelRequest,
+  request: ReadableModelRequest,
   signal: AbortSignal,
   timeout: LocalPersonalProviderTimeoutController,
   onRawUsage?: (rawUsage: unknown) => void,
@@ -672,7 +717,7 @@ type ToolCallFragments = {
 
 function projectChunk(
   raw: string,
-  request: ModelRequest,
+  request: ReadableModelRequest,
   calls: Map<number, ToolCallFragments>,
 ): Readonly<{
   textDeltas: readonly string[];
@@ -752,7 +797,7 @@ function classifyParsedProgress(value: Record<string, unknown>): boolean {
 function appendToolFragment(
   candidate: unknown,
   calls: Map<number, ToolCallFragments>,
-  request: ModelRequest,
+  request: ReadableModelRequest,
 ): void {
   if (!isObject(candidate) || !Number.isInteger(candidate.index) || Number(candidate.index) < 0) {
     throw failure("personal_model.tool_call_fragment_invalid", "protocol", false);
@@ -787,7 +832,10 @@ function appendToolFragment(
   calls.set(index, current);
 }
 
-function finalizeToolCall(fragments: ToolCallFragments, request: ModelRequest): AssistantToolCall {
+function finalizeToolCall(
+  fragments: ToolCallFragments,
+  request: ReadableModelRequest,
+): AssistantToolCall {
   const matching = request.tools.filter((tool) => tool.name === fragments.name);
   if (fragments.providerId === undefined || fragments.name === undefined || matching.length !== 1) {
     throw failure("personal_model.tool_call_identity_invalid", "protocol", false);
@@ -807,7 +855,11 @@ function finalizeToolCall(fragments: ToolCallFragments, request: ModelRequest): 
   };
 }
 
-function projectRequest(request: ModelRequest, providerModelId: string): JsonObject {
+function projectRequest(
+  request: ReadableModelRequest,
+  providerModelId: string,
+  reasoningProjection: LocalPersonalReasoningProjection,
+): JsonObject {
   const toolsByCall = new Map(request.messages.flatMap((message) =>
     message.role === "assistant" ? message.toolCalls.map((call) => [call.toolCallId, call]) : []));
   const messages = request.messages.map((message): JsonObject => {
@@ -851,6 +903,9 @@ function projectRequest(request: ModelRequest, providerModelId: string): JsonObj
     stream_options: { include_usage: true },
     max_tokens: request.maxOutputTokens,
     ...(tools.length === 0 ? {} : { tools }),
+    ...(reasoningProjection.mode === "apply"
+      ? { reasoning_effort: reasoningProjection.directive.effort }
+      : {}),
   });
 }
 

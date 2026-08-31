@@ -93,13 +93,13 @@ export function presentKnowledgeCenter(
     return {
       state,
       title: "企业知识能力尚未配置",
-      description: "知识库真实检索能力待接入；当前不会读取 Provider、索引或本地文件。",
+      description: "企业知识检索能力尚未接入；当前不会读取外部服务、索引或本地文件。",
       noticeTitle: "真实检索待接入",
-      noticeText: "当前生产默认只展示未配置状态，不展示示例知识源、搜索框或结果卡片。",
+      noticeText: "知识服务尚未配置，当前不展示示例知识源、搜索框或结果卡片。",
       showSearch: false,
       showList: false,
       emptyTitle: "知识中心未接入",
-      emptyDescription: "企业知识能力尚未配置/接入，不影响 Workspace 或 Document Tool 任务。",
+      emptyDescription: "企业知识能力尚未配置，不影响工作区中的普通文档任务。",
       filteredSources: [],
     };
   }
@@ -113,11 +113,11 @@ export function presentKnowledgeCenter(
   }
 
   if (state === "unavailable") {
-    return nonListCenterView(state, "知识能力不可用", "该状态仅用于 Fixture 场景，不代表真实 Provider 故障。");
+    return nonListCenterView(state, "知识能力不可用", "该状态仅用于界面测试，不代表真实知识服务故障。");
   }
 
   if (state === "empty") {
-    return nonListCenterView(state, "暂无示例知识源", "这只表示 Fixture 场景中的示例集合为空，不代表真实 Provider 状态。");
+    return nonListCenterView(state, "暂无示例知识源", "这只表示界面测试中的示例集合为空，不代表真实知识服务状态。");
   }
 
   const cards = sources.map(presentKnowledgeSource);
@@ -131,7 +131,7 @@ export function presentKnowledgeCenter(
     showSearch: true,
     showList: true,
     emptyTitle: "没有匹配的示例知识源",
-    emptyDescription: "这只表示 Fixture 场景中的示例集合为空，不代表真实 Provider 状态。",
+    emptyDescription: "这只表示界面测试中的示例集合为空，不代表真实知识服务状态。",
     filteredSources,
   };
 }
@@ -148,7 +148,7 @@ export function presentKnowledgeDetail(
       title: "知识能力未配置",
       description: "企业知识能力尚未配置/接入，详情页不会展示知识源字段或示例结果。",
       noticeTitle: "真实检索待接入",
-      noticeText: "生产默认详情页不读取 Provider、不展示搜索框，也不把路由参数当作知识源名称。",
+      noticeText: "知识服务尚未配置；当前不展示搜索框，也不会把页面参数当作知识源名称。",
       showSearch: false,
     };
   }
@@ -159,7 +159,7 @@ export function presentKnowledgeDetail(
       "知识中心暂不可用",
       "知识中心暂不可用，请稍后重试。",
       "无法展示详情",
-      "错误详情已脱敏，不展示内部对象、Provider 响应或异常栈。",
+      "错误详情已脱敏，不展示内部对象、服务响应或异常栈。",
     );
   }
 
@@ -169,7 +169,7 @@ export function presentKnowledgeDetail(
       "无权查看该示例知识源",
       "当前用户无权查看该示例知识源详情。",
       "权限不足",
-      "该状态仅用于 Fixture/组件测试，不代表真实权限事实。",
+      "该状态仅用于界面测试，不代表真实权限事实。",
     );
   }
 
@@ -177,9 +177,9 @@ export function presentKnowledgeDetail(
     return nonDetailView(
       state,
       "知识能力不可用",
-      "该状态仅用于 Fixture 场景，不代表真实 Provider 故障。",
+      "该状态仅用于界面测试，不代表真实知识服务故障。",
       "详情不可用",
-      "真实知识能力仍待接入，当前不会发起 Provider 请求。",
+      "真实知识能力仍待接入，当前不会发起外部服务请求。",
     );
   }
 
@@ -196,7 +196,7 @@ export function presentKnowledgeDetail(
     source: card,
     filteredResults: filterSampleResults(card.sampleResults, query),
     noticeTitle: "检索结果样例",
-    noticeText: "结果卡片来自本地 Fixture，仅用于展示布局，不代表真实知识能力已接入。",
+    noticeText: "结果卡片仅为界面测试数据，不代表真实知识能力已接入。",
     showSearch: true,
   };
 }
@@ -248,7 +248,7 @@ function notFoundDetail(): KnowledgeDetailView {
   return {
     state: "not_found",
     title: "未找到该示例知识源",
-    description: "该详情页只允许打开预定义的安全 Fixture id；不会把未匹配路由参数显示为知识源。",
+    description: "该详情页只允许打开预定义的安全测试条目；不会把未匹配的页面参数显示为知识源。",
     noticeTitle: "没有可展示详情",
     noticeText: "返回知识中心列表查看当前可用的示例入口。",
     showSearch: false,
@@ -269,7 +269,7 @@ function nonListCenterView(
     title: "知识中心示例",
     description: "真实知识库检索能力待接入。",
     noticeTitle: "真实检索待接入",
-    noticeText: "当前不会读取 Provider、索引或本地文件。",
+    noticeText: "当前不会读取外部服务、索引或本地文件。",
     showSearch: false,
     showList: false,
     emptyTitle,
@@ -303,8 +303,8 @@ function statusLabel(status: KnowledgeSourceFixture["status"]): string {
 }
 
 function statusHelp(status: KnowledgeSourceFixture["status"]): string {
-  if (status === "ready") return "Fixture 可展示，但真实 Provider 尚未接入。";
-  if (status === "unavailable") return "仅用于视觉测试，不代表真实 Provider 故障。";
+  if (status === "ready") return "测试数据可展示，但真实知识服务尚未接入。";
+  if (status === "unavailable") return "仅用于视觉测试，不代表真实知识服务故障。";
   if (status === "permission_denied") return "仅用于组件测试，不代表真实权限事实。";
-  return "部分示例区域可展示，真实 Partial 语义仍待 Feature Spec。";
+  return "部分示例区域可展示，完整的局部可用规则仍待产品确认。";
 }

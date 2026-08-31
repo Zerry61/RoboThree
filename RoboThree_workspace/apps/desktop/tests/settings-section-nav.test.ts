@@ -27,13 +27,12 @@ describe("DFE-5B.2 SettingsSectionNav", () => {
     const links = wrapper.findAll("a");
 
     expect(wrapper.find("nav").attributes("aria-label")).toBe("设置导航");
-    expect(links).toHaveLength(5);
+    expect(links).toHaveLength(4);
     expect(links.map((link) => link.text())).toEqual([
       "模型管理已接入",
       "个性化待接入",
       "个人记忆待接入",
       "问题反馈待接入",
-      "登录与身份待接入",
     ]);
     expect(links[2]?.attributes("aria-current")).toBe("page");
     expect(wrapper.findAll("button[disabled]")).toHaveLength(0);

@@ -1,0 +1,801 @@
+{
+  "status": "PASS",
+  "outcome": "DFI4A42_PERSONAL_MODEL_CRUD_REVEAL_RECOVERY_CONFORMANT",
+  "contractVersion": "personal-model-management.v1alpha2",
+  "exactContractSubpathImportable": true,
+  "exactApiMethodCount": 8,
+  "exactIpcChannelCount": 8,
+  "exactCorePrivateRouteCount": 8,
+  "mutationMethodCount": 3,
+  "revealMethodCount": 1,
+  "genericDispatcherCount": 0,
+  "transportSplit": "create_replace_reveal_strm_reuse_delete_safe_core_zero_secret",
+  "productionSensitiveTransportReady": true,
+  "productionBusinessHandlerInstalled": true,
+  "productionBusinessHandlerReady": false,
+  "productionHelperAssetPresent": false,
+  "personalModelCrudReady": false,
+  "credentialRevealReady": false,
+  "rendererConsumerCount": 0,
+  "rendererPersonalModelUiReady": false,
+  "dfi4a43Unlocked": false,
+  "enterpriseIdentityReady": false,
+  "adminV2Ready": false,
+  "tgmReady": false,
+  "knowledgeProviderReady": false,
+  "agentLifecycleReady": false,
+  "zeroCopyClaimed": false,
+  "structuredCloneInternalCopiesReliablyClearable": false,
+  "negativeLeakInjectionDetectionCount": 80,
+  "fourChannelLeakageMatchCounts": {
+    "parentStdout": 0,
+    "childStderr": 0,
+    "machineEvidence": 0,
+    "safeTrace": 0
+  },
+  "resourceCounts": {
+    "electronProcessCount": 0,
+    "browserWindowCount": 0,
+    "webContentsCount": 0,
+    "messagePortCount": 0,
+    "ipcListenerCount": 0,
+    "navigationListenerCount": 0,
+    "timerCount": 0,
+    "transportSessionCount": 0,
+    "transportRegistryCount": 0,
+    "brokerInflightCount": 0,
+    "brokerTombstoneCount": 0,
+    "coreChildProcessCount": 0,
+    "sensitiveStreamCount": 0,
+    "helperProcessCount": 0,
+    "listeningPortCount": 0,
+    "temporaryDirectoryCount": 0,
+    "revealAttemptCount": 0,
+    "operationLeaseCount": 0
+  },
+  "resourceAccountingSources": {
+    "transportAndProcess": "historical_strm3_real_process_evidence",
+    "revealAndOperation": "dfi4a42_lifecycle_runtime_diagnostics"
+  },
+  "parentQaMatrixCount": 120,
+  "focusedQaMatrixCount": 96,
+  "parentQaLedgerStatus": "qa_061_080_strm3_qa_081_100_dfi4a42_other_80_retained",
+  "parentQaLedger": [
+    {
+      "qaId": "QA-001",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-002",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-003",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-004",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-005",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-006",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-007",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-008",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-009",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-010",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-011",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-012",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-013",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-014",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-015",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-016",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-017",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-018",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-019",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-020",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-021",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-022",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-023",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-024",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-025",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-026",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-027",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-028",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-029",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-030",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-031",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-032",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-033",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-034",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-035",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-036",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-037",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-038",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-039",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-040",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-041",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-042",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-043",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-044",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-045",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-046",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-047",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-048",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-049",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-050",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-051",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-052",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-053",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-054",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-055",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-056",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-057",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-058",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-059",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-060",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-061",
+      "ownerTest": "run-strm3-process-electron.mjs",
+      "evidenceKey": "mutationBypassesOrdinaryInvoke",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-062",
+      "ownerTest": "run-strm3-process-electron.mjs",
+      "evidenceKey": "updateSharesSensitiveMutationRoute",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-063",
+      "ownerTest": "run-strm3-process-electron.mjs",
+      "evidenceKey": "revealBypassesCoreHttp",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-064",
+      "ownerTest": "run-strm3-electron.mjs",
+      "evidenceKey": "productCallersRemainUnavailable",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-065",
+      "ownerTest": "strm2.2-personal-credential-directional-closure.test.ts",
+      "evidenceKey": "preloadBodyLengthBound",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-066",
+      "ownerTest": "strm2.2-personal-credential-directional-closure.test.ts",
+      "evidenceKey": "mainTicketBound",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-067",
+      "ownerTest": "strm2.1-personal-credential-lifecycle.test.ts",
+      "evidenceKey": "perWebContentsInflightBound",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-068",
+      "ownerTest": "strm2.1-personal-credential-lifecycle.test.ts",
+      "evidenceKey": "globalInflightBound",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-069",
+      "ownerTest": "strm2.2-personal-credential-directional-closure.test.ts",
+      "evidenceKey": "exactFrameAuthorization",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-070",
+      "ownerTest": "strm2.1-personal-credential-lifecycle.test.ts",
+      "evidenceKey": "staleTicketRejected",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-071",
+      "ownerTest": "strm2.1-personal-credential-lifecycle.test.ts",
+      "evidenceKey": "duplicateTicketRejected",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-072",
+      "ownerTest": "strm2.2-personal-credential-directional-closure.test.ts",
+      "evidenceKey": "lateBodyRejected",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-073",
+      "ownerTest": "strm2.1-personal-credential-lifecycle.test.ts",
+      "evidenceKey": "cancelSingleTerminal",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-074",
+      "ownerTest": "strm2.1-personal-credential-lifecycle.test.ts",
+      "evidenceKey": "deadlineSingleTerminal",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-075",
+      "ownerTest": "run-strm3-electron.mjs",
+      "evidenceKey": "oldCorePortInvalidAfterRestart",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-076",
+      "ownerTest": "strm2.2-personal-credential-directional-closure.test.ts",
+      "evidenceKey": "navigationAndCloseScrub",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-077",
+      "ownerTest": "strm2.3-personal-credential-transport-closure.test.ts",
+      "evidenceKey": "helperFrameStrict",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-078",
+      "ownerTest": "run-strm3-process-electron.mjs",
+      "evidenceKey": "helperStderrFailClosed",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-079",
+      "ownerTest": "run-strm3-process-electron.mjs",
+      "evidenceKey": "revealExactConsumerNoFanout",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-080",
+      "ownerTest": "run-strm3-harness.mjs",
+      "evidenceKey": "clipboardCacheBroadcastZero",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-081",
+      "ownerTest": "dfi4a4.2-personal-model-lifecycle.integration.test.ts",
+      "evidenceKey": "createPreparedBeforeKeychain",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-082",
+      "ownerTest": "dfi4a4.2-personal-model-command-service.test.ts",
+      "evidenceKey": "createInitialUnverified",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-083",
+      "ownerTest": "dfi4a4.2-personal-model-command-service.test.ts",
+      "evidenceKey": "saveNoConnectionTest",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-084",
+      "ownerTest": "dfi4a4.2-personal-model-command-service.test.ts",
+      "evidenceKey": "metadataUpdateReusesCredential",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-085",
+      "ownerTest": "dfi4a4.2-personal-model-command-service.test.ts",
+      "evidenceKey": "bindingChangeRequiresNewKey",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-086",
+      "ownerTest": "dfi4a4.2-personal-model-command-service.test.ts",
+      "evidenceKey": "replaceExactRevision",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-087",
+      "ownerTest": "dfi4a4.2-personal-model-lifecycle.integration.test.ts",
+      "evidenceKey": "activeTaskDeleteBlocked",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-088",
+      "ownerTest": "dfi4a4.2-personal-model-lifecycle.integration.test.ts",
+      "evidenceKey": "usageUnknownDeleteBlocked",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-089",
+      "ownerTest": "dfi4a4.2-personal-model-lifecycle.integration.test.ts",
+      "evidenceKey": "corePreferenceConvergence",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-090",
+      "ownerTest": "dfi4a4.2-personal-model-lifecycle.integration.test.ts",
+      "evidenceKey": "receiptExactReplay",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-091",
+      "ownerTest": "dfi4a4.2-personal-model-lifecycle.integration.test.ts",
+      "evidenceKey": "commandMaterialConflict",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-092",
+      "ownerTest": "dfi4a4.2-personal-model-lifecycle.integration.test.ts",
+      "evidenceKey": "uncertainHonest",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-093",
+      "ownerTest": "dfi4a4.2-personal-model-lifecycle.integration.test.ts",
+      "evidenceKey": "manualAttentionHonest",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-094",
+      "ownerTest": "dfi4a4.2-personal-model-lifecycle.integration.test.ts",
+      "evidenceKey": "cleanupPendingHonest",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-095",
+      "ownerTest": "dfi4a4.2-personal-model-lifecycle.integration.test.ts",
+      "evidenceKey": "recoveryNoRendererSecretReread",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-096",
+      "ownerTest": "dfi4a4.2-personal-model-lifecycle.integration.test.ts",
+      "evidenceKey": "revealExactRevalidation",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-097",
+      "ownerTest": "dfi4a4.2-personal-model-command-service.test.ts",
+      "evidenceKey": "revealRateLimitSingleConcurrency",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-098",
+      "ownerTest": "personal-model-v1alpha2-safe-api.test.ts",
+      "evidenceKey": "revealExpiredNoReplay",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-099",
+      "ownerTest": "dfi4a4.2-personal-model-lifecycle.integration.test.ts",
+      "evidenceKey": "revealNoDurableViewedFact",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-100",
+      "ownerTest": "dfi4a4.2-personal-model-command-service.test.ts",
+      "evidenceKey": "enterprisePersonalCredentialIsolation",
+      "result": "pass"
+    },
+    {
+      "qaId": "QA-101",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-102",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-103",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-104",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-105",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-106",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-107",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-108",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-109",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-110",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-111",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-112",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-113",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-114",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-115",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-116",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-117",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-118",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-119",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    },
+    {
+      "qaId": "QA-120",
+      "ownerTest": "DFI-4A.4.3 stage closure",
+      "evidenceKey": "retained_for_dfi4a4_stage_closure",
+      "result": "retained"
+    }
+  ],
+  "historicalStrm3EvidenceDigest": "sha256:f1a42004058f14ae3e1178dd2243d95a379874a62a11d4392784066bcff90722",
+  "historicalStrm3EvidenceFileSha256": "64bff1d5b3432bdbb61ab141b8658e454e8e59d02860a04844972481ee31a817",
+  "historicalDfi4a41EvidenceDigest": "sha256:69bdb4003e29c1bbe0d51b1dd987041c806babfea1b3ef6c1de282623c328750",
+  "historicalDfi4a41EvidenceFileSha256": "5efbe9268e195b4acb9318e69e65f1c1e81cc94ac5945e012a529fb2509d67d1",
+  "migrationMax": 26,
+  "lockfileDigest": "sha256:5b15ae0197c6f7a1450a49551fbfb50a9e0edc32f0fbe75a9259a360ed874f31",
+  "versions": {
+    "root": "0.0.0-dfi.4a.4.2",
+    "core": "0.0.0-dfi.4a.4.2",
+    "contracts": "0.0.0-dfi.4a.4.2",
+    "desktop": "0.0.0-dfi.4a.4.2",
+    "admin": "0.0.0-afe.6c"
+  },
+  "testFileCount": 8,
+  "testCount": 59,
+  "evidenceDigest": "sha256:f52e7a255374e70a920957ba7641f5643f73a39445946815e42d7261be87dc0e"
+}

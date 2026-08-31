@@ -10,8 +10,11 @@ import {
   type AgentDefinitionRevisionV1Alpha2,
   type AgentDefinitionRevisionV1Alpha2Material,
   type AgentKnowledgeRestrictionV1Alpha2,
+  type AgentModelRestrictionRefV1Alpha2,
   type AgentModelRestrictionV1Alpha2,
+  type AgentSkillRestrictionRefV1Alpha2,
   type AgentSkillRestrictionV1Alpha2,
+  type AgentToolRestrictionRefV1Alpha2,
   type AgentToolRestrictionV1Alpha2,
 } from "@robothree/contracts/runtime-selection/agent-definition/v1alpha2";
 
@@ -73,6 +76,11 @@ export type ReadableAgentDefinitionRevision =
   | AgentDefinitionRevision
   | AgentDefinitionRevisionV1Alpha2;
 
+export type PrivateAgentDefinitionRevision = AgentDefinitionRevisionV1Alpha2;
+export type PortableAgentModelRestrictionRef = AgentModelRestrictionRefV1Alpha2;
+export type PortableAgentSkillRestrictionRef = AgentSkillRestrictionRefV1Alpha2;
+export type PortableAgentToolRestrictionRef = AgentToolRestrictionRefV1Alpha2;
+
 export function calculateAgentDefinitionRevisionV1Alpha2Digest(
   material: AgentDefinitionRevisionV1Alpha2Material,
 ): string {
@@ -94,6 +102,9 @@ export function createAgentDefinitionRevisionV1Alpha2(
     digest,
   });
 }
+
+export const createPortableAgentDefinitionRevision =
+  createAgentDefinitionRevisionV1Alpha2;
 
 export function hasValidAgentDefinitionRevisionV1Alpha2(
   input: AgentDefinitionRevisionV1Alpha2,

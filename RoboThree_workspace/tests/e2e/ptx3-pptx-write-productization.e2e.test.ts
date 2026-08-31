@@ -27,6 +27,7 @@ describe("PTX-3 PPTX write productization", () => {
     const runtime = createDesktopPrivateRuntime({
       databasePath: join(directory, "robothree.sqlite"),
       authorizationToken: "p".repeat(48),
+      demoMode: "legacy_test",
     });
     await runtime.start();
     cleanup.push(async () => {

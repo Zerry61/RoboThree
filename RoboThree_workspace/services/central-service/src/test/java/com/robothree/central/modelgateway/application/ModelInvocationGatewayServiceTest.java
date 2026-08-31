@@ -9,6 +9,7 @@ import com.robothree.central.modelgateway.domain.ModelInvocationStatus;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -46,7 +47,7 @@ class ModelInvocationGatewayServiceTest {
         var second = service.subscribe("token", invocationId, 0);
         assertThat(runtime.executeCount.get()).isEqualTo(1);
         assertThat(service.activeExecutionCount()).isEqualTo(1);
-        assertThat(first.poll(100)).isNotNull();
+        assertThat(first.pollAvailable(100)).hasSize(1);
         assertThat(first.continuityLost()).isFalse();
         assertThat(second.continuityLost()).isTrue();
 
@@ -107,11 +108,69 @@ class ModelInvocationGatewayServiceTest {
         subscription.close();
     }
 
+    @Test
+    void boundsInitialAndSubsequentDurableEventQueriesToPersistenceLimit() {
+        UUID invocationId = UUID.randomUUID();
+        String requestDigest = "d".repeat(64);
+        ModelInvocation completed = invocation(
+                invocationId,
+                requestDigest,
+                ModelInvocationStatus.COMPLETED);
+        var runtime = new FakeRuntime(completed, completed);
+        var service = new ModelInvocationGatewayService(
+                runtime,
+                new TransientModelProviderRequestSource(),
+                new ModelInvocationEphemeralBuffer(8, 8_192),
+                "bounded-node",
+                8);
+
+        try (var subscription = service.subscribe("token", invocationId, 0)) {
+            subscription.durableAfter(0);
+        }
+
+        assertThat(runtime.durableLimits).containsExactly(1_000, 1_000);
+    }
+
+    @Test
+    void drainsAllAvailableEphemeralEventsBeforeTerminalFactsAreRead()
+            throws Exception {
+        UUID invocationId = UUID.randomUUID();
+        String requestDigest = "e".repeat(64);
+        var buffer = new ModelInvocationEphemeralBuffer(32, 65_536);
+        var runtime = new FakeRuntime(
+                invocation(invocationId, requestDigest, ModelInvocationStatus.ACCEPTED),
+                invocation(invocationId, requestDigest, ModelInvocationStatus.COMPLETED));
+        runtime.onExecute = () -> {
+            buffer.appendStarted(
+                    invocationId,
+                    Instant.parse("2026-08-03T06:00:00Z"));
+            buffer.appendText(
+                    invocationId,
+                    "second turn",
+                    Instant.parse("2026-08-03T06:00:01Z"));
+        };
+        var service = new ModelInvocationGatewayService(
+                runtime,
+                new TransientModelProviderRequestSource(),
+                buffer,
+                "drain-node",
+                8);
+
+        try (var subscription = service.subscribe("token", invocationId, 0)) {
+            awaitZero(service);
+            assertThat(subscription.pollAvailable(100))
+                    .extracting(ModelInvocationEphemeralBuffer.EphemeralEvent::eventType)
+                    .containsExactly("started", "text_delta");
+        }
+    }
+
     private static final class FakeRuntime implements ModelInvocationApplicationRuntime {
         private final ModelInvocation initial;
         private final ModelInvocation result;
         private final AtomicInteger executeCount = new AtomicInteger();
         private final AtomicInteger recoverCount = new AtomicInteger();
+        private final CopyOnWriteArrayList<Integer> durableLimits =
+                new CopyOnWriteArrayList<>();
         private volatile Runnable onExecute = () -> {};
         private volatile boolean failAccept;
         private volatile boolean failRecovery;
@@ -157,6 +216,7 @@ class ModelInvocationGatewayServiceTest {
         @Override
         public List<ModelInvocationDurableEvent> durableEvents(
                 String token, UUID invocationId, long afterSequence, int limit) {
+            durableLimits.add(limit);
             return List.of();
         }
     }

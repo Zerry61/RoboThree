@@ -29,6 +29,7 @@ import {
   NodeWorkspacePathResolver,
   RegistryBuilder,
   RuntimeSelectionService,
+  R2D3DurableAcceptancePlanner,
   ReasoningModeLockPlanner,
   TaskLockedReasoningProfileSubjectResolver,
   RuntimeCatalogProjectionService,
@@ -47,6 +48,10 @@ import {
   createCapabilityDefinition,
   createModelDefinition,
   createReasoningProfile,
+  createTaskResourceEntitlementSnapshotV1,
+  AgentResourceDecisionPlanner,
+  BuiltInGeneralAgentSource,
+  FixedTaskAuthorizationModePolicyProvider,
   calculateReasoningSupportRevision,
 } from "../src/index.js";
 import { sha256CanonicalJson } from "../src/persistence/digest.js";
@@ -625,7 +630,139 @@ describe("DCF-1.1C SubmitTurnCoordinator", () => {
   });
 });
 
+describe("R2D-3.3 durable acceptance cutover", () => {
+  it("atomically materializes v1alpha4 coordination and the exact v1alpha3 Task bundle", async () => {
+    const harness = await createMemoryHarness({ r2d3Enabled: true });
+    try {
+      expect(await harness.coordinator.submitV1Alpha3(commandV1Alpha3Default()))
+        .toMatchObject({
+          ok: true,
+          receipt: {
+            contractVersion: "v1alpha3",
+            status: "accepted",
+            runtimeSelectionSummary: {
+              agent: { id: "agent.general" },
+              resolvedModel: { id: "model.default" },
+            },
+          },
+        });
+      expect(await harness.coordination.loadRecord(commandId)).toMatchObject({
+        schemaVersion: "v1alpha4",
+        status: "completed",
+        resourcePlan: { acceptanceReceiptIdentity: commandId },
+      });
+      expect(await harness.tasks.loadR2D3SubmitTurnTaskBundle(commandId))
+        .toMatchObject({
+          runtimeSelection: {
+            schemaVersion: "v1alpha3",
+            agent: { agentDefinitionId: "agent.general" },
+            modelSelectionSource: "user_preference",
+            reasoningModeLock: { resolution: "default_passthrough" },
+          },
+          taskInstructionBinding: { schemaVersion: "v1" },
+        });
+      expect(harness.r2d3AuthorityCounts).toEqual({
+        exactAgent: 0,
+        subject: 1,
+        registry: 1,
+        workspaceAuthorization: 1,
+        preference: 1,
+        capabilityLocks: 1,
+        entitlement: 1,
+        toolPolicy: 1,
+      });
+      expect(harness.loop.startedCount()).toBe(1);
+
+      expect(await harness.coordinator.submitV1Alpha3(commandV1Alpha3Default()))
+        .toMatchObject({ ok: true, receipt: { status: "replayed" } });
+      expect(harness.r2d3AuthorityCounts).toEqual({
+        exactAgent: 0,
+        subject: 1,
+        registry: 1,
+        workspaceAuthorization: 1,
+        preference: 1,
+        capabilityLocks: 1,
+        entitlement: 1,
+        toolPolicy: 1,
+      });
+      expect(harness.loop.startedCount()).toBe(1);
+    } finally {
+      await harness.cleanup();
+    }
+  });
+
+  it("keeps Agent Loop behind task_committed and recovers without rereading authority", async () => {
+    let fail = true;
+    const harness = await createMemoryHarness({
+      r2d3Enabled: true,
+      coordinatorFault(point) {
+        if (fail && point === "submit_turn.coordinator.after_task_bundle") {
+          fail = false;
+          throw new Error("r2d3 task_committed barrier");
+        }
+      },
+    });
+    try {
+      await expect(harness.coordinator.submitV1Alpha3(commandV1Alpha3Default()))
+        .rejects.toThrow("r2d3 task_committed barrier");
+      expect(await harness.coordination.loadRecord(commandId)).toMatchObject({
+        schemaVersion: "v1alpha4",
+        status: "message_appended",
+      });
+      expect(await harness.tasks.loadR2D3SubmitTurnTaskBundle(commandId))
+        .toBeDefined();
+      expect(harness.loop.startedCount()).toBe(0);
+      const countsAtCrash = structuredClone(harness.r2d3AuthorityCounts);
+
+      expect(await harness.coordinator.resume(commandId)).toMatchObject({
+        ok: true,
+        receipt: { status: "accepted" },
+      });
+      expect(harness.r2d3AuthorityCounts).toEqual(countsAtCrash);
+      expect(harness.loop.startedCount()).toBe(1);
+    } finally {
+      await harness.cleanup();
+    }
+  });
+});
+
 describe("DCF-1.1C SQLite close/reopen recovery matrix", () => {
+  it("reopens the exact R2D-3.3 plan and bundle without current-authority rereads", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "robothree-r2d33-"));
+    const databasePath = join(directory, "core.sqlite");
+    const first = await createSqliteHarness(databasePath, { r2d3Enabled: true });
+    try {
+      expect(await first.coordinator.submitV1Alpha3(commandV1Alpha3Default()))
+        .toMatchObject({ ok: true, receipt: { status: "accepted" } });
+      expect(first.r2d3AuthorityCounts.entitlement).toBe(1);
+    } finally {
+      await first.cleanup();
+    }
+    const second = await createSqliteHarness(databasePath, {
+      seedSession: false,
+      r2d3Enabled: true,
+    });
+    try {
+      expect(await second.coordinator.submitV1Alpha3(commandV1Alpha3Default()))
+        .toMatchObject({ ok: true, receipt: { status: "replayed" } });
+      expect(second.r2d3AuthorityCounts).toEqual({
+        exactAgent: 0,
+        subject: 0,
+        registry: 0,
+        workspaceAuthorization: 0,
+        preference: 0,
+        capabilityLocks: 0,
+        entitlement: 0,
+        toolPolicy: 0,
+      });
+      expect(await second.tasks.loadR2D3SubmitTurnTaskBundle(commandId))
+        .toMatchObject({ runtimeSelection: { schemaVersion: "v1alpha3" } });
+    } finally {
+      await second.cleanup();
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it("reopens the exact reasoning-aware Task bundle without Profile reread", async () => {
     const directory = await mkdtemp(join(tmpdir(), "robothree-dfi522-"));
     const databasePath = join(directory, "core.sqlite");
@@ -910,6 +1047,18 @@ type HarnessOptions = {
   loop?: FakeAgentLoopStarter;
   seedSession?: boolean;
   reasoningProfiles?: ReasoningProfileSource;
+  r2d3Enabled?: boolean;
+};
+
+type R2D3AuthorityCounts = {
+  exactAgent: number;
+  subject: number;
+  registry: number;
+  workspaceAuthorization: number;
+  preference: number;
+  capabilityLocks: number;
+  entitlement: number;
+  toolPolicy: number;
 };
 
 type Harness = {
@@ -924,6 +1073,7 @@ type Harness = {
   registryRevision: string;
   reasoningProfile: ReturnType<typeof createReasoningProfile>;
   reasoningSupportRevision: string;
+  r2d3AuthorityCounts: R2D3AuthorityCounts;
   cleanup(): Promise<void>;
 };
 
@@ -1073,17 +1223,18 @@ async function assembleHarness(input: {
   const catalog = new InMemoryTrustedRuntimeCatalog()
     .registerAgent(runtime.agent)
     .registerModel(runtime.model);
+  const capabilityLocks = new TaskCapabilityLockService({
+    resolver: new CapabilityResolver(runtime.registry),
+    persistence: input.tasks,
+    clock: input.clock,
+    idGenerator: new SystemIdGenerator(),
+  });
   const selection = new RuntimeSelectionService({
     agents: catalog,
     models: catalog,
     tasks: input.tasks,
     workspaces: input.foundation,
-    locks: new TaskCapabilityLockService({
-      resolver: new CapabilityResolver(runtime.registry),
-      persistence: input.tasks,
-      clock: input.clock,
-      idGenerator: new SystemIdGenerator(),
-    }),
+    locks: capabilityLocks,
     eligibility: new ModelEligibilityEvaluator(),
     clock: input.clock,
     ids: new SystemIdGenerator(),
@@ -1105,6 +1256,119 @@ async function assembleHarness(input: {
     }],
   }]);
   const loop = input.options.loop ?? new FakeAgentLoopStarter();
+  const r2d3AuthorityCounts: R2D3AuthorityCounts = {
+    exactAgent: 0,
+    subject: 0,
+    registry: 0,
+    workspaceAuthorization: 0,
+    preference: 0,
+    capabilityLocks: 0,
+    entitlement: 0,
+    toolPolicy: 0,
+  };
+  const modelRef = {
+    modelId: runtime.model.modelId,
+    revision: runtime.model.capability.capabilityRevision,
+    digest: runtime.model.capability.capabilityRevision,
+  };
+  const subjectBindingDigest = digest("1");
+  const entitlement = createTaskResourceEntitlementSnapshotV1({
+    schemaVersion: "v1",
+    subjectBindingDigest,
+    authorityKind: "runtime_active_enterprise_identity",
+    authorityRevision: digest("2"),
+    observedAt: at,
+    models: [{ ...modelRef, stableOrdinal: 10 }],
+    skills: [],
+    tools: [],
+    knowledge: [],
+    identityEvidence: { testIdentityUsed: true, productionIdentityReady: false },
+  });
+  const r2d3Planner = input.options.r2d3Enabled === true
+    ? new R2D3DurableAcceptancePlanner({
+      clock: input.clock,
+      ids: new SystemIdGenerator(),
+      builtInAgent: new BuiltInGeneralAgentSource(),
+      decisionPlanner: new AgentResourceDecisionPlanner(),
+      authorizationPolicies: new FixedTaskAuthorizationModePolicyProvider(),
+      reasoningPlanner: new ReasoningModeLockPlanner({
+        profiles: input.options.reasoningProfiles
+          ?? new InMemoryReasoningProfileSource([reasoningProfile]),
+        subjects: new TaskLockedReasoningProfileSubjectResolver(),
+      }),
+      entitlements: {
+        async loadExact() {
+          r2d3AuthorityCounts.entitlement += 1;
+          return structuredClone(entitlement);
+        },
+      },
+      toolPolicy: {
+        async resolveExact(policyInput) {
+          r2d3AuthorityCounts.toolPolicy += 1;
+          return {
+            registryRevision: policyInput.registryRevision,
+            authorityFactsDigest: digest("3"),
+            candidates: [],
+          };
+        },
+      },
+      authority: {
+        async loadExactAgent() {
+          r2d3AuthorityCounts.exactAgent += 1;
+          return undefined;
+        },
+        async captureSubjectBindings() {
+          r2d3AuthorityCounts.subject += 1;
+          return {
+            acceptanceLeaseId: "019f7447-a784-77b2-a716-0000000000a1",
+            verifiedRuntimeSubjectBindingDigest: subjectBindingDigest,
+            acceptedClientBindingDigest: digest("4"),
+          };
+        },
+        async captureRegistrySnapshot() {
+          r2d3AuthorityCounts.registry += 1;
+          return {
+            schemaVersion: "v1",
+            registryRevision: runtime.registry.registryRevision,
+            models: [{
+              ref: modelRef,
+              capabilities: runtime.model.capabilities,
+              available: true,
+            }],
+            skills: [],
+            tools: [],
+            knowledge: [],
+            knowledgeProviderReady: false,
+          };
+        },
+        async captureWorkspaceAndAuthorizationFacts() {
+          r2d3AuthorityCounts.workspaceAuthorization += 1;
+          return {
+            schemaVersion: "v1",
+            factsDigest: digest("5"),
+            models: [modelRef],
+            skills: [],
+            tools: [],
+            knowledge: [],
+          };
+        },
+        async loadExactUserModelPreference() {
+          r2d3AuthorityCounts.preference += 1;
+          return modelRef;
+        },
+        async prepareExactCapabilityLocks(lockInput) {
+          r2d3AuthorityCounts.capabilityLocks += 1;
+          return [capabilityLocks.prepare({
+            taskId: lockInput.taskId,
+            registryRevision: lockInput.registrySnapshot.registryRevision,
+            capabilityId: lockInput.decision.resolvedModelRef.modelId,
+            lockId: lockInput.orderedLockIds[0],
+            lockedAt: lockInput.lockedAt,
+          }).lock];
+        },
+      },
+    })
+    : undefined;
   const coordinator = new SubmitTurnCoordinator({
     clock: input.clock,
     ids: new SystemIdGenerator(),
@@ -1115,6 +1379,8 @@ async function assembleHarness(input: {
     selectionContexts,
     coordination: input.coordination,
     loopStarter: loop,
+    r2dCoreDeltaEnabled: input.options.r2d3Enabled === true,
+    ...(r2d3Planner === undefined ? {} : { r2d3AcceptancePlanner: r2d3Planner }),
     ...(input.options.coordinatorFault === undefined
       ? {}
       : { faultInjector: input.options.coordinatorFault }),
@@ -1167,6 +1433,7 @@ async function assembleHarness(input: {
     registryRevision: runtime.registry.registryRevision,
     reasoningProfile,
     reasoningSupportRevision,
+    r2d3AuthorityCounts,
     cleanup: input.cleanup,
   };
 }

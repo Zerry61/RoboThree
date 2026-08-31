@@ -1,9 +1,13 @@
 import {
   JsonObjectSchema,
   JsonValueSchema,
-  ModelRequestSchema,
   type JsonObject,
 } from "@robothree/contracts";
+import { parseReadableModelRequest } from "./model-request-revisions.js";
+import {
+  EnterpriseReasoningSafeSidecarSchema,
+  type EnterpriseReasoningSafeSidecar,
+} from "./enterprise-reasoning-mapping.js";
 
 import type { ModelProviderInvocation } from "../ports/model-provider-invocation.js";
 import type { ModelInvocationCacheContext } from "../ports/session-scope-digest-provider.js";
@@ -12,7 +16,7 @@ import { sha256CanonicalJson } from "../persistence/digest.js";
 export type EnterpriseModelAcceptMaterial = Readonly<{
   document: JsonObject;
   requestDigest: string;
-  gatewayContractVersion: "v1alpha1" | "v1alpha2";
+  gatewayContractVersion: "v1alpha1" | "v1alpha2" | "v1alpha3";
 }>;
 
 export class EnterpriseModelRequestConverter {
@@ -22,8 +26,12 @@ export class EnterpriseModelRequestConverter {
     transportRequestId: string;
     providerStreamIdleTimeoutMillis: number;
     cacheContext?: ModelInvocationCacheContext;
+    reasoning?: EnterpriseReasoningSafeSidecar;
   }>): EnterpriseModelAcceptMaterial {
-    const request = ModelRequestSchema.parse(input.invocation.modelRequest);
+    const request = parseReadableModelRequest(input.invocation.modelRequest);
+    if ((request.schemaVersion === "v1alpha2") !== (input.reasoning !== undefined)) {
+      throw new Error("Enterprise reasoning sidecar must match ModelRequest version");
+    }
     const selection = input.invocation.runtimeSelection;
     const configurationRevision = selection.enterpriseConfigRevision;
     if (configurationRevision === undefined) {
@@ -56,7 +64,7 @@ export class EnterpriseModelRequestConverter {
               content: message.content,
               toolCalls: message.toolCalls.map((call) => ({
                 toolCallId: call.toolCallId,
-                name: toolName(request, call.capabilityId),
+                name: projectEnterpriseProviderToolName(call.capabilityId),
                 arguments: call.arguments,
                 argumentsDigest: hexDigest(sha256CanonicalJson(call.arguments)),
               })),
@@ -74,12 +82,15 @@ export class EnterpriseModelRequestConverter {
       tools: request.tools.map((tool) => ({
         capabilityId: tool.capabilityId,
         capabilityRevision: hexDigest(tool.capabilityRevision),
-        name: tool.name,
+        name: projectEnterpriseProviderToolName(tool.capabilityId),
         description: tool.description,
         inputSchema: tool.inputSchema,
         inputSchemaDigest: hexDigest(sha256CanonicalJson(tool.inputSchema)),
       })),
       maxOutputTokens: request.maxOutputTokens,
+      ...(input.reasoning === undefined
+        ? {}
+        : { reasoning: projectGatewayReasoning(input.reasoning) }),
     });
     const admission = JsonObjectSchema.parse({
       type: "user_confirmed",
@@ -94,11 +105,6 @@ export class EnterpriseModelRequestConverter {
       providerRequestDeadlineAt: input.invocation.deadlineAt,
       providerStreamIdleTimeoutMillis: input.providerStreamIdleTimeoutMillis,
     });
-    const requestDigest = hexDigest(sha256CanonicalJson(JsonValueSchema.parse({
-      modelRequest,
-      admission,
-      timeoutPolicy,
-    })));
     const cacheContext = input.cacheContext === undefined
       ? undefined
       : JsonObjectSchema.parse({
@@ -110,7 +116,18 @@ export class EnterpriseModelRequestConverter {
         throw new Error("Prompt Cache context digest does not match the exact sidecar");
       }
     }
-    const gatewayContractVersion = input.cacheContext?.gatewayContractVersion ?? "v1alpha1";
+    const v3 = request.schemaVersion === "v1alpha2";
+    const requestDigest = hexDigest(sha256CanonicalJson(JsonValueSchema.parse({
+      modelRequest,
+      admission,
+      timeoutPolicy,
+      ...(v3 && input.cacheContext !== undefined
+        ? { cacheContextDigest: hexDigest(input.cacheContext.cacheContextDigest) }
+        : {}),
+    })));
+    const gatewayContractVersion = v3
+      ? "v1alpha3" as const
+      : input.cacheContext?.gatewayContractVersion ?? "v1alpha1";
     return Object.freeze({
       requestDigest,
       gatewayContractVersion,
@@ -133,6 +150,33 @@ export class EnterpriseModelRequestConverter {
   }
 }
 
+function projectGatewayReasoning(
+  value: EnterpriseReasoningSafeSidecar,
+): JsonObject {
+  const reasoning = EnterpriseReasoningSafeSidecarSchema.parse(value);
+  if (reasoning.mode === "default_passthrough") {
+    return JsonObjectSchema.parse({
+      mode: reasoning.mode,
+      reasoningModeLockId: reasoning.reasoningModeLockId,
+      reasoningModeLockDigest: hexDigest(reasoning.reasoningModeLockDigest),
+    });
+  }
+  return JsonObjectSchema.parse({
+    mode: reasoning.mode,
+    reasoningModeLockId: reasoning.reasoningModeLockId,
+    reasoningModeLockDigest: hexDigest(reasoning.reasoningModeLockDigest),
+    profileId: reasoning.profileId,
+    profileRevision: hexDigest(reasoning.profileRevision),
+    profileDigest: hexDigest(reasoning.profileDigest),
+    strategyId: reasoning.strategyId,
+    strategyRevision: hexDigest(reasoning.strategyRevision),
+    strategyDigest: hexDigest(reasoning.strategyDigest),
+    mappingRevision: hexDigest(reasoning.mappingRevision),
+    mappingDigest: hexDigest(reasoning.mappingDigest),
+    timeoutPolicyRef: reasoning.timeoutPolicyRef,
+  });
+}
+
 function hexDigest(value: string): string {
   if (!value.startsWith("sha256:") || value.length !== 71) {
     throw new Error("Expected a prefixed SHA-256 digest");
@@ -140,10 +184,8 @@ function hexDigest(value: string): string {
   return value.slice("sha256:".length);
 }
 
-function toolName(request: ReturnType<typeof ModelRequestSchema.parse>, capabilityId: string): string {
-  const tool = request.tools.find((candidate) => candidate.capabilityId === capabilityId);
-  if (tool === undefined) {
-    throw new Error("Assistant Tool Call references a Tool not present in the exact Model request");
-  }
-  return tool.name;
+export function projectEnterpriseProviderToolName(capabilityId: string): string {
+  const readable = capabilityId.replace(/[^A-Za-z0-9_-]/gu, "_");
+  const digestSuffix = sha256CanonicalJson(capabilityId).slice("sha256:".length, 19);
+  return `${readable.slice(0, 44)}_${digestSuffix}`;
 }

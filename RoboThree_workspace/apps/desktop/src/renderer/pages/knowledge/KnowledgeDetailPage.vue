@@ -1,7 +1,7 @@
 <template>
   <section class="knowledge-detail-page" aria-labelledby="knowledge-detail-title">
     <R3PageHeader
-      eyebrow="Knowledge"
+      eyebrow="知识中心"
       :title="detailTitle"
       :description="detailDescription"
     >
@@ -84,7 +84,7 @@
         <R3EmptyState
           v-if="view.filteredResults.length === 0"
           title="没有匹配的示例结果"
-          description="当前过滤只作用于 Fixture 结果卡片。"
+          description="当前过滤只作用于界面测试结果。"
           icon="K"
         />
 

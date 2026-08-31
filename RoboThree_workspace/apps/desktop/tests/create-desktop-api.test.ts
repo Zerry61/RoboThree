@@ -30,7 +30,7 @@ describe("createDesktopApi", () => {
     expect(Object.isFrozen(api)).toBe(true);
   });
 
-  it("exposes only the frozen v1alpha1 business whitelist and validates events", async () => {
+  it("exposes only the fixed renderer-safe business whitelist and validates events", async () => {
     const runtime = {
       contractVersion: "v1alpha1",
       status: "ready",
@@ -184,6 +184,8 @@ describe("createDesktopApi", () => {
                     : channel === DESKTOP_IPC_CHANNELS.listArtifacts
                       ? artifactCatalog
                       : channel === DESKTOP_IPC_CHANNELS.registerWorkspaceArtifactFromPicker
+                        || channel === DESKTOP_IPC_CHANNELS.pickWorkbenchAttachment
+                        || channel === DESKTOP_IPC_CHANNELS.validateWorkbenchAttachment
                         ? registerReceipt
                         : channel === DESKTOP_IPC_CHANNELS.openArtifactLocation
                           ? openReceipt
@@ -374,6 +376,27 @@ describe("createDesktopApi", () => {
       clientInstanceId: "00000000-0000-4000-8000-000000000042",
       relativePath: "reports/report.xlsx",
     } as never)).toThrow();
+    await expect(api.pickWorkbenchAttachment({
+      contractVersion: "v1alpha1",
+      type: "register_workspace_artifact",
+      commandId: "00000000-0000-4000-8000-000000000043",
+      correlationId: "00000000-0000-4000-8000-000000000044",
+      clientInstanceId: "00000000-0000-4000-8000-000000000045",
+      workspaceGrantId: "workspace:one",
+    })).resolves.toEqual({ ok: true, value: registerReceipt });
+    expect(invoke).toHaveBeenCalledWith(
+      DESKTOP_IPC_CHANNELS.pickWorkbenchAttachment,
+      expect.objectContaining({ workspaceGrantId: "workspace:one" }),
+    );
+    await expect(api.validateWorkbenchAttachment({
+      contractVersion: "v1alpha1",
+      type: "register_workspace_artifact",
+      commandId: "00000000-0000-4000-8000-000000000046",
+      correlationId: "00000000-0000-4000-8000-000000000047",
+      clientInstanceId: "00000000-0000-4000-8000-000000000048",
+      workspaceGrantId: "workspace:one",
+      artifact: artifactCatalogItem,
+    })).resolves.toEqual({ ok: true, value: registerReceipt });
     await expect(api.openArtifactLocation({
       contractVersion: "v1alpha1",
       type: "open_artifact_location",
@@ -417,6 +440,8 @@ describe("createDesktopApi", () => {
       "loadTaskDetail",
       "listArtifacts",
       "registerWorkspaceArtifactFromPicker",
+      "pickWorkbenchAttachment",
+      "validateWorkbenchAttachment",
       "previewArtifact",
       "startArtifactHtmlPreview",
       "closeArtifactPreview",
@@ -441,6 +466,6 @@ describe("createDesktopApi", () => {
       displayName: "Workspace",
       accessMode: "read_write",
     })).toThrow();
-    expect(invoke).toHaveBeenCalledTimes(12);
+    expect(invoke).toHaveBeenCalledTimes(14);
   });
 });

@@ -26,6 +26,14 @@ import { DesktopDocumentScriptedModelProvider } from "../adapters/fake/desktop-d
 import { createScriptedDesktopAgentFixture } from "../adapters/fake/scripted-desktop-agent-fixture.js";
 import { DocumentWorkerToolBackend } from "../adapters/document-worker/document-worker-tool-backend.js";
 import { CorePrivateHttpServer } from "../adapters/http/core-private-http-server.js";
+import { HttpEnterpriseModelGatewayClient } from
+  "../adapters/http/http-enterprise-model-gateway-client.js";
+import { InternalTrialEnterpriseAccessTokenProvider } from
+  "../adapters/environment/internal-trial-enterprise-access-token-provider.js";
+import { InternalTrialAgentLifecycleAccessToken } from
+  "../adapters/environment/internal-trial-agent-lifecycle-access-token.js";
+import { HttpAgentLifecycleClient } from
+  "../adapters/http/http-agent-lifecycle-client.js";
 import { FrozenRegistrySnapshotProvider } from
   "../adapters/memory/frozen-registry-snapshot-provider.js";
 import { EphemeralWorkspaceSelectionStore } from "../adapters/memory/ephemeral-workspace-selection-store.js";
@@ -40,6 +48,30 @@ import { SqliteConversationPersistence } from "../adapters/sqlite/sqlite-convers
 import { SqliteDesktopFoundationPersistence } from "../adapters/sqlite/sqlite-desktop-foundation-persistence.js";
 import { SqliteSubmitTurnPersistence } from "../adapters/sqlite/sqlite-submit-turn-persistence.js";
 import { SqliteTaskPersistence } from "../adapters/sqlite/sqlite-task-persistence.js";
+import { SqliteModelInvocationLinkPersistence } from
+  "../adapters/sqlite/sqlite-model-invocation-link-persistence.js";
+import { SqliteProviderUsageProjectionPersistence } from
+  "../adapters/sqlite/sqlite-provider-usage-projection-persistence.js";
+import { SqlitePromptCacheContextPersistence } from
+  "../adapters/sqlite/sqlite-prompt-cache-context-persistence.js";
+import { SqlitePersonalModelPersistence } from
+  "../adapters/sqlite/sqlite-personal-model-persistence.js";
+import { SqliteLocalPersonalModelInvocationPersistence } from
+  "../adapters/sqlite/sqlite-local-personal-model-invocation-persistence.js";
+import { SqliteDesktopReasoningModePreferencePersistence } from
+  "../adapters/sqlite/sqlite-desktop-reasoning-mode-preference-persistence.js";
+import { MacOsKeychainPersonalCredentialStore } from
+  "../adapters/credential/macos-keychain-personal-credential-store.js";
+import { createPersonalModelCredentialBrokerHandler } from
+  "../adapters/credential/personal-model-credential-broker-handler.js";
+import type { PersonalCredentialBrokerHandler } from
+  "../adapters/credential/personal-credential-broker-server.js";
+import { TaskBackedPersonalModelUsageGuard } from
+  "../adapters/personal-model-task-usage-guard.js";
+import type { PersonalCredentialHelperDescriptor } from
+  "../adapters/credential/personal-credential-helper-trust.js";
+import { InMemoryReasoningProfileSource } from
+  "../adapters/memory/in-memory-reasoning-profile-source.js";
 import { SystemClock } from "../adapters/system-clock.js";
 import { SystemIdGenerator } from "../adapters/system-id-generator.js";
 import { SystemScheduler } from "../adapters/system-scheduler.js";
@@ -51,10 +83,38 @@ import { ContextPipeline } from "../application/context-pipeline.js";
 import { TaskInstructionBundleMaterializer } from
   "../application/instruction-bundle-compiler.js";
 import { DesktopApplicationFacade } from "../application/desktop-application-facade.js";
+import { InternalTrialAgentLifecycleSource } from
+  "../application/internal-trial-agent-lifecycle-source.js";
+import { ProductionPersonalModelManagementAuthoritySource } from
+  "../application/personal-model-management-authority.js";
+import { PersonalModelManagementReadService } from
+  "../application/personal-model-management-read-service.js";
+import { PersonalModelManagementCommandService } from
+  "../application/personal-model-management-command-service.js";
+import {
+  PersonalModelCredentialCoordinator,
+  PersonalModelCredentialRecoveryCoordinator,
+} from "../application/personal-model-credential-coordinator.js";
+import {
+  PersonalModelCredentialRevealService,
+  PersonalModelRevealAttemptRegistry,
+} from "../application/personal-model-credential-reveal-service.js";
+import { InMemoryPersonalModelOperationGate } from
+  "../application/personal-model-operation-gate.js";
 import { DesktopConversationProjectionService } from "../application/desktop-conversation-projection-service.js";
 import { DesktopEphemeralEventBus } from "../application/desktop-ephemeral-event-bus.js";
 import { DesktopSessionService } from "../application/desktop-session-service.js";
 import { DesktopTaskProjectionService } from "../application/desktop-task-projection-service.js";
+import { TaskReasoningModeProjectionService } from
+  "../application/task-reasoning-mode-projection-service.js";
+import { ReasoningModePreviewService } from
+  "../application/reasoning-mode-preview-service.js";
+import { ReasoningModePreferenceService } from
+  "../application/reasoning-mode-preference-service.js";
+import {
+  LocalDesktopReasoningModeOwnerAuthorityProvider,
+  LocalPersonalEffectiveReasoningModelResolver,
+} from "../application/local-desktop-reasoning-runtime.js";
 import {
   RobotCatalogQueryService,
   ToolCatalogQueryService,
@@ -68,11 +128,72 @@ import { DurableAgentConversationWriter } from "../application/durable-agent-con
 import { ToolCallBatchCoordinator } from "../application/tool-call-batch-coordinator.js";
 import { ToolExecutionAgentBridge } from "../application/tool-execution-agent-bridge.js";
 import { DurableAgentLoopStarter } from "../application/durable-agent-loop-starter.js";
+import { ActiveAgentLoopStartupRecoveryCoordinator } from
+  "../application/active-agent-loop-startup-recovery.js";
+import { DurableEnterpriseModelProvider } from
+  "../application/durable-enterprise-model-provider.js";
+import { PersistentSessionScopeDigestProvider } from
+  "../application/session-scope-digest-provider.js";
+import { TaskLockedReasoningProviderMapper } from
+  "../application/task-locked-reasoning-provider-mapper.js";
+import { ReleasePinnedReasoningMappingRegistry } from
+  "../application/release-pinned-reasoning-mapping-registry.js";
+import { createEnterpriseReasoningTimeoutPolicyIdentity } from
+  "../application/enterprise-reasoning-mapping.js";
+import { FailClosedModelProvider } from
+  "../application/fail-closed-model-provider.js";
 import { DurableTaskRuntime } from "../application/durable-task-runtime.js";
 import { EffectCoordinator } from "../application/effect-coordinator.js";
 import { ModelEligibilityEvaluator } from "../application/model-eligibility-evaluator.js";
 import { FixedTaskAuthorizationModePolicyProvider } from
   "../application/fixed-task-authorization-mode-policy.js";
+import { R2D3_CORE_DELTA_DEFAULT_ENABLED } from
+  "../application/r2d3-durable-acceptance-planner.js";
+import {
+  R2DP3_DESKTOP_V1ALPHA4_DEFAULT_ENABLED,
+  assertR2DP3ProductionReleaseDecision,
+} from "../application/desktop-v1alpha4-cutover.js";
+import { DFI543A_LOCAL_PERSONAL_PRODUCTION_GRAPH_ENABLED } from
+  "../application/dfi543a-local-personal-production-graph.js";
+import {
+  LocalPersonalAdmittedReasoningProfileSource,
+  LocalPersonalDfi541AdmissionInputSource,
+  TaskPinnedReasoningReleaseResolver,
+} from "../application/dfi543a-local-personal-release.js";
+import { Dfi543LocalPersonalSubmitTurnHandler } from
+  "../application/dfi543a-local-personal-submit-turn-handler.js";
+import { Dfi541ExactSubjectProviderReleaseAdmissionResolver } from
+  "../application/dfi541-provider-release-admission.js";
+import { ExactSubjectBoundProviderReleaseMaterializer } from
+  "../application/exact-subject-provider-release-materializer.js";
+import { ReasoningModeLockPlanner } from
+  "../application/reasoning-mode-lock-planner.js";
+import { ReasoningModeLockPlannerV1Alpha2 } from
+  "../application/reasoning-mode-lock-planner-v1alpha2.js";
+import { TaskLockedReasoningProfileSubjectResolver } from
+  "../application/reasoning-mode-lock-planner.js";
+import { createLocalDesktopR2DProductionComposition } from
+  "../application/local-desktop-r2d-production.js";
+import { PersonalModelRuntimeRegistry } from
+  "../application/personal-model-runtime-registry.js";
+import { BuiltInGeneralAgentSource } from
+  "../application/built-in-general-agent-source.js";
+import {
+  BuiltInPresentationAgentSource,
+  createPresentationAgentCatalogProjection,
+} from "../application/built-in-presentation-agent-source.js";
+import {
+  TrustedLocalSkillInstructionResolver,
+  loadPresentationPlanningSkillManifest,
+} from "../application/trusted-local-skill-instruction-resolver.js";
+import { CompositeModelProviderResolver } from
+  "../application/composite-personal-model-runtime.js";
+import { LocalDesktopPersonalModelExecutionAuthorityProvider } from
+  "../application/personal-model-execution-authority.js";
+import { DurableCompositeTaskModelProviderResolver } from
+  "../application/task-locked-model-provider-resolution.js";
+import { LOCAL_PERSONAL_MODEL_TIMEOUT_POLICY_V1 } from
+  "../application/model-invocation-timeout-policy.js";
 import { LegacyTaskAuthorizationSelectionMaterializer } from
   "../application/legacy-task-authorization-selection-materializer.js";
 import {
@@ -112,13 +233,28 @@ import {
 import { isDocumentToolCapabilityId } from "../application/document-tool-context.js";
 import { RegistryBuilder } from "../registry/registry-builder.js";
 import { RuntimeAdapterHandles } from "../registry/runtime-adapter-handles.js";
+import { sha256CanonicalJson } from "../persistence/digest.js";
+import {
+  AgentResourceRegistrySnapshotV1Schema,
+  type ExactResourcePermissionsV1,
+} from "../application/agent-resource-decision-planner.js";
+import { createInternalTrialEnterpriseR2DProductionComposition } from
+  "../application/internal-trial-enterprise-r2d-production.js";
 import type { AgentLoopStarter } from "../ports/agent-loop-starter.js";
 import type { Clock } from "../ports/clock.js";
-import type { WorkspaceGrantPersistence } from "../ports/desktop-foundation-persistence.js";
+import type {
+  ManualArtifactRegistrationPersistence,
+  WorkspaceGrantPersistence,
+} from "../ports/desktop-foundation-persistence.js";
 import type { IdGenerator } from "../ports/id-generator.js";
 import type { TaskPersistence } from "../ports/task-persistence.js";
+import {
+  consumeInternalTrialEnterpriseModelDeployment,
+  type InternalTrialEnterpriseModelDeployment,
+} from
+  "./internal-trial-enterprise-model-deployment.js";
 
-const CORE_VERSION = "0.0.0-r2d.3.2";
+const CORE_VERSION = "0.0.0-dfi.4a.4.2";
 const FIXTURE_CREATED_AT = "2026-07-26T00:00:00.000Z";
 const DOCUMENT_TOOL_LIMITS = Object.freeze({
   maxFileBytes: 10 * 1024 * 1024,
@@ -136,6 +272,12 @@ const source = {
 export type DesktopPrivateRuntime = Readonly<{
   facade: DesktopApplicationFacade;
   server: CorePrivateHttpServer;
+  personalCredentialBrokerHandler: PersonalCredentialBrokerHandler;
+  testOnlyIssueWorkspaceSelection?(input: Readonly<{
+    selectedPath: string;
+    clientInstanceId: string;
+    correlationId: string;
+  }>): string;
   start(): Promise<void>;
   stop(): Promise<void>;
 }>;
@@ -148,12 +290,49 @@ type XlsxOverwriteConfirmationMaterial = Readonly<{
 export function createDesktopPrivateRuntime(input: {
   databasePath: string;
   authorizationToken: string;
-  demoMode?: "dcf2c";
+  clientInstanceId?: string;
+  demoMode?: "dcf2c" | "legacy_test";
+  credentialHelperDescriptor?: PersonalCredentialHelperDescriptor;
+  sensitiveTransportProductionReady?: boolean;
+  environment?: Record<string, string | undefined>;
+  dfi543TestHarness?: Readonly<{
+    credentialHelperDescriptor: PersonalCredentialHelperDescriptor;
+    providerCaPem: string;
+    providerPort: number;
+  }>;
+  vs1TestHarness?: true;
 }): DesktopPrivateRuntime {
+  assertR2DP3ProductionReleaseDecision();
   const demoMode = input.demoMode === "dcf2c";
+  const legacyTestMode = input.demoMode === "legacy_test";
+  const fixtureMode = demoMode || legacyTestMode;
   const activeUserId = "00000000-0000-4000-8000-000000000001";
   const clock = new SystemClock();
   const ids = new SystemIdGenerator();
+  const environment = input.environment ?? process.env;
+  const internalTrialDeployment = fixtureMode ? undefined
+    : consumeInternalTrialEnterpriseModelDeployment({ environment });
+  const internalTrialTokenProvider = fixtureMode ? undefined
+    : InternalTrialEnterpriseAccessTokenProvider.consume({ environment, clock });
+  const internalTrialAgentLifecycleToken = fixtureMode ? undefined
+    : InternalTrialAgentLifecycleAccessToken.consume({ environment, clock });
+  if ((internalTrialDeployment === undefined)
+    !== (internalTrialTokenProvider === undefined)) {
+    throw new Error("internal_trial_model_runtime_incomplete");
+  }
+  if (internalTrialAgentLifecycleToken !== undefined
+    && internalTrialDeployment === undefined) {
+    throw new Error("internal_trial_agent_lifecycle_runtime_incomplete");
+  }
+  const agentLifecycleSource = new InternalTrialAgentLifecycleSource();
+  const agentLifecycleClient = internalTrialAgentLifecycleToken === undefined
+    || internalTrialDeployment === undefined
+    ? undefined
+    : new HttpAgentLifecycleClient({
+      baseUrl: internalTrialDeployment.centralBaseUrl,
+      token: internalTrialAgentLifecycleToken,
+      allowInsecureLoopback: internalTrialDeployment.allowInsecureLoopback,
+    });
   const runtimeInstanceId = `runtime.instance-${ids.next()}`;
   const ephemeralEvents = new DesktopEphemeralEventBus({
     clock,
@@ -178,32 +357,138 @@ export function createDesktopPrivateRuntime(input: {
     databasePath: input.databasePath,
     clock,
   });
+  const personalModels = new SqlitePersonalModelPersistence({
+    databasePath: input.databasePath,
+    clock,
+  });
+  const personalInvocations = new SqliteLocalPersonalModelInvocationPersistence({
+    databasePath: input.databasePath,
+    clock,
+  });
+  const reasoningPreferencePersistence =
+    new SqliteDesktopReasoningModePreferencePersistence({
+    databasePath: input.databasePath,
+    clock,
+  });
+  const enterpriseInvocationLinks = new SqliteModelInvocationLinkPersistence({
+    databasePath: input.databasePath,
+    clock,
+  });
+  const enterpriseUsageProjections = new SqliteProviderUsageProjectionPersistence({
+    databasePath: input.databasePath,
+    clock,
+  });
+  const enterprisePromptCacheContexts = new SqlitePromptCacheContextPersistence({
+    databasePath: input.databasePath,
+    clock,
+  });
+  const personalCredentials = new MacOsKeychainPersonalCredentialStore({
+    ...(input.dfi543TestHarness !== undefined
+      ? { descriptor: input.dfi543TestHarness.credentialHelperDescriptor }
+      : input.credentialHelperDescriptor === undefined
+        ? {}
+        : { descriptor: input.credentialHelperDescriptor }),
+  });
   const workspaceSelections = new EphemeralWorkspaceSelectionStore({
     clock,
     ids,
   });
-  const runtime = runtimeFixture(demoMode);
-  const catalog = new InMemoryTrustedRuntimeCatalog()
-    .registerAgent(runtime.agent, demoMode)
-    .registerModel(runtime.model);
-  if (runtime.legacyAgent !== undefined) catalog.registerAgent(runtime.legacyAgent);
-  const cpcInstructionRuntimeEnabled = CPC_INSTRUCTION_RUNTIME_DEFAULT_ENABLED;
+  const runtime = runtimeFixture({ demoMode, legacyTestMode });
+  const activeRegistry = internalTrialDeployment === undefined
+    ? runtime.registry
+    : mergeRegistrySnapshots(
+      runtime.registry,
+      internalTrialDeployment.registrySnapshot,
+    );
+  const catalog = new InMemoryTrustedRuntimeCatalog();
+  const builtInGeneralAgent = new BuiltInGeneralAgentSource().loadDefault();
+  const presentationSkill = internalTrialDeployment === undefined
+    ? undefined
+    : loadPresentationPlanningSkillManifest();
+  const presentationToolCapabilityIds = [
+    "tool.document.docx.read",
+    "tool.document.xlsx.read",
+    "tool.document.pdf.extract_text",
+    PPTX_WRITE_CAPABILITY_ID,
+  ] as const;
+  const presentationToolDefinitions = internalTrialDeployment === undefined
+    ? []
+    : presentationToolCapabilityIds.map((capabilityId) =>
+      DOCUMENT_TOOL_REGISTRY_RECORDS.definitions.find(
+        (definition) => definition.capabilityId === capabilityId,
+      ));
+  if (internalTrialDeployment !== undefined
+    && (presentationSkill === undefined
+      || presentationToolDefinitions.some((definition) => definition === undefined))) {
+    throw new Error("internal_trial_presentation_runtime_incomplete");
+  }
+  const presentationToolRefs = presentationToolDefinitions.map((definition) => ({
+    capabilityId: definition!.capabilityId,
+    capabilityRevision: definition!.revision,
+  }));
+  const presentationSkillRef = presentationSkill === undefined
+    ? undefined
+    : {
+      skillId: presentationSkill.skillId,
+      revision: presentationSkill.revision,
+      contentDigest: presentationSkill.contentDigest,
+    };
+  const presentationAgent = internalTrialDeployment === undefined
+    || presentationToolRefs.length === 0
+    || presentationSkillRef === undefined
+    ? undefined
+    : new BuiltInPresentationAgentSource({
+      model: {
+        modelId: internalTrialDeployment.capability.capabilityId,
+        revision: internalTrialDeployment.capability.revision,
+        digest: internalTrialDeployment.capability.revision,
+      },
+      skill: presentationSkillRef,
+      tools: presentationToolRefs,
+      minimumContextWindow: 8_192,
+    });
+  if (fixtureMode) {
+    catalog.registerAgent(runtime.agent, true).registerModel(runtime.model);
+  } else if (internalTrialDeployment !== undefined) {
+    catalog.registerModel(internalTrialDeployment.model);
+    if (presentationAgent !== undefined && presentationSkill !== undefined
+      && presentationToolRefs.length !== 0) {
+      catalog.registerAgent(createPresentationAgentCatalogProjection({
+        source: presentationAgent,
+        modelId: internalTrialDeployment.model.modelId,
+        skill: {
+          id: presentationSkill.skillId,
+          revision: presentationSkill.revision,
+          contentDigest: presentationSkill.contentDigest,
+          materializedRef: presentationSkill.materializedRef,
+        },
+        tools: presentationToolRefs,
+      }), true);
+    }
+  } else {
+    // R2D v1alpha2 Agent definitions are consumed by the production acceptance
+    // authority and execution repository, not by the frozen legacy Catalog.
+  }
+  const cpcInstructionRuntimeEnabled = CPC_INSTRUCTION_RUNTIME_DEFAULT_ENABLED
+    || internalTrialDeployment !== undefined;
   const selectionContexts = new FrozenRuntimeSelectionContextProvider({
-    registryRevision: runtime.registry.registryRevision,
+    registryRevision: activeRegistry.registryRevision,
     platformPromptRevision: platformPromptRevisionForNewTask(
       cpcInstructionRuntimeEnabled,
     ),
-    liveModels: [{
-      modelId: runtime.model.modelId,
+    liveModels: fixtureMode || internalTrialDeployment !== undefined ? [{
+      modelId: fixtureMode
+        ? runtime.model.modelId
+        : internalTrialDeployment!.model.modelId,
       userAllowed: true,
       enabled: true,
       credentialAvailable: true,
       callable: true,
-    }],
+    }] : [],
     capabilityAvailability: runtimeCapabilityAvailability(runtime),
   });
   const lockService = new TaskCapabilityLockService({
-    resolver: new CapabilityResolver(RegistrySnapshotSchema.parse(runtime.registry)),
+    resolver: new CapabilityResolver(RegistrySnapshotSchema.parse(activeRegistry)),
     persistence: tasks,
     clock,
     idGenerator: ids,
@@ -263,6 +548,7 @@ export function createDesktopPrivateRuntime(input: {
           hydrateAction: (hydration) => hydrateDesktopDocumentToolAction({
             action: hydration.action,
             workspaces: foundation,
+            manualArtifacts: foundation,
           }),
         })],
       }),
@@ -290,17 +576,226 @@ export function createDesktopPrivateRuntime(input: {
           taskRuntime,
           tasks,
           workspaces: foundation,
+          manualArtifacts: foundation,
           clock,
           ids,
           activeUserId,
           pendingXlsxOverwriteConfirmations,
         }),
     });
-  const desktopModelProvider = new DesktopDocumentScriptedModelProvider({
+  const scriptedModelProvider = new DesktopDocumentScriptedModelProvider({
     adapterDescriptorId: "adapter.model.desktop-scripted",
     adapterDescriptorRevision: runtime.descriptor.revision,
   });
-  const runtimeAdapterHandles = new RuntimeAdapterHandles([desktopModelProvider]);
+  const reasoningProfiles = fixtureMode
+    ? new InMemoryReasoningProfileSource()
+    : new LocalPersonalAdmittedReasoningProfileSource({ personal: personalModels });
+  const reasoningSubjects = new TaskLockedReasoningProfileSubjectResolver({
+    personal: personalModels,
+  });
+  const enterpriseModelProvider = internalTrialDeployment === undefined
+    || internalTrialTokenProvider === undefined
+    ? undefined
+    : new DurableEnterpriseModelProvider({
+      adapterDescriptorId:
+        internalTrialDeployment.descriptor.adapterDescriptorId,
+      adapterDescriptorRevision: internalTrialDeployment.descriptor.revision,
+      gateway: new HttpEnterpriseModelGatewayClient({
+        baseUrl: internalTrialDeployment.centralBaseUrl,
+        tokenProvider: internalTrialTokenProvider,
+        allowInsecureLoopbackForTest:
+          internalTrialDeployment.allowInsecureLoopback,
+      }),
+      links: enterpriseInvocationLinks,
+      compactionLinks: conversation,
+      usageProjections: enterpriseUsageProjections,
+      sessionScopes: new PersistentSessionScopeDigestProvider({
+        persistence: enterprisePromptCacheContexts,
+        ids,
+      }),
+      identityScope: internalTrialTokenProvider.identityScope(),
+      clock,
+      ids,
+      reasoning: {
+        mapper: new TaskLockedReasoningProviderMapper({
+          profiles: reasoningProfiles,
+          mappings: new ReleasePinnedReasoningMappingRegistry([]),
+        }),
+        providerFamily: "enterprise_openai",
+        timeoutPolicyIdentity: createEnterpriseReasoningTimeoutPolicyIdentity({
+          timeoutPolicyRef: "timeout.enterprise-model.vs1",
+          timeoutPolicyRevision: "vs1.default",
+          streamIdleTimeoutMillis: 30_000,
+        }),
+      },
+    });
+  const defaultModelProvider = fixtureMode
+    ? scriptedModelProvider
+    : enterpriseModelProvider ?? new FailClosedModelProvider();
+  const runtimeAdapterHandles = new RuntimeAdapterHandles(
+    fixtureMode
+      ? [scriptedModelProvider]
+      : enterpriseModelProvider === undefined ? [] : [enterpriseModelProvider],
+  );
+  const dfiAdmission = new Dfi541ExactSubjectProviderReleaseAdmissionResolver(
+    new LocalPersonalDfi541AdmissionInputSource({
+      personal: personalModels,
+      credentials: personalCredentials,
+    }),
+    new ExactSubjectBoundProviderReleaseMaterializer(),
+  );
+  const sessionBindingVerifier = {
+    async verifyExact(binding: Readonly<{
+      desktopSessionId: string;
+      internalSessionId: string;
+    }>) {
+      const session = await foundation.loadDesktopSession(binding.desktopSessionId);
+      if (session === undefined || session.internalSessionId !== binding.internalSessionId
+        || session.summary.tombstoned) throw new Error("selection.subject_binding_invalid");
+      return {
+        verifiedRuntimeSubjectBindingDigest: sha256CanonicalJson(
+          JsonObjectSchema.parse({ kind: "local_desktop_owner",
+            desktopSessionId: binding.desktopSessionId,
+            internalSessionId: binding.internalSessionId }),
+        ),
+        acceptedClientBindingDigest: sha256CanonicalJson(
+          JsonObjectSchema.parse({ kind: "accepted_desktop_client",
+            runtimeInstanceId, desktopSessionId: binding.desktopSessionId }),
+        ),
+      };
+    },
+  };
+  const r2dComposition = fixtureMode
+    ? createLocalDesktopR2DProductionComposition({ enabled: false })
+    : internalTrialDeployment !== undefined && internalTrialTokenProvider !== undefined
+      ? createInternalTrialEnterpriseR2DProductionComposition({
+        clock,
+        ids,
+        sessionBindingVerifier,
+        identityScope: internalTrialTokenProvider.identityScope(),
+        registry: enterpriseR2DRegistrySnapshot(
+          internalTrialDeployment,
+          activeRegistry.registryRevision,
+          presentationSkillRef,
+          presentationToolRefs,
+        ),
+        model: {
+          modelId: internalTrialDeployment.capability.capabilityId,
+          revision: internalTrialDeployment.capability.revision,
+          digest: internalTrialDeployment.capability.revision,
+        },
+        ...(presentationSkillRef === undefined
+          ? {}
+          : { skill: presentationSkillRef }),
+        tools: presentationToolRefs,
+        ...(presentationAgent === undefined
+          ? {}
+          : { presentationAgent }),
+        additionalAgents: agentLifecycleSource,
+        modelLocks: lockService,
+        toolPolicy: {
+          async resolveExact(input) {
+            return { registryRevision: input.registryRevision,
+              authorityFactsDigest: input.workspaceAndAuthorizationFactsDigest,
+              candidates: input.exactAgent.agentDefinitionId === "agent.presentation"
+                || input.exactAgent.agentDefinitionId === "agent.general"
+                ? input.entitlementSnapshot.tools
+                : [] };
+          },
+        },
+        reasoningPlanner: new ReasoningModeLockPlanner({
+          profiles: reasoningProfiles,
+          subjects: reasoningSubjects,
+        }),
+        reasoningPlannerV1Alpha2: new ReasoningModeLockPlannerV1Alpha2({
+          profiles: reasoningProfiles,
+          subjects: reasoningSubjects,
+          admission: dfiAdmission,
+        }),
+      authorizationPolicies,
+      enterpriseConfigRevision: internalTrialDeployment.configurationRevision,
+      platformPromptRevision: platformPromptRevisionForNewTask(true),
+    })
+      : createLocalDesktopR2DProductionComposition({
+    enabled: DFI543A_LOCAL_PERSONAL_PRODUCTION_GRAPH_ENABLED,
+    dependencies: {
+      clock,
+      ids,
+      sessionBindingVerifier,
+      persistence: personalModels,
+      credentials: personalCredentials,
+      async captureBaseRegistrySnapshot() {
+        return AgentResourceRegistrySnapshotV1Schema.parse({
+          schemaVersion: "v1",
+          registryRevision: sha256CanonicalJson(JsonObjectSchema.parse({
+            domain: "robothree.dfi543a.local-base-registry.v1",
+          })),
+          models: [], skills: [], tools: [], knowledge: [],
+          knowledgeProviderReady: false,
+        });
+      },
+      async captureWorkspacePermissions() {
+        const material = { schemaVersion: "v1" as const,
+          models: [], skills: [], tools: [], knowledge: [] };
+        return { ...material,
+          factsDigest: sha256CanonicalJson(JsonObjectSchema.parse(material)),
+        } as ExactResourcePermissionsV1;
+      },
+      async prepareToolLocks(input) {
+        if (input.decision.toolCandidateRefs.length !== 0) {
+          throw new Error("selection.tool_policy_unavailable");
+        }
+        return [];
+      },
+      toolPolicy: {
+        async resolveExact(input) {
+          return { registryRevision: input.registryRevision,
+            authorityFactsDigest: input.workspaceAndAuthorizationFactsDigest,
+            candidates: input.entitlementSnapshot.tools };
+        },
+      },
+      reasoningPlanner: new ReasoningModeLockPlanner({
+        profiles: reasoningProfiles, subjects: reasoningSubjects,
+      }),
+      reasoningPlannerV1Alpha2: new ReasoningModeLockPlannerV1Alpha2({
+        profiles: reasoningProfiles, subjects: reasoningSubjects,
+        admission: dfiAdmission,
+      }),
+      authorizationPolicies,
+    },
+  });
+  const taskPinnedReleases = new TaskPinnedReasoningReleaseResolver({
+    personal: personalModels,
+  });
+  const taskModelProviders = fixtureMode ? undefined
+    : new DurableCompositeTaskModelProviderResolver({
+      enterprise: runtimeAdapterHandles,
+      composite: new CompositeModelProviderResolver({
+        enterprise: runtimeAdapterHandles,
+        personal: personalModels,
+        runtime: new PersonalModelRuntimeRegistry(personalModels),
+        credentials: personalCredentials,
+        clock,
+        scheduler: new SystemScheduler(),
+        timeoutPolicy: LOCAL_PERSONAL_MODEL_TIMEOUT_POLICY_V1,
+        ...(input.dfi543TestHarness === undefined ? {} : {
+          transport: {
+            ca: input.dfi543TestHarness.providerCaPem,
+            testOnlyAllowLoopback: true,
+            testOnlyPortOverride: input.dfi543TestHarness.providerPort,
+            lookup: async () => [{ address: "127.0.0.1", family: 4 as const }],
+          },
+        }),
+      }),
+      authorities: new LocalDesktopPersonalModelExecutionAuthorityProvider(
+        personalModels),
+      invocations: personalInvocations,
+      personal: personalModels,
+      clock,
+      timeoutPolicy: LOCAL_PERSONAL_MODEL_TIMEOUT_POLICY_V1,
+      tasks,
+      reasoningReleases: taskPinnedReleases,
+    });
   const toolCallBatches = new ToolCallBatchCoordinator({
     conversation,
     tasks,
@@ -308,25 +803,43 @@ export function createDesktopPrivateRuntime(input: {
     clock,
   });
   const loop = new AgentLoopCoordinator({
-    model: desktopModelProvider,
+    model: defaultModelProvider,
     tools: loopTools,
     conversation: conversationWriter,
     batches: toolCallBatches,
   });
   const contextBudgetPolicy = new ContextBudgetPolicy({
-    modelContextWindow: runtime.model.capabilities.contextWindow,
+    modelContextWindow: internalTrialDeployment?.model.capabilities.contextWindow
+      ?? runtime.model.capabilities.contextWindow,
     reservedOutputTokens: 1_024,
     safetyMarginTokens: 512,
     compactionThresholdRatio: 0.8,
     maxPreviewBytes: 4_096,
   });
   const contextTokenEstimator = new ConservativeTokenEstimator();
+  const executionAgents = fixtureMode
+    ? catalog
+    : {
+      async loadAgentRevision(agentDefinitionId: string, revision: string) {
+        if (agentDefinitionId === builtInGeneralAgent.agentDefinitionId
+          && revision === builtInGeneralAgent.revision
+        ) return structuredClone(builtInGeneralAgent);
+        if (presentationAgent !== undefined) {
+          const presentation = await presentationAgent.loadExactAgent(
+            agentDefinitionId,
+            revision,
+          );
+          if (presentation !== undefined) return presentation;
+        }
+        return agentLifecycleSource.loadExactAgent(agentDefinitionId, revision);
+      },
+    };
   const normalLoopStarter = new DurableAgentLoopStarter({
     clock,
     ids,
     conversation,
     tasks,
-    agents: catalog,
+    agents: executionAgents,
     snapshots: new TurnSnapshotBuilder({
       conversationPersistence: conversation,
       taskPersistence: tasks,
@@ -339,6 +852,11 @@ export function createDesktopPrivateRuntime(input: {
       materializer: new TaskInstructionBundleMaterializer({
         tokenEstimator: contextTokenEstimator,
         budgetPolicy: contextBudgetPolicy,
+        ...(presentationSkill === undefined ? {} : {
+          lockedSkillInstructionResolver: new TrustedLocalSkillInstructionResolver({
+            manifest: presentationSkill,
+          }),
+        }),
       }),
       enabled: cpcInstructionRuntimeEnabled,
     }),
@@ -347,7 +865,21 @@ export function createDesktopPrivateRuntime(input: {
     coordination,
     ephemeralEvents,
     adapterHandles: runtimeAdapterHandles,
+    ...(taskModelProviders === undefined ? {} : {
+      modelProviderResolver: taskModelProviders,
+      localPersonalTimeoutPolicy: LOCAL_PERSONAL_MODEL_TIMEOUT_POLICY_V1,
+    }),
+    ...(enterpriseModelProvider === undefined ? {} : {
+      modelInvocationLinks: enterpriseInvocationLinks,
+    }),
   });
+  const activeAgentLoopStartupRecovery = enterpriseModelProvider === undefined
+    ? undefined
+    : new ActiveAgentLoopStartupRecoveryCoordinator({
+      tasks,
+      starter: normalLoopStarter,
+      scheduler: new SystemScheduler(),
+    });
   const demoBackend = demoMode && runtime.tool !== undefined
     ? new ProcessEchoToolBackend({
       adapterDescriptorId: runtime.tool.descriptor.adapterDescriptorId,
@@ -390,7 +922,7 @@ export function createDesktopPrivateRuntime(input: {
       }),
       clock,
       ids,
-      registryRevision: runtime.registry.registryRevision,
+      registryRevision: activeRegistry.registryRevision,
       activeUserId,
   });
   const loopStarter: AgentLoopStarter = demoRunner ?? normalLoopStarter;
@@ -409,6 +941,12 @@ export function createDesktopPrivateRuntime(input: {
       await normalLoopStarter.resume(taskId);
     },
   };
+  const dfi543Handler = r2dComposition.enabled
+    ? new Dfi543LocalPersonalSubmitTurnHandler({
+      clock, ids, conversation, sessions: foundation, tasks, coordination,
+      loopStarter, planner: r2dComposition.planner,
+    })
+    : undefined;
   const submitTurns = new SubmitTurnCoordinator({
     clock,
     ids,
@@ -420,6 +958,9 @@ export function createDesktopPrivateRuntime(input: {
     coordination,
     loopStarter,
     authorizationPolicies,
+    r2dCoreDeltaEnabled: R2D3_CORE_DELTA_DEFAULT_ENABLED,
+    dfi541MaxEnabled: dfi543Handler !== undefined,
+    ...(dfi543Handler === undefined ? {} : { dfi541SubmitHandler: dfi543Handler }),
   });
   const recovery = new SubmitTurnRecoveryCoordinator({
     coordination,
@@ -464,7 +1005,7 @@ export function createDesktopPrivateRuntime(input: {
     runtimeInstanceId,
   });
   const registrySnapshots = new FrozenRegistrySnapshotProvider(
-    RegistrySnapshotSchema.parse(runtime.registry),
+    RegistrySnapshotSchema.parse(activeRegistry),
   );
   const catalogCursors = new HmacCatalogCursorCodec();
   const robotCatalog = new RobotCatalogQueryService({
@@ -475,10 +1016,95 @@ export function createDesktopPrivateRuntime(input: {
     eligibility: new ModelEligibilityEvaluator(),
     cursors: catalogCursors,
   });
+  const refreshPublishedAgents = agentLifecycleClient === undefined
+    || internalTrialDeployment === undefined
+    ? undefined
+    : async () => {
+      const page = await agentLifecycleClient.listPublished();
+      agentLifecycleSource.registerPublished(page);
+      for (const release of page.items) {
+        catalog.registerAgent(agentLifecycleSource.catalogProjection(
+          release.agentPackage.agentDefinition,
+          internalTrialDeployment.model.modelId,
+        ), true);
+      }
+    };
   const toolCatalog = new ToolCatalogQueryService({
     registries: registrySnapshots,
     contexts: selectionContexts,
     cursors: catalogCursors,
+  });
+  const reasoningOwnerAuthority = new LocalDesktopReasoningModeOwnerAuthorityProvider({
+    personal: personalModels,
+    clientInstanceId: input.clientInstanceId
+      ?? "00000000-0000-4000-8000-000000000543",
+    testIdentityUsed: input.dfi543TestHarness !== undefined,
+  });
+  const reasoningPreferenceService = new ReasoningModePreferenceService({
+    persistence: reasoningPreferencePersistence,
+    ownerAuthority: reasoningOwnerAuthority,
+    clock,
+  });
+  const reasoningPreviewService = new ReasoningModePreviewService({
+    models: new LocalPersonalEffectiveReasoningModelResolver(personalModels),
+    profiles: reasoningProfiles,
+    preferences: reasoningPreferencePersistence,
+    ownerAuthority: reasoningOwnerAuthority,
+    clock,
+  });
+  const personalModelManagementAuthority =
+    new ProductionPersonalModelManagementAuthoritySource({
+      persistence: personalModels,
+      deploymentMode: "standalone_local",
+    });
+  const personalModelOperationGate = new InMemoryPersonalModelOperationGate();
+  const personalModelUsage = new TaskBackedPersonalModelUsageGuard({
+    tasks,
+    personal: personalModels,
+  });
+  const personalModelCredentialCoordinator = new PersonalModelCredentialCoordinator({
+    persistence: personalModels,
+    credentials: personalCredentials,
+    managementAuthority: personalModelManagementAuthority,
+    deletionGuard: personalModelUsage,
+    credentialUsage: personalModelUsage,
+    clock,
+    operationGate: personalModelOperationGate,
+  });
+  const personalModelCredentialRecovery = new PersonalModelCredentialRecoveryCoordinator(
+    personalModelCredentialCoordinator,
+  );
+  const personalModelRevealAttempts = new PersonalModelRevealAttemptRegistry();
+  const personalModelCredentialReveal = new PersonalModelCredentialRevealService({
+    persistence: personalModels,
+    credentials: personalCredentials,
+    managementAuthority: personalModelManagementAuthority,
+    clock,
+    attempts: personalModelRevealAttempts,
+    operationGate: personalModelOperationGate,
+  });
+  const personalModelSensitiveOperationsReady = () =>
+    input.sensitiveTransportProductionReady === true
+    && personalCredentials.verifiedHelperReady;
+  const personalModelCommands = new PersonalModelManagementCommandService({
+    coordinator: personalModelCredentialCoordinator,
+    persistence: personalModels,
+    authority: personalModelManagementAuthority,
+    ids,
+    clock,
+    sensitiveOperationsReady: personalModelSensitiveOperationsReady,
+  });
+  const personalCredentialBrokerHandler = createPersonalModelCredentialBrokerHandler(
+    personalModelCredentialCoordinator,
+    personalModelCredentialReveal,
+  );
+  const personalModelManagement = new PersonalModelManagementReadService({
+    persistence: personalModels,
+    credentials: personalCredentials,
+    authority: personalModelManagementAuthority,
+    helperProductionReady: () => personalCredentials.productionReady,
+    transportProductionReady: () =>
+      input.sensitiveTransportProductionReady === true,
   });
   const facade = new DesktopApplicationFacade({
     clock,
@@ -516,18 +1142,50 @@ export function createDesktopPrivateRuntime(input: {
     workspaceReveal,
     robotCatalog,
     toolCatalog,
+    r2dDesktopV1Alpha4Enabled: R2DP3_DESKTOP_V1ALPHA4_DEFAULT_ENABLED,
+    dfi541MaxEnabled: dfi543Handler !== undefined,
+    dfi541RuntimeReady: () => personalCredentials.productionReady
+      || internalTrialDeployment !== undefined
+      || (input.dfi543TestHarness !== undefined
+        && personalCredentials.verifiedHelperReady),
+    reasoningPreview: reasoningPreviewService,
+    reasoningPreferences: reasoningPreferenceService,
+    taskReasoning: new TaskReasoningModeProjectionService({ tasks, coordination }),
+    personalModelManagement,
+    personalModelCommands,
+    ...(agentLifecycleClient === undefined ? {} : {
+      agentLifecycle: agentLifecycleClient,
+      registerLifecycleDraft(detail) {
+        agentLifecycleSource.registerDraft(detail);
+      },
+    }),
+    ...(refreshPublishedAgents === undefined ? {} : { refreshPublishedAgents }),
   });
   const server = new CorePrivateHttpServer({
     authorizationToken: input.authorizationToken,
     facade,
     ephemeralEvents,
   });
-  const persistence = [conversation, foundation, tasks, coordination] as const;
+  const persistence = [conversation, foundation, tasks, coordination,
+    personalModels, personalInvocations, reasoningPreferencePersistence,
+    enterpriseInvocationLinks, enterpriseUsageProjections,
+    enterprisePromptCacheContexts,
+    personalCredentials] as const;
   let started = false;
 
   return Object.freeze({
     facade,
     server,
+    personalCredentialBrokerHandler,
+    ...(input.vs1TestHarness !== true ? {} : {
+      testOnlyIssueWorkspaceSelection(selection: Readonly<{
+        selectedPath: string;
+        clientInstanceId: string;
+        correlationId: string;
+      }>) {
+        return workspaceSelections.issue(selection);
+      },
+    }),
     async start() {
       if (started) return;
       runtimeStatus = "starting";
@@ -546,14 +1204,23 @@ export function createDesktopPrivateRuntime(input: {
             `Task authorization materialization failed: ${materialized.error.code}`,
           );
         }
-        await recovery.recoverOnce();
-        recovery.start();
+        await personalModelCredentialRecovery.recoverOnce();
         await server.start();
         started = true;
         runtimeStatus = "ready";
+        void facade.resumeRobotDraftTestsV1Alpha1();
+        if (activeAgentLoopStartupRecovery === undefined) {
+          recovery.start();
+        } else {
+          void activeAgentLoopStartupRecovery.recoverOnce().finally(() => {
+            if (runtimeStatus === "ready") recovery.start();
+          });
+        }
       } catch (error) {
         runtimeStatus = "failed";
+        activeAgentLoopStartupRecovery?.stop();
         recovery.stop();
+        personalModelCredentialReveal.close();
         await server.stop().catch(() => undefined);
         for (const adapter of startedPersistence.reverse()) {
           await adapter.stop().catch(() => undefined);
@@ -566,7 +1233,9 @@ export function createDesktopPrivateRuntime(input: {
     async stop() {
       if (!started && runtimeStatus !== "failed") return;
       runtimeStatus = "stopping";
+      activeAgentLoopStartupRecovery?.stop();
       recovery.stop();
+      personalModelCredentialReveal.close();
       ephemeralEvents.clear();
       workspaceSelections.clear();
       await server.stop();
@@ -585,6 +1254,7 @@ async function buildDesktopDocumentToolExecution(input: {
   taskRuntime: DurableTaskRuntime;
   tasks: TaskPersistence;
   workspaces: WorkspaceGrantPersistence;
+  manualArtifacts: ManualArtifactRegistrationPersistence;
   clock: Clock;
   ids: IdGenerator;
   activeUserId: string;
@@ -594,7 +1264,7 @@ async function buildDesktopDocumentToolExecution(input: {
   if (!isDocumentToolCapabilityId(call.capabilityId)) {
     throw new Error(`Desktop runtime only binds Document Tool calls, got ${call.capabilityId}`);
   }
-  const selection = await input.tasks.loadTaskRuntimeSelection(call.taskId);
+  const selection = await input.tasks.loadReadableTaskRuntimeSelection(call.taskId);
   if (selection === undefined) {
     throw new Error("Document Tool call has no locked runtime selection");
   }
@@ -613,6 +1283,13 @@ async function buildDesktopDocumentToolExecution(input: {
       ? "create_new"
     : undefined;
   const targetRealPath = resolve(grant.rootRealPath, modelArguments.relativePath);
+  await validateWorkspaceAttachmentIdentity({
+    capabilityId: call.capabilityId,
+    workspaceGrantId,
+    relativePath: modelArguments.relativePath,
+    targetRealPath,
+    manualArtifacts: input.manualArtifacts,
+  });
   const overwriteMaterialKey = writeMode === "overwrite_existing"
     ? xlsxOverwriteConfirmationMaterialKey(call)
     : undefined;
@@ -731,6 +1408,7 @@ async function buildDesktopDocumentToolExecution(input: {
 async function hydrateDesktopDocumentToolAction(input: {
   action: Action;
   workspaces: WorkspaceGrantPersistence;
+  manualArtifacts: ManualArtifactRegistrationPersistence;
 }): Promise<Action> {
   const action = ActionSchema.parse(input.action);
   if (!isDocumentToolCapabilityId(action.kind)) {
@@ -744,6 +1422,16 @@ async function hydrateDesktopDocumentToolAction(input: {
   if (grant === undefined || grant.status !== "active") {
     throw new Error("Document Tool workspace grant is unavailable before dispatch");
   }
+  if (typeof payload.relativePath !== "string") {
+    throw new Error("Document Tool effect metadata is missing relativePath");
+  }
+  await validateWorkspaceAttachmentIdentity({
+    capabilityId: action.kind,
+    workspaceGrantId: payload.workspaceGrantId,
+    relativePath: payload.relativePath,
+    targetRealPath: resolve(grant.rootRealPath, payload.relativePath),
+    manualArtifacts: input.manualArtifacts,
+  });
   const hydratedPayload = JsonObjectSchema.parse({
     workspaceRoot: grant.rootRealPath,
     relativePath: payload.relativePath,
@@ -758,6 +1446,45 @@ async function hydrateDesktopDocumentToolAction(input: {
     ...action,
     payload: hydratedPayload,
   });
+}
+
+const WORKSPACE_SOURCE_READ_CAPABILITY_IDS = new Set([
+  "tool.document.docx.read",
+  "tool.document.xlsx.read",
+  "tool.document.pdf.extract_text",
+]);
+
+export async function validateWorkspaceAttachmentIdentity(input: Readonly<{
+  capabilityId: string;
+  workspaceGrantId: string;
+  relativePath: string;
+  targetRealPath: string;
+  manualArtifacts: ManualArtifactRegistrationPersistence;
+}>): Promise<void> {
+  if (!WORKSPACE_SOURCE_READ_CAPABILITY_IDS.has(input.capabilityId)) return;
+  const registration = await input.manualArtifacts
+    .findManualArtifactRegistrationByWorkspacePath({
+      workspaceGrantId: input.workspaceGrantId,
+      relativePath: input.relativePath,
+    });
+  // VS2.1's explicit workspace-relative path flow remains valid. VS2.2
+  // attachments are registered first and therefore take this exact identity path.
+  if (registration === undefined) return;
+  try {
+    const link = await lstat(input.targetRealPath);
+    if (link.isSymbolicLink() || !link.isFile() || link.nlink > 1) {
+      throw new Error("not_regular_single_link");
+    }
+    const bytes = await readFile(input.targetRealPath);
+    const fileSha256 = createHash("sha256").update(bytes).digest("hex");
+    if (bytes.byteLength !== registration.byteSize || fileSha256 !== registration.fileSha256) {
+      throw new Error("digest_or_size_changed");
+    }
+  } catch {
+    throw new Error(
+      "workspace.attachment_identity_changed: Selected attachment changed after registration",
+    );
+  }
 }
 
 async function ensureDocumentToolStep(input: {
@@ -1050,7 +1777,12 @@ function workspaceGrantEntityId(workspaceGrantId: string): string {
     : workspaceGrantId;
 }
 
-function runtimeFixture(demoMode: boolean) {
+function runtimeFixture(input: Readonly<{
+  demoMode: boolean;
+  legacyTestMode: boolean;
+}>) {
+  const { demoMode, legacyTestMode } = input;
+  const fixtureMode = demoMode || legacyTestMode;
   const capability = createCapabilityDefinition({
     schemaVersion: CONTRACT_VERSION,
     capabilityId: "model.desktop-scripted",
@@ -1093,11 +1825,16 @@ function runtimeFixture(demoMode: boolean) {
     ? createDemoToolRecords()
     : undefined;
   const registryBuilder = new RegistryBuilder({
-    trustedSources: demoMode ? [source] : [source, DOCUMENT_TOOL_SOURCE],
-  })
-    .registerCapability(capability)
-    .registerAdapterDescriptor(descriptor)
-    .registerBinding(binding);
+    trustedSources: fixtureMode
+      ? [source, DOCUMENT_TOOL_SOURCE]
+      : [DOCUMENT_TOOL_SOURCE],
+  });
+  if (fixtureMode) {
+    registryBuilder
+      .registerCapability(capability)
+      .registerAdapterDescriptor(descriptor)
+      .registerBinding(binding);
+  }
   if (tool !== undefined) {
     registryBuilder
       .registerCapability(tool.definition)
@@ -1161,30 +1898,100 @@ function runtimeFixture(demoMode: boolean) {
       modelId: model.modelId,
       toolReferences,
     });
-  // R2D-3.2 isolates the scripted fixture identity. The legacy v1 route remains
-  // readable until the separately gated R2D-3.3 atomic acceptance cutover.
-  const legacyAgent = demoMode ? undefined : createAgentDefinitionRevision({
-    schemaVersion: "v1alpha1",
-    agentDefinitionId: "agent.general",
-    name: "RoboThree General",
-    identity: "RoboThree enterprise desktop agent",
-    goal: "Complete the user's selected local task",
-    instructions: "Use only the exact capabilities locked for this Task. For workspace documents, use Document Tools only when the Task has an active workspace grant and the model provides an exact tool call.",
-    defaultModelId: model.modelId,
-    allowModelOverride: false,
-    skillReferences: [],
-    toolReferences,
-    knowledgeReferences: [],
-    requiredModelCapabilities: {
-      inputModalities: ["text"],
-      outputModalities: ["text"],
-      supportsToolCalling: true,
-      supportsStreaming: true,
-      minimumContextWindow: 8_192,
+  return { registry, model, agent, descriptor, tool };
+}
+
+function mergeRegistrySnapshots(
+  base: ReturnType<RegistryBuilder["finalize"]>,
+  deployment: ReturnType<RegistryBuilder["finalize"]>,
+) {
+  const definitions = [
+    ...base.agentVisibleCapabilities.models,
+    ...base.agentVisibleCapabilities.tools,
+    ...deployment.agentVisibleCapabilities.models,
+    ...deployment.agentVisibleCapabilities.tools,
+  ];
+  const descriptors = [
+    ...base.infrastructureResources.adapterDescriptors,
+    ...deployment.infrastructureResources.adapterDescriptors,
+  ];
+  const bindings = [
+    ...base.infrastructureResources.capabilityBindings,
+    ...deployment.infrastructureResources.capabilityBindings,
+  ];
+  const sources = new Map<string, (typeof definitions)[number]["source"]>();
+  for (const item of [...definitions, ...descriptors, ...bindings]) {
+    sources.set(
+      `${item.source.trust}:${item.source.packageId}:${item.source.packageRevision}`,
+      item.source,
+    );
+  }
+  const builder = new RegistryBuilder({ trustedSources: [...sources.values()] });
+  const parsed = RegistrySnapshotSchema.parse({
+    schemaVersion: CONTRACT_VERSION,
+    registryRevision: base.registryRevision,
+    agentVisibleCapabilities: {
+      models: definitions.filter((definition) => definition.kind === "model"),
+      tools: definitions.filter((definition) => definition.kind === "tool"),
     },
-    createdAt: FIXTURE_CREATED_AT,
+    infrastructureResources: {
+      adapterDescriptors: descriptors,
+      capabilityBindings: bindings,
+    },
   });
-  return { registry, model, agent, legacyAgent, descriptor, tool };
+  for (const definition of [
+    ...parsed.agentVisibleCapabilities.models,
+    ...parsed.agentVisibleCapabilities.tools,
+  ]) builder.registerCapability(definition);
+  for (const descriptor of parsed.infrastructureResources.adapterDescriptors) {
+    builder.registerAdapterDescriptor(descriptor);
+  }
+  for (const binding of parsed.infrastructureResources.capabilityBindings) {
+    builder.registerBinding(binding);
+  }
+  return builder.finalize();
+}
+
+function enterpriseR2DRegistrySnapshot(
+  deployment: InternalTrialEnterpriseModelDeployment,
+  registryRevision: string,
+  skill?: Readonly<{
+    skillId: string;
+    revision: string;
+    contentDigest: string;
+  }>,
+  tools: readonly Readonly<{
+    capabilityId: string;
+    capabilityRevision: string;
+  }>[] = [],
+) {
+  return AgentResourceRegistrySnapshotV1Schema.parse({
+    schemaVersion: "v1",
+    registryRevision,
+    models: [{
+      ref: {
+        modelId: deployment.capability.capabilityId,
+        revision: deployment.capability.revision,
+        digest: deployment.capability.revision,
+      },
+      capabilities: {
+        inputModalities: deployment.model.capabilities.inputModalities,
+        outputModalities: deployment.model.capabilities.outputModalities,
+        supportsToolCalling: deployment.model.capabilities.supportsToolCalling,
+        supportsStreaming: deployment.model.capabilities.supportsStreaming,
+        contextWindow: deployment.model.capabilities.contextWindow,
+      },
+      available: true,
+    }],
+    skills: skill === undefined ? [] : [{
+      ref: skill,
+      available: true,
+      materialAvailable: true,
+    }],
+    tools: tools.map((tool) => ({ ref: tool, available: true })),
+    knowledge: [],
+    knowledgeProviderReady: false,
+  });
 }
 
 function runtimeCapabilityAvailability(

@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "dfi531.private-mapping-conformance.v1",
+  "mappingId": "reasoning.mapping.fixture-openai",
+  "commitment": {
+    "authority": "central_enterprise",
+    "providerFamily": "enterprise_openai",
+    "exactSubject": {
+      "modelCapabilityId": "model.fixture-max",
+      "modelCapabilityRevision": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "adapterDescriptorId": "adapter.model.fixture-max",
+      "adapterDescriptorRevision": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "authority": "central_enterprise"
+    },
+    "profileId": "reasoning.profile.fixture-max",
+    "strategyId": "reasoning.strategy.fixture-max",
+    "strategyRevision": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+    "mappingKind": "effort_level",
+    "timeoutPolicyIdentity": {
+      "timeoutPolicyRef": "timeout.policy.fixture-max",
+      "timeoutPolicyRevision": "timeout.policy.fixture-max.v1",
+      "timeoutPolicyDigest": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+    },
+    "requestProjectionRevision": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+    "evidenceRevision": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+    "typedPrivateDirective": {
+      "kind": "openai_reasoning_effort",
+      "effort": "xhigh"
+    }
+  },
+  "expected": {
+    "strategyDigest": "sha256:a3479d06260f9c6f556473d29c53a5050b7a84b248f36e334f2d6c84cf047f3c",
+    "profileRevision": "sha256:aa6319d484d81ff59cdfcc9f22dd4967ae7b0704a1bbccdf7a8be5f6e8add07a",
+    "mappingRevision": "sha256:af786b55908f98209a17a94ce5e8a47e400c1d16a07812e56f0b533c5c730d5b"
+  }
+}

@@ -1,6 +1,7 @@
 import type { TaskCapabilityLock } from "@robothree/contracts";
 
 import { LocalPersonalOpenAiCompatibleModelProvider } from "../adapters/https/local-personal-openai-compatible-model-provider.js";
+import type { LocalPersonalProviderTransportOptions } from "../adapters/https/local-personal-openai-compatible-model-provider.js";
 import type { PersonalCredentialStore } from "../ports/personal-credential-store.js";
 import type { PersonalModelOwnerAuthority } from "../ports/personal-model-owner-authority.js";
 import type { PersonalModelPersistence } from "../ports/personal-model-persistence.js";
@@ -26,6 +27,8 @@ import type {
   PersonalModelStatusFact,
 } from "./personal-model-domain.js";
 import type { ModelInvocationTimeoutPolicy } from "./model-invocation-timeout-policy.js";
+import type { TaskLockedPersonalModelExecutionAuthority } from
+  "./personal-model-execution-authority.js";
 
 export type ResolvedPersonalModelProvider = Readonly<{
   provider: LocalPersonalOpenAiCompatibleModelProvider;
@@ -153,6 +156,7 @@ export class CompositeModelProviderResolver {
   readonly #clock: Clock;
   readonly #scheduler: Scheduler;
   readonly #timeoutPolicy: ModelInvocationTimeoutPolicy;
+  readonly #transport: LocalPersonalProviderTransportOptions | undefined;
 
   public constructor(input: Readonly<{
     enterprise: RuntimeAdapterHandles;
@@ -164,6 +168,7 @@ export class CompositeModelProviderResolver {
     clock: Clock;
     scheduler: Scheduler;
     timeoutPolicy: ModelInvocationTimeoutPolicy;
+    transport?: LocalPersonalProviderTransportOptions;
   }>) {
     this.#enterprise = input.enterprise;
     this.#personal = input.personal;
@@ -176,11 +181,12 @@ export class CompositeModelProviderResolver {
     this.#clock = input.clock;
     this.#scheduler = input.scheduler;
     this.#timeoutPolicy = input.timeoutPolicy;
+    this.#transport = input.transport;
   }
 
   public async resolve(input: Readonly<{
     lock: TaskCapabilityLock;
-    ownerAuthority?: PersonalModelOwnerAuthority;
+    ownerAuthority?: TaskLockedPersonalModelExecutionAuthority;
   }>): Promise<ModelProvider> {
     const resolved = await this.resolveDetailed(input);
     return "provider" in resolved ? resolved.provider : resolved;
@@ -188,7 +194,7 @@ export class CompositeModelProviderResolver {
 
   public async resolveDetailed(input: Readonly<{
     lock: TaskCapabilityLock;
-    ownerAuthority?: PersonalModelOwnerAuthority;
+    ownerAuthority?: TaskLockedPersonalModelExecutionAuthority;
   }>): Promise<ModelProvider | ResolvedPersonalModelProvider> {
     const lock = validateTaskCapabilityLockRevisions(input.lock);
     if (!isPersonalModelLock(lock)) {
@@ -202,7 +208,8 @@ export class CompositeModelProviderResolver {
       );
     }
     if (input.ownerAuthority === undefined
-      || input.ownerAuthority.offlineState === "enterprise_session_invalid") {
+      || (input.ownerAuthority.authorityKind === "runtime_active_enterprise_identity"
+        && input.ownerAuthority.offlineState === "enterprise_session_invalid")) {
       throw new CompositeModelRuntimeError("personal_model.lock_authority_mismatch");
     }
     const namespace = await this.#personal.loadActiveOwnerNamespace();
@@ -249,6 +256,7 @@ export class CompositeModelProviderResolver {
       clock: this.#clock,
       scheduler: this.#scheduler,
       timeoutPolicy: this.#timeoutPolicy,
+      ...(this.#transport === undefined ? {} : { transport: this.#transport }),
     });
     if (provider.adapterDescriptorRevision !== lock.adapterDescriptorSnapshot.revision
       || provider.adapterDescriptorId !== lock.adapterDescriptorSnapshot.adapterDescriptorId

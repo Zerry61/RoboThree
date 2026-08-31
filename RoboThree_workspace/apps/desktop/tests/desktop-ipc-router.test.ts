@@ -273,6 +273,114 @@ describe("DesktopIpcRouter", () => {
     }
   });
 
+  it("limits Workbench attachment picking to the selected workspace and rejects pre-submit drift", async () => {
+    const selectedRoot = await mkdtemp(join(tmpdir(), "robothree-vs22-selected-"));
+    const otherRoot = await mkdtemp(join(tmpdir(), "robothree-vs22-other-"));
+    try {
+      await mkdir(join(selectedRoot, "资料"));
+      const selectedPath = join(selectedRoot, "资料", "source.xlsx");
+      await writeFile(selectedPath, "manual-artifact");
+      const artifactId = `artifact:${"2".repeat(64)}`;
+      const receipt = registrationReceipt({
+        commandId: id("80"),
+        artifactId,
+        relativePath: "资料/source.xlsx",
+      });
+      const registerWorkspaceArtifact = vi.fn(async () => ({
+        ok: true as const,
+        value: receipt,
+      }));
+      const chooseWorkspaceArtifactFile = vi.fn(async () => selectedPath);
+      const router = new DesktopIpcRouter({
+        core: {
+          client: fakeClient({
+            listWorkspaceGrantAuthorities: vi.fn(async () => ({
+              ok: true as const,
+              value: [
+                workspaceAuthority(selectedRoot),
+                {
+                  ...workspaceAuthority(otherRoot),
+                  workspaceGrantId: "workspace.grant-other",
+                },
+              ],
+            })),
+            registerWorkspaceArtifact,
+          }),
+        },
+        chooseWorkspaceDirectory: async () => undefined,
+        chooseWorkspaceArtifactFile,
+      });
+
+      const picked = await router.dispatch(DESKTOP_IPC_CHANNELS.pickWorkbenchAttachment, {
+        contractVersion: "v1alpha1",
+        type: "register_workspace_artifact",
+        commandId: id("80"),
+        correlationId: id("81"),
+        clientInstanceId: id("82"),
+        workspaceGrantId: "workspace.grant-test",
+      });
+      expect(picked).toEqual({ ok: true, value: receipt });
+      expect(chooseWorkspaceArtifactFile).toHaveBeenCalledWith(
+        [expect.objectContaining({ workspaceGrantId: "workspace.grant-test" })],
+        { documentSourcesOnly: true },
+      );
+      expect(registerWorkspaceArtifact).toHaveBeenNthCalledWith(1, expect.objectContaining({
+        command: {
+          contractVersion: "v1alpha1",
+          type: "register_workspace_artifact",
+          commandId: id("80"),
+          correlationId: id("81"),
+          clientInstanceId: id("82"),
+        },
+      }));
+
+      const validatedBeforeDrift = await router.dispatch(
+        DESKTOP_IPC_CHANNELS.validateWorkbenchAttachment,
+        {
+          contractVersion: "v1alpha1",
+          type: "register_workspace_artifact",
+          commandId: id("83"),
+          correlationId: id("84"),
+          clientInstanceId: id("85"),
+          workspaceGrantId: "workspace.grant-test",
+          artifact: receipt.artifact,
+        },
+      );
+      expect(validatedBeforeDrift).toEqual({ ok: true, value: receipt });
+      expect(registerWorkspaceArtifact).toHaveBeenNthCalledWith(2, expect.objectContaining({
+        command: {
+          contractVersion: "v1alpha1",
+          type: "register_workspace_artifact",
+          commandId: id("83"),
+          correlationId: id("84"),
+          clientInstanceId: id("85"),
+        },
+      }));
+
+      await writeFile(selectedPath, "changed-manual-artifact");
+      const validated = await router.dispatch(
+        DESKTOP_IPC_CHANNELS.validateWorkbenchAttachment,
+        {
+          contractVersion: "v1alpha1",
+          type: "register_workspace_artifact",
+          commandId: id("86"),
+          correlationId: id("87"),
+          clientInstanceId: id("88"),
+          workspaceGrantId: "workspace.grant-test",
+          artifact: receipt.artifact,
+        },
+      );
+      expect(validated).toMatchObject({
+        ok: false,
+        error: { code: "artifact.source_changed", category: "conflict" },
+      });
+      expect(registerWorkspaceArtifact).toHaveBeenCalledTimes(2);
+    } finally {
+      await rm(selectedRoot, { recursive: true, force: true });
+      await rm(otherRoot, { recursive: true, force: true });
+    }
+  });
+
   it("maps transport failures to a retryable safe availability error", async () => {
     const router = new DesktopIpcRouter({
       core: {

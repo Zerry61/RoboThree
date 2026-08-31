@@ -1,13 +1,13 @@
 # R2D-0 Product Revision 2 Core Delta 详细实施总方案
 
-> 状态：**PLAN REVIEW PASS/CLOSED；R2D-1～R2D-3.1 PASS/CLOSED；R2D-3.2 EXACT MATERIAL CONFIRMATION PENDING / CODING GATED**  
+> 状态：**PLAN REVIEW PASS/CLOSED；R2D-1～R2D-4 PASS/CLOSED；R2D CONFORMANCE PASS/CLOSED**
 > 日期：2026-08-26  
 > 负责人：Codex 5.6  
 > 计划代号：`R2D`（Product Revision 2 Core Delta）  
 > 上游：PRD v1.6 Final Revision 15、Core Prompt / Context Feature Spec Revision 2、Model Experience Revision 4，以及讨论区 `001-用户创建.md`  
 > 既有基线：CPC-1～CPC-3 与 CPC 全线 `PASS/CLOSED`；DFI-5.2 `PASS/CLOSED`；DFI-5.3 计划 `PASS/CLOSED / CODING GATED`  
 > 本方案最高输出：`R2D_CORE_DELTA_CONFORMANT`  
-> 当前结论：**R2D-1～R2D-3.1 PASS/CLOSED；R2D-3.2 `agent.general` docs-only 聚焦确认待评审；R2D-3.2～R2D-4 继续 CODING GATED**
+> 当前结论：**R2D-1～R2D-4 与 R2D 工程线 conformance 均 PASS/CLOSED；production readiness 仍为 false**
 
 ## 0. 结论摘要
 
@@ -24,14 +24,14 @@
 | --- | --- | ---: | --- |
 | R2D-1 | Dynamic Request Facts 与 Invocation 级恢复 | 3～5 个集中工程日 | `PASS/CLOSED` |
 | R2D-2 | Agent Definition v1alpha2 与四类资源限制 Contract | 3～5 个集中工程日 | `PASS/CLOSED` |
-| R2D-3 | Entitlement 决策、Runtime Selection v1alpha3、durable acceptance 与 built-in `agent.general` | 6～10 个集中工程日 | `3.1 PASS/CLOSED；3.2 exact material 确认待评审且编码 GATED；3.3 GATED` |
-| R2D-4 | Lifecycle / Compatibility / Security Closure Harness | 1～2 个集中工程日 | `GATED` |
-| 合计 |  | **13～22 个集中工程日** | 逐批授权 |
+| R2D-3 | Entitlement 决策、Runtime Selection v1alpha3、durable acceptance 与 built-in `agent.general` | 7～11 个集中工程日 | `PASS/CLOSED` |
+| R2D-4 | Lifecycle / Compatibility / Security Closure Harness | 1～2 个集中工程日 | `PASS/CLOSED` |
+| 合计 |  | **14～23 个集中工程日** | 逐批授权 |
 
 R2D-3 Revision 1 确认当前 SubmitTurn 已有 message / coordination / Task bundle 分阶段持久化和 exact recovery，
 产品级原子锁定不要求新建跨 Repository 单一物理事务；改为复用 durable coordination，并把 `task_committed`
-冻结为首次 Provider 调用前 barrier。R2D-3 因此修正为 6～10 日，R2D-4 聚焦为 1～2 日，R2D 总工期修正为
-13～22 日。详细边界见
+冻结为首次 Provider 调用前 barrier。R2D-3 最终细化为 7～11 日，R2D-4 聚焦为 1～2 日，R2D 总工期修正为
+14～23 日。详细边界见
 [R2D-3 Runtime Selection / Entitlement / Atomic Acceptance 方案](./R2D-3-RUNTIME-SELECTION-ENTITLEMENT-ATOMIC-ACCEPTANCE-DEVELOPMENT-PLAN.md)。
 
 该估算只包含 Core Delta。Desktop Workbench 修复由前端独立批次承担；Agent 草稿、测试、发布、Admin CRUD、
@@ -1045,7 +1045,7 @@ pnpm run harness:r2d4
 最高输出：`R2D_AGENT_RESOURCE_RESTRICTION_CONFORMANT`。  
 完成后不自动授权 R2D-3。
 
-### R2D-3：Selection / Entitlement / Durable Acceptance / built-in Agent（6～10 日）
+### R2D-3：Selection / Entitlement / Durable Acceptance / built-in Agent（7～11 日）
 
 交付：
 
@@ -1068,13 +1068,16 @@ pnpm run harness:r2d4
 
 交付：
 
-- D1～D8 / S1～S8 / C1～C8；
+- A1～A8 / D1～D8 / R1～R8 / C1～C12；
 - real process / SQLite reopen；
 - three-round semantic replay；
 - 80 次负向泄漏扫描；
 - 12 类资源归零；
 - CPC/DFI regression；
 - final evidence 与 implementation report。
+
+详细边界见
+[R2D-4 Lifecycle / Cutover / Closure Harness 详细实施方案](./R2D-4-LIFECYCLE-CUTOVER-CLOSURE-HARNESS-DEVELOPMENT-PLAN.md)。
 
 最高输出：`R2D_CORE_DELTA_CONFORMANT`，并附六项 false。  
 该输出仍不等于 production activation。
@@ -1155,7 +1158,7 @@ DFI-5.3 保持 `PASS/CLOSED / CODING GATED`。未来授权时必须：
 10. 是否接受 built-in `agent.general` 四类 restriction 均 unrestricted，但仍受 Core policy 与 explicit selection？
 11. 是否接受 enterprise entitlement 未 ready 时 production v2 activation 继续 fail-closed？
 12. 是否接受 Agent draft/test/publish 移出本计划、后续另立 AAPI-1？
-13. 是否接受按 R2D-3 Revision 1 将总工期修正为 13～22 个集中工程日及四批逐批授权？
+13. 是否接受 R2D-3 最终细化为 7～11 日、R2D 总工期修正为 14～23 个集中工程日及四批逐批授权？
 
 ## 16. 当前状态
 
@@ -1172,11 +1175,15 @@ R2D-2 Agent Definition v1alpha2 / Restrictions
 R2D-3 Runtime Selection v1alpha3 / Entitlement / agent.general
   PLAN REVIEW PASS/CLOSED
   3.1 PASS/CLOSED
-  3.2 EXACT MATERIAL CONFIRMATION PENDING / CODING GATED
-  3.3 CODING GATED
+  3.2 PASS/CLOSED
+  3.3 PASS/CLOSED
+  R2D-3 PASS/CLOSED
 
 R2D-4 Lifecycle / Closure
-  GATED
+  PASS/CLOSED
+
+R2D conformance
+  PASS/CLOSED
 
 productionCpcActivationEnabled=false
 productionEnterpriseEntitlementReady=false
@@ -1186,5 +1193,5 @@ adminV2ConsumptionReady=false
 knowledgeProviderReady=false
 ```
 
-R2D-1～R2D-3.1 已通过独立 QA并由用户正式接受关闭；R2D-3.2 `agent.general` exact material 已形成
-docs-only 聚焦确认稿，但编码仍未授权；R2D-3.2～R2D-3.3 与 R2D-4 继续 GATED。
+R2D-1～R2D-4 均已通过独立 QA 并由用户正式接受，R2D 工程线 conformance 整体 `PASS/CLOSED`。该关闭
+只确认 `R2D_CORE_DELTA_CONFORMANT`，不构成 production activation 或任何下游编码授权。

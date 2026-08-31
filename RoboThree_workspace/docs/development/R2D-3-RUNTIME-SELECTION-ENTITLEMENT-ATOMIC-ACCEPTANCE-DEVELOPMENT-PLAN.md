@@ -1,13 +1,13 @@
 # R2D-3 Runtime Selection v1alpha3 / Entitlement Intersection / Durable Acceptance 详细实施方案 Revision 1
 
-> 状态：**PLAN REVIEW PASS/CLOSED；R2D-3.1 PASS/CLOSED；R2D-3.2 EXACT MATERIAL CONFIRMATION PENDING / CODING GATED；R2D-3.3 CODING GATED**  
+> 状态：**PLAN REVIEW PASS/CLOSED；R2D-3.1～R2D-3.3 PASS/CLOSED；R2D-3 PASS/CLOSED**
 > 日期：2026-08-26  
 > 负责人：Codex 5.6  
 > 计划代号：`R2D-3`  
 > 上游：R2D-0～R2D-2 `PASS/CLOSED`、CPC 全线 `PASS/CLOSED`、DFI-5.2 `PASS/CLOSED`  
 > 产品基线：PRD v1.6 Final Revision 15、Core Prompt / Context Feature Spec Revision 2、Model Experience Revision 4  
 > 本方案最高输出：`R2D_RUNTIME_SELECTION_FOUNDATION_CONFORMANT`  
-> 当前结论：**Revision 1 与 R2D-3.1 已关闭；R2D-3.2 `agent.general` exact material 已形成 docs-only 聚焦确认稿，编码未授权**
+> 当前结论：**Revision 1 与 R2D-3.1～R2D-3.3 均已关闭；R2D-3 阶段整体 PASS/CLOSED**
 
 ## Revision 1 修订摘要
 
@@ -25,7 +25,8 @@ Revision 1 关闭原方案对“原子接受”的过强解释：产品要求的
 5. crash/restart 只继续原 coordination plan，不重新读取 current Agent、entitlement、Preference 或 stable order；
 6. 删除新增 aggregate persistence Port 与“所有表必须同一 SQLite transaction”的要求；
 7. 不实现 production Enterprise Entitlement Adapter，production enterprise entitlement 继续 false；
-8. R2D-3 估算由 12～20 日修正为 6～10 日，R2D-4 聚焦收口由 2～4 日修正为 1～2 日。
+8. Revision 1 初步把 R2D-3 从 12～20 日修正为 6～10 日；R2D-3.3 详细方案确认需要 Core-private 双
+   envelope 后，R2D-3 最终细化为 7～11 日；R2D-4 聚焦收口保持 1～2 日。
 
 ## 0. 结论摘要
 
@@ -44,14 +45,15 @@ R2D-2 已经能够精确表达 Agent 对 Model、Skill、Tool、Knowledge 的四
 | 子批 | 交付目标 | 估算 | 当前状态 |
 | --- | --- | ---: | --- |
 | R2D-3.1 | Entitlement / Decision / Runtime Selection v1alpha3 / coordination v1alpha4 Contract 与 conformance | 2～3 个集中工程日 | `PASS/CLOSED` |
-| R2D-3.2 | 单一 Planner、可信交集、code-owned `agent.general` 与 fixture 隔离 | 2～3 个集中工程日 | `EXACT MATERIAL CONFIRMATION PENDING / CODING GATED` |
-| R2D-3.3 | 既有 durable coordination 接线、Provider 前 barrier、recovery/cutover | 2～4 个集中工程日 | `GATED` |
-| 合计 |  | **6～10 个集中工程日** | 逐批授权 |
+| R2D-3.2 | 单一 Planner、可信交集、code-owned `agent.general` 与 fixture 隔离 | 2～3 个集中工程日 | `PASS/CLOSED` |
+| R2D-3.3 | 既有 durable coordination 接线、Provider 前 barrier、recovery/cutover | 3～5 个集中工程日 | `PASS/CLOSED` |
+| 合计 |  | **7～11 个集中工程日** | `PASS/CLOSED` |
 
 父计划原先 4～7 日覆盖“新增 selection 版本 + intersection”的草估。Revision 0 曾把产品级原子锁定进一步
 解释为跨 Repository 的单一物理事务，导致估算放大到 12～20 日。Revision 1 根据现有 coordination 已具备可恢复
 阶段与 exact replay 的工程事实，改为“Provider 前 durable winner + 中间态不对外成功 + restart 不重选”，因此
-细化为 6～10 日。
+初步细化为 6～10 日；R2D-3.3 详细方案进一步确认 v1alpha4 摘要不足以单独恢复完整 Task bundle，增加双
+Adapter envelope conformance 后，最终修正为 7～11 日。
 
 本批结束后最高只能输出：
 
@@ -534,6 +536,13 @@ revision = digest = "sha256:f846f63e9b0b7135df865a2de832f0605643eeb25919201e1285
 
 ## 6. R2D-3.3：首次 SubmitTurn Durable Acceptance
 
+详细可编码方案见：
+[R2D-3.3 Durable Acceptance / Coordination v1alpha4 / Task Bundle Atomic Commit 详细实施方案](./R2D-3.3-DURABLE-ACCEPTANCE-COORDINATION-DEVELOPMENT-PLAN.md)。
+
+详细方案根据 v1alpha4 `resourcePlan` 只含 digest/ID、无法单独重建完整 Task bundle 的代码事实，新增
+Core-private coordination/task-binding 双 envelope，复用既有 JSON 列与事务，不改 Contract、不加 migration 27；
+因此 R2D-3.3 明细估算由父计划 2～4 日修正为 3～5 日。
+
 ### 6.1 复用既有 coordination，不新建第二套状态机
 
 R2D-3.3 继续使用：
@@ -827,7 +836,7 @@ r2dCoreDeltaEnabled = false
 5. 隔离 scripted fixture ID/source graph；
 6. 验证 zero-side-effect、single-load、no-fallback。
 
-### 12.3 R2D-3.3（2～4 日）
+### 12.3 R2D-3.3（3～5 日）
 
 1. additive widen 既有 reasoning-aware Task bundle Port/validator；
 2. 同批更新 InMemory/SQLite Task bundle Adapter 与同一 conformance；
@@ -1036,7 +1045,7 @@ CI=true pnpm install --frozen-lockfile --offline
 9. authorization 与 selection digest 是否避免 circular binding；
 10. 不新增 migration 27 的假设是否被现有 selection/record JSON 与 Task bundle transaction 真实支持；
 11. recovery 是否完全不重读 current Agent/entitlement/Preference；
-12. 6～10 日是否诚实覆盖三个子批及既有双 Adapter conformance。
+12. 7～11 日是否诚实覆盖三个子批、Core-private 双 envelope 与既有双 Adapter conformance。
 
 ## 17. 冻结与下一步
 
@@ -1045,12 +1054,13 @@ CI=true pnpm install --frozen-lockfile --offline
 ```text
 R2D-3 PLAN REVIEW PASS/CLOSED
 R2D-3.1 PASS/CLOSED
-R2D-3.2 EXACT MATERIAL CONFIRMATION PENDING / CODING GATED
-R2D-3.3 CODING GATED
+R2D-3.2 PASS/CLOSED
+R2D-3.3 PASS/CLOSED
+R2D-3 PASS/CLOSED
 ```
 
-R2D-3.1 已通过独立 QA 并由用户正式接受关闭；该关闭不自动授权 R2D-3.2。R2D-3.2 必须先完成
-`agent.general` exact material 聚焦确认，再由用户单独授权编码。
-R2D-3.2、R2D-3.3、R2D-4、DFI-5.3 子批、AAPI-0.3～0.4、TGM、Knowledge Provider、Memory、
+R2D-3.2 exact material 聚焦确认、实现与独立 QA 均已由用户正式接受并 `PASS/CLOSED`。R2D-3.3 实现与独立 QA
+也已由用户正式接受，R2D-3 阶段整体 `PASS/CLOSED`。R2D-4 已完成 closure-only 实现与开发者门禁，当前等待独立 QA；
+这不构成 production activation 授权。DFI-5.3 子批、AAPI-0.3～0.4、TGM、Knowledge Provider、Memory、
 Effect Reconciliation、Agent Lifecycle 与 Desktop/Admin v2 consumption 继续 GATED。production CPC activation、
 production R2D gate 与 production enterprise entitlement 继续保持 false。

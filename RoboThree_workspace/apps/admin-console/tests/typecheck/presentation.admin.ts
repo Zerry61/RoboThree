@@ -9,23 +9,24 @@ import {
 import { presentPageState } from '../../src/presentation/page-state-presentation';
 import { presentUnknownError } from '../../src/presentation/safe-error-presentation';
 import {
-  presentToolDetail,
-  presentToolExecutionLocation,
-  presentToolListRow,
-  presentToolRisk,
-  presentToolSource,
-  presentToolStatusState
-} from '../../src/presentation/tool-pages-presentation';
-import { prototypeToolRows } from '../../src/fixtures/tool-pages';
+  nonProductionNotice,
+  presentDetail,
+  presentInventoryError,
+  presentInventoryItem,
+  presentInventoryNotices
+} from '../../src/presentation/read-only-inventory';
 import type { CapabilityState } from '../../src/app/route-meta';
 import type { AdminPageStatus } from '../../src/adapters/admin-adapter';
 import type {
-  AdminToolExecutionLocation,
-  AdminToolRiskLevel,
-  AdminToolSource,
-  AdminToolStatusState
-} from '../../src/types/admin-tool-pages';
+  AdminKnowledgeDetail,
+  AdminModelDetail,
+  AdminRobotDetail,
+  AdminSkillDetail,
+  AdminToolDetail
+} from '@robothree/contracts/admin-control/v1alpha1';
 import type { SecretDisplayStatus } from '../../src/types/admin-ui';
+
+const revision = `sha256:${'a'.repeat(64)}`;
 
 describe('Admin presentation functions', () => {
   it('covers all capability states with explicit labels', () => {
@@ -42,9 +43,12 @@ describe('Admin presentation functions', () => {
       'ready',
       'unavailable',
       'permissionDenied',
+      'notFound',
+      'stale',
       'error',
       'disabled',
-      'partial'
+      'partial',
+      'gated'
     ];
 
     for (const status of statuses) {
@@ -104,41 +108,134 @@ describe('Admin presentation functions', () => {
     });
   });
 
-  it('covers Tool source, location, status and risk display decisions', () => {
-    const sources: readonly AdminToolSource[] = ['code', 'httpApi', 'mcp'];
-    expect(sources.map((source) => presentToolSource(source))).toEqual(['代码工具', '连接 API', 'MCP 服务']);
+  it('presents six read-only inventory modules with Chinese business labels', () => {
+    const rows = [
+      presentInventoryItem('models', modelDetail),
+      presentInventoryItem('robots', robotDetail),
+      presentInventoryItem('skills', skillDetail),
+      presentInventoryItem('tools', toolDetail),
+      presentInventoryItem('knowledge', knowledgeDetail),
+      presentInventoryItem('audit', {
+        auditEventId: '00000000-0000-4000-8000-000000000001',
+        auditRevision: revision,
+        occurredAt: '2026-08-27T00:00:00.000Z',
+        actorSummary: '测试管理员',
+        actionSummary: '读取模型目录',
+        result: 'allowed'
+      })
+    ];
 
-    const locations: readonly AdminToolExecutionLocation[] = ['localWorker', 'centralGateway', 'remoteMcp'];
-    expect(locations.map((location) => presentToolExecutionLocation(location))).toEqual([
-      '受控本地执行',
-      '中央网关',
-      '远程服务'
-    ]);
-
-    const states: readonly AdminToolStatusState[] = ['configured', 'missing', 'unavailable', 'gated', 'unknown'];
-    expect(states.map((state) => presentToolStatusState(state))).toEqual([
-      '已配置',
-      '未配置',
-      '暂不可用',
-      '待接入',
-      '未知'
-    ]);
-
-    const risks: readonly AdminToolRiskLevel[] = ['read', 'write', 'external'];
-    expect(risks.map((risk) => presentToolRisk(risk).label)).toEqual(['读取', '写入', '外发']);
+    expect(rows.map((row) => row.title)).toEqual(['通用模型', '业务机器人', '文档技能', '业务查询工具', '制度知识库', '读取模型目录']);
+    expect(JSON.stringify(rows)).toContain('供应方');
+    expect(JSON.stringify(rows)).toContain('已限制范围');
+    expect(JSON.stringify(rows)).toContain('检索能力');
+    expect(nonProductionNotice).toContain('测试身份');
   });
 
-  it('keeps Tool presentation free of sensitive operational data', () => {
-    const listRows = prototypeToolRows.map(presentToolListRow);
-    const details = prototypeToolRows.map(presentToolDetail);
-    const serialized = JSON.stringify({ listRows, details });
+  it('presents detail sections without raw technical or sensitive fields', () => {
+    const details = [
+      presentDetail('models', modelDetail),
+      presentDetail('robots', robotDetail),
+      presentDetail('skills', skillDetail),
+      presentDetail('tools', toolDetail),
+      presentDetail('knowledge', knowledgeDetail)
+    ];
+    const serialized = JSON.stringify(details);
 
-    expect(serialized).toContain('待接入');
-    expect(serialized).not.toContain('Credential');
+    expect(serialized).toContain('供应方');
+    expect(serialized).toContain('资源限制');
+    expect(serialized).toContain('常规文件读取');
+    expect(serialized).not.toContain('Provider');
+    expect(serialized).not.toContain('Credential Reference');
     expect(serialized).not.toContain(['Capability', 'Lock'].join(''));
     expect(serialized).not.toContain(['Bear', 'er'].join(''));
     expect(serialized).not.toContain('requestDigest');
     expect(serialized).not.toContain('stack');
     expect(serialized).not.toContain(['End', 'point'].join(''));
   });
+
+  it('maps read-only inventory errors to safe states and keeps pagination rows', () => {
+    expect(presentInventoryError({ code: 'permission_denied', message: 'secret stack' }, 'list')).toMatchObject({ status: 'permissionDenied', keepRows: false });
+    expect(presentInventoryError({ code: 'not_found', message: 'missing' }, 'detail')).toMatchObject({ status: 'notFound', keepRows: false });
+    expect(presentInventoryError({ code: 'stale_cursor', message: 'stale' }, 'pagination')).toMatchObject({ status: 'stale', keepRows: true });
+    expect(presentInventoryError({ code: 'service_unavailable', message: '服务维护' }, 'detail')).toMatchObject({ status: 'unavailable', keepRows: false });
+    expect(JSON.stringify(presentInventoryError({ code: 'unknown', message: 'raw stack /Users/example' }, 'list'))).not.toContain('/Users/example');
+  });
+
+  it('summarizes partial and gated inventory rows without guessing missing fields', () => {
+    const notices = presentInventoryNotices([
+      presentInventoryItem('knowledge', { ...knowledgeDetail, state: 'partial' }),
+      presentInventoryItem('tools', { ...toolDetail, policyState: 'gated' })
+    ]);
+
+    expect(notices).toEqual([
+      '部分记录只有有限字段可展示，页面不会猜测缺失信息。',
+      '部分能力仍待接入或暂不可用，当前仅展示已投影事实。'
+    ]);
+  });
 });
+
+const modelDetail: AdminModelDetail = {
+  modelId: 'model.general',
+  modelRevision: revision,
+  displayName: '通用模型',
+  providerLabel: '企业模型服务',
+  lifecycle: 'published',
+  credentialStatus: 'configured',
+  safeSummary: '用于常规任务处理',
+  contextWindowState: 'known',
+  defaultForNewTasks: true
+};
+
+const robotDetail: AdminRobotDetail = {
+  robotId: 'robot.business',
+  publishedRobotRevision: revision,
+  displayName: '业务机器人',
+  description: '处理日常业务问题',
+  source: 'enterprise_published',
+  lifecycle: 'published',
+  restrictionSummary: {
+    models: 'restricted_nonempty',
+    skills: 'unrestricted',
+    tools: 'restricted_empty',
+    knowledge: 'unrestricted'
+  },
+  reviewState: 'approved',
+  policyState: 'configured'
+};
+
+const skillDetail: AdminSkillDetail = {
+  skillId: 'skill.document',
+  skillRevision: revision,
+  displayName: '文档技能',
+  description: '整理文档摘要',
+  lifecycle: 'published',
+  packageValidationState: 'valid',
+  validationSummary: '校验摘要可用'
+};
+
+const toolDetail: AdminToolDetail = {
+  toolId: 'tool.business.query',
+  toolDefinitionRevision: revision,
+  displayName: '业务查询工具',
+  description: '读取经过授权的业务摘要',
+  source: 'enterprise_package',
+  lifecycle: 'published',
+  readOnly: true,
+  riskSummary: ['routine_file'],
+  policyState: 'configured',
+  connectionState: 'gated',
+  credentialStatus: 'unavailable',
+  healthState: 'unavailable',
+  inputSummary: '结构化查询条件',
+  outputSummary: '安全业务摘要'
+};
+
+const knowledgeDetail: AdminKnowledgeDetail = {
+  knowledgeId: 'knowledge.policy',
+  knowledgeRevision: revision,
+  displayName: '制度知识库',
+  safeSummary: '提供制度摘要投影',
+  state: 'ready',
+  retrievalState: 'gated'
+};

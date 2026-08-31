@@ -14,10 +14,11 @@ const resultPath = join(evidenceDirectory, "result.json");
 const failurePath = join(evidenceDirectory, "failure.json");
 const startedAt = Date.now();
 const expectedLockfileDigest =
-  "sha256:c47641ac78aa6ccd8cfbef139e0823fbe343615b5b3749f965a20a335f815a07";
+  "sha256:5b15ae0197c6f7a1450a49551fbfb50a9e0edc32f0fbe75a9259a360ed874f31";
 const focusedFiles = Object.freeze([
   "services/core/tests/r2d3.2-agent-resource-decision-planner.test.ts",
   "services/core/tests/r2d3.2-built-in-general-agent.test.ts",
+  "services/core/tests/r2d3.2-resource-ports.test.ts",
   "services/core/tests/r2d3.2-boundary.test.ts",
   "services/core/tests/r2d3.1-entitlement-decision-domain.test.ts",
   "services/core/tests/r2d3.1-contract-boundary.test.ts",

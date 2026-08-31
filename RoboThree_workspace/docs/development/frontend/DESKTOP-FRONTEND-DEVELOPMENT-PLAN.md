@@ -970,6 +970,16 @@ v1alpha2 Robot / Tool Catalog Adapter 读取真实 Summary / Detail，Skill tab 
 完成授权、实现、独立 QA 与用户接受，不再污染 DFE-7A。用户已单独接受 DFE-7A 并正式标记为
 `PASS/CLOSED`。Skill Catalog、Tool 管理、Agent/Skill 创建及所有未实现后端能力仍保持 GATED。
 
+### DFE-8.0：Desktop Demo Login And Settings Prototype Alignment（Implemented / Independent QA Pending）
+
+正式方案：[DFE-8.0 Desktop Demo Login And Settings Prototype Alignment Plan](./DFE-8.0-DESKTOP-DEMO-LOGIN-SETTINGS-PROTOTYPE-ALIGNMENT-PLAN.md)。
+
+Revision 1 收缩为先做 DFE-8B 设置四页，再做 DFE-8A 显式演示入口。只有 `local_demo` 模式注册公开 Fixture
+`admin/123456` 路由和 Renderer guard，非演示模式不启用固定账号校验。设置导航收敛为模型管理、个性化、个人
+记忆、问题反馈四项；模型页只消费既有真实只读 Projection，不创建 Personal Model 表单；个性化和记忆只在演示
+模式允许本页预览；反馈生产路径不读取附件且不可提交。产品聚焦复核通过并获用户授权后，DFE-8B 与 DFE-8A
+已按该边界完成实现和开发者验证；企业认证、真实个性化/记忆/反馈及 Personal Model mutation 继续 GATED。
+
 ---
 
 ## 10. 每批开发前模板

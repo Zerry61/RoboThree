@@ -4,6 +4,12 @@ import {
   type ReasoningModePreferenceReceipt,
   type UpdateReasoningModePreferenceCommand,
 } from "@robothree/contracts";
+import {
+  GetReasoningModePreferenceQueryV1Alpha5Schema,
+  ReasoningModePreferenceProjectionV1Alpha5Schema,
+  type GetReasoningModePreferenceQueryV1Alpha5,
+  type ReasoningModePreferenceProjectionV1Alpha5,
+} from "@robothree/contracts/desktop-local/v1alpha5";
 
 import type { Clock } from "../ports/clock.js";
 import type {
@@ -85,6 +91,36 @@ export class ReasoningModePreferenceService {
       replayed: result.replayed,
       receipt: publicReceipt(result.value),
     };
+  }
+
+  public async get(
+    raw: GetReasoningModePreferenceQueryV1Alpha5,
+  ): Promise<ReasoningModePreferenceProjectionV1Alpha5> {
+    const query = GetReasoningModePreferenceQueryV1Alpha5Schema.parse(raw);
+    const owner = await resolveDesktopReasoningModeOwner({
+      authorityProvider: this.dependencies.ownerAuthority,
+      persistence: this.dependencies.persistence,
+      clock: this.dependencies.clock,
+      expectedClientInstanceId: query.clientInstanceId,
+    });
+    if (owner === undefined) {
+      return ReasoningModePreferenceProjectionV1Alpha5Schema.parse({
+        contractVersion: "v1alpha5",
+        requestedMode: "default",
+        preferencePersistence: "unavailable",
+        testIdentityUsed: false,
+        productionIdentityReady: false,
+      });
+    }
+    const preference = await this.dependencies.persistence.loadPreference(owner.identity);
+    return ReasoningModePreferenceProjectionV1Alpha5Schema.parse({
+      contractVersion: "v1alpha5",
+      requestedMode: preference?.requestedMode ?? "default",
+      preferenceRevision: preference?.preferenceRevision ?? 0,
+      preferencePersistence: "available",
+      testIdentityUsed: owner.authority.testIdentityUsed,
+      productionIdentityReady: owner.authority.productionIdentityReady,
+    });
   }
 }
 

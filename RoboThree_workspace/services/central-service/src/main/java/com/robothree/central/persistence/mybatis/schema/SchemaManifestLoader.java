@@ -15,9 +15,9 @@ import org.springframework.core.io.ClassPathResource;
 public final class SchemaManifestLoader {
 
     static final String MANIFEST_RESOURCE =
-            "robothree-schema/postgresql/manifest/postgresql-v0010.json";
+            "robothree-schema/postgresql/manifest/postgresql-v0012.json";
     static final String SIDECAR_RESOURCE = MANIFEST_RESOURCE + ".sha256";
-    private static final String MANIFEST_FILE_NAME = "postgresql-v0010.json";
+    private static final String MANIFEST_FILE_NAME = "postgresql-v0012.json";
     private static final ObjectMapper JSON = new ObjectMapper()
             .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 
@@ -68,9 +68,9 @@ public final class SchemaManifestLoader {
     private static void validateSemantics(SchemaManifest manifest) {
         if (!manifest.database().equals("postgresql")
                 || !manifest.manifestVersion().equals("v1alpha1")
-                || manifest.targetSchemaVersion() != 10
+                || manifest.targetSchemaVersion() != 12
                 || !manifest.supportedEntryPaths()
-                        .equals(java.util.List.of("fresh", "v0009_upgrade"))
+                        .equals(java.util.List.of("fresh", "v0011_upgrade"))
                 || manifest.scripts().size() != 2
                 || !manifest.applyOrder()
                         .equals(manifest.scripts().stream()

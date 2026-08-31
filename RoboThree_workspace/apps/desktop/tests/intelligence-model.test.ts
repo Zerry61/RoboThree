@@ -68,6 +68,27 @@ describe("DFE-7A intelligence catalog model", () => {
     expect(JSON.stringify(detail)).not.toMatch(/modelCallable|lifecycleLabel|模型可调用|已接入/u);
   });
 
+  it("presents known built-in document tools in Chinese without changing unknown catalog entries", () => {
+    const builtIn = buildToolSummaryCard({
+      ...toolSummary(),
+      toolId: "tool.document.pdf.extract_text",
+      displayName: "PDF Extract Text",
+      description: "Extracts read-only text from a PDF in the selected workspace.",
+    });
+    const custom = buildToolSummaryCard({
+      ...toolSummary(),
+      toolId: "tool.enterprise.custom",
+      displayName: "Custom Tool",
+      description: "Enterprise supplied safe summary.",
+    });
+
+    expect(builtIn.name).toBe("PDF 文本提取");
+    expect(builtIn.description).toContain("只读提取文本");
+    expect(JSON.stringify(builtIn)).not.toContain("Extracts read-only text");
+    expect(custom.name).toBe("Custom Tool");
+    expect(custom.description).toBe("Enterprise supplied safe summary.");
+  });
+
   it("filters only loaded safe display fields and reports loaded counts honestly", () => {
     const robot = buildRobotSummaryCard(robotSummary());
     const tool = buildToolSummaryCard(toolSummary());
@@ -104,9 +125,9 @@ describe("DFE-7A intelligence catalog model", () => {
     expect(presentCatalogError({ code: "catalog.tool_not_found" }).description)
       .toContain("工具不存在");
     expect(presentCatalogError({ code: "catalog.client_mismatch" }).description)
-      .toContain("客户端身份");
+      .toContain("当前窗口");
     expect(presentCatalogError({ code: "catalog.runtime_changed" }).description)
-      .toContain("Core 已重启");
+      .toContain("应用服务已重新连接");
     expect(presentCatalogError({ code: "contract.feature_unavailable" }).description)
       .toContain("目录能力暂不可用");
     expect(presentCatalogError({ code: "runtime.request_aborted" }).description)

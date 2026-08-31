@@ -9,8 +9,8 @@ import type {
   ReasoningProfileSubject,
 } from "@robothree/contracts/reasoning-mode/v1alpha1";
 
-import type { PersonalModelOwnerAuthority } from
-  "../ports/personal-model-owner-authority.js";
+import type { TaskLockedPersonalOwnerIdentity } from
+  "../ports/r2d3-acceptance-authority.js";
 import type { PersonalModelPersistence } from
   "../ports/personal-model-persistence.js";
 import type { ReasoningProfileSource } from "../ports/desktop-reasoning-mode.js";
@@ -51,7 +51,7 @@ export class TaskLockedReasoningProfileSubjectResolver {
   public async resolve(input: Readonly<{
     candidateAuthority: ReasoningCandidateAuthority;
     modelLock: TaskCapabilityLock;
-    personalOwnerAuthority?: PersonalModelOwnerAuthority;
+    personalOwnerAuthority?: TaskLockedPersonalOwnerIdentity;
   }>): Promise<ReasoningProfileSubject> {
     const lock = validateTaskCapabilityLockRevisions(input.modelLock);
     const personal = isPersonalModelLock(lock);
@@ -109,7 +109,7 @@ export class ReasoningModeLockPlanner {
     lockedAt: string;
     modelLock: TaskCapabilityLock;
     candidateAuthority: ReasoningCandidateAuthority;
-    personalOwnerAuthority?: PersonalModelOwnerAuthority;
+    personalOwnerAuthority?: TaskLockedPersonalOwnerIdentity;
   }>): Promise<ReasoningModeLockPlanResult> {
     let modelLock: TaskCapabilityLock;
     try {

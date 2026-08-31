@@ -315,6 +315,7 @@ async function startHarness(label: string) {
   let runtime = createDesktopPrivateRuntime({
     databasePath,
     authorizationToken: "c".repeat(48),
+    demoMode: "legacy_test",
   });
   await runtime.start();
   let stopped = false;
@@ -444,6 +445,7 @@ async function startHarness(label: string) {
       runtime = createDesktopPrivateRuntime({
         databasePath,
         authorizationToken: "c".repeat(48),
+        demoMode: "legacy_test",
       });
       await runtime.start();
       stopped = false;

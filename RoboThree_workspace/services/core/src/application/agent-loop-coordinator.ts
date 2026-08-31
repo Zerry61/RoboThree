@@ -63,6 +63,13 @@ export type AgentLoopResult =
     timelineDigest: string;
   }>;
 
+export type AgentLoopRecoverySeed = Readonly<{
+  completedRoundCount: number;
+  activeRound: number;
+  activeAssistantMessageId: string;
+  priorToolResults: readonly Extract<ProviderNeutralMessage, { role: "tool" }>[];
+}>;
+
 export class AgentLoopCoordinator {
   readonly #model: ModelProvider;
   readonly #tools: AgentToolCallExecutor;
@@ -110,6 +117,7 @@ export class AgentLoopCoordinator {
     signal?: AbortSignal;
     now?: () => string;
     createAssistantMessageId?: (round: number) => string;
+    recoverySeed?: AgentLoopRecoverySeed;
     onModelRoundCompleted?: (input: Readonly<{
       round: number;
       assistantMessageId: string | undefined;
@@ -127,9 +135,13 @@ export class AgentLoopCoordinator {
     const model = input.model ?? this.#model;
     const signal = input.signal ?? new AbortController().signal;
     const timeline: AgentLoopTimelineEvent[] = [];
-    const toolResults: Array<Extract<ProviderNeutralMessage, { role: "tool" }>> = [];
+    const recoverySeed = input.recoverySeed === undefined
+      ? undefined
+      : validateRecoverySeed(input.recoverySeed, this.#maxModelRounds, this.#maxToolCalls);
+    const toolResults: Array<Extract<ProviderNeutralMessage, { role: "tool" }>> =
+      recoverySeed === undefined ? [] : [...recoverySeed.priorToolResults];
     let allText = "";
-    let rounds = 0;
+    let rounds = recoverySeed?.completedRoundCount ?? 0;
     const append = <T extends Omit<AgentLoopTimelineEvent, "sequence">>(event: T): void => {
       timeline.push(Object.freeze({
         ...event,
@@ -143,7 +155,10 @@ export class AgentLoopCoordinator {
         return finish({ status: "cancelled", rounds, timeline });
       }
       rounds += 1;
-      const assistantMessageId = input.createAssistantMessageId?.(rounds);
+      const assistantMessageId = recoverySeed !== undefined
+        && rounds === recoverySeed.activeRound
+        ? recoverySeed.activeAssistantMessageId
+        : input.createAssistantMessageId?.(rounds);
       const request = await input.buildRequest(rounds, Object.freeze([...toolResults]));
       append({
         type: "model_requested",
@@ -434,4 +449,39 @@ function isModelStreamResumeUnavailable(cause: unknown): cause is Error & { code
   return cause instanceof Error
     && "code" in cause
     && cause.code === "model_stream_resume_unavailable";
+}
+
+function validateRecoverySeed(
+  seed: AgentLoopRecoverySeed,
+  maxModelRounds: number,
+  maxToolCalls: number,
+): AgentLoopRecoverySeed {
+  if (
+    !Number.isSafeInteger(seed.completedRoundCount)
+    || seed.completedRoundCount < 0
+    || !Number.isSafeInteger(seed.activeRound)
+    || seed.activeRound !== seed.completedRoundCount + 1
+    || seed.activeRound > maxModelRounds
+  ) throw new Error("Agent Loop recovery round identity is invalid");
+  if (seed.activeAssistantMessageId.length === 0) {
+    throw new Error("Agent Loop recovery Assistant Message identity is unavailable");
+  }
+  if (seed.priorToolResults.length > maxToolCalls) {
+    throw new Error("Agent Loop recovery Tool Result count exceeds the configured limit");
+  }
+  const toolCallIds = seed.priorToolResults.map((result) => result.toolCallId);
+  const observationIds = seed.priorToolResults.map((result) => result.observationId);
+  if (
+    new Set(toolCallIds).size !== toolCallIds.length
+    || new Set(observationIds).size !== observationIds.length
+  ) throw new Error("Agent Loop recovery Tool Result identity is ambiguous");
+  return Object.freeze({
+    completedRoundCount: seed.completedRoundCount,
+    activeRound: seed.activeRound,
+    activeAssistantMessageId: seed.activeAssistantMessageId,
+    priorToolResults: Object.freeze(seed.priorToolResults.map((result) => ({
+      ...result,
+      content: result.content.map((part) => ({ ...part })),
+    }))),
+  });
 }

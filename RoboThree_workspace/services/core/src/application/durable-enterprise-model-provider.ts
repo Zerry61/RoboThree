@@ -2,11 +2,9 @@ import { createHash } from "node:crypto";
 
 import {
   JsonValueSchema,
-  ModelRequestSchema,
   ModelStreamEventSchema,
   type AssistantToolCall,
   type JsonObject,
-  type ModelRequest,
   type ModelStreamEvent,
   type RuntimeError,
 } from "@robothree/contracts";
@@ -43,8 +41,18 @@ import type {
   SessionScopeDigestProvider,
 } from "../ports/session-scope-digest-provider.js";
 import { sha256CanonicalJson } from "../persistence/digest.js";
-import { EnterpriseModelRequestConverter } from "./enterprise-model-request-converter.js";
-import { requireLegacyModelRequestForUnmappedProvider } from "./model-reasoning-protocol.js";
+import {
+  EnterpriseModelRequestConverter,
+  projectEnterpriseProviderToolName,
+} from "./enterprise-model-request-converter.js";
+import {
+  deriveEnterpriseReasoningProfileSubject,
+  projectEnterpriseReasoningSidecar,
+  type EnterpriseReasoningMappingInstallation,
+  type EnterpriseReasoningSafeSidecar,
+} from "./enterprise-reasoning-mapping.js";
+import { parseReadableModelRequest } from "./model-request-revisions.js";
+import { ReasoningProtocolUnavailableError } from "./model-reasoning-protocol.js";
 import {
   validateDynamicRequestFacts,
   type DynamicRequestFactsSubject,
@@ -82,6 +90,7 @@ export class DurableEnterpriseModelProvider implements ModelProvider {
   readonly #ids: IdGenerator;
   readonly #converter: EnterpriseModelRequestConverter;
   readonly #streamIdleTimeoutMillis: number;
+  readonly #reasoning: EnterpriseReasoningMappingInstallation | undefined;
 
   public constructor(input: Readonly<{
     adapterDescriptorId: string;
@@ -96,6 +105,7 @@ export class DurableEnterpriseModelProvider implements ModelProvider {
     ids: IdGenerator;
     converter?: EnterpriseModelRequestConverter;
     streamIdleTimeoutMillis?: number;
+    reasoning?: EnterpriseReasoningMappingInstallation;
   }>) {
     this.adapterDescriptorId = input.adapterDescriptorId;
     this.adapterDescriptorRevision = input.adapterDescriptorRevision;
@@ -109,6 +119,7 @@ export class DurableEnterpriseModelProvider implements ModelProvider {
     this.#ids = input.ids;
     this.#converter = input.converter ?? new EnterpriseModelRequestConverter();
     this.#streamIdleTimeoutMillis = input.streamIdleTimeoutMillis ?? 30_000;
+    this.#reasoning = input.reasoning;
     if (
       !Number.isInteger(this.#streamIdleTimeoutMillis)
       || this.#streamIdleTimeoutMillis < 1
@@ -121,9 +132,7 @@ export class DurableEnterpriseModelProvider implements ModelProvider {
     signal: AbortSignal,
     invocation?: ModelProviderInvocation,
   ): AsyncIterable<ModelStreamEvent> {
-    // The enterprise Adapter remains v1-only until DFI-5.3 installs an exact
-    // Profile mapping. Fail before link persistence or Gateway dispatch.
-    const request = requireLegacyModelRequestForUnmappedProvider(candidate);
+    const request = parseReadableModelRequest(candidate);
     const exact = requireInvocation(request, invocation, this);
     if (exact.purpose === "compaction_summary") {
       yield* this.#streamCompactionSummary(request, signal, exact);
@@ -134,19 +143,45 @@ export class DurableEnterpriseModelProvider implements ModelProvider {
       "enterprise-model-client-request",
     );
     const transportRequestId = this.#ids.next();
+    const existingV3Link = request.schemaVersion === "v1alpha2"
+      ? await this.#links.loadRound(exact.taskId, exact.runId, exact.round)
+      : undefined;
+    if (existingV3Link?.messageCommittedAt !== undefined) {
+      yield ModelStreamEventSchema.parse({ type: "started" });
+      yield ModelStreamEventSchema.parse({ type: "completed", finishReason: "durable_replay" });
+      return;
+    }
+    const reasoning = await this.#reasoningSidecar(request, exact);
+    const v3CreatedAt = existingV3Link?.createdAt ?? this.#clock.now();
+    const v3CacheContext = request.schemaVersion === "v1alpha2"
+      ? await this.#cacheContext({
+        invocationKind: "assistant_message",
+        invocationLinkId: clientRequestId,
+        sessionId: exact.sessionId,
+        createdAt: v3CreatedAt,
+        accepted: existingV3Link?.invocationId !== undefined,
+      })
+      : undefined;
     const baseMaterial = this.#converter.convert({
       invocation: exact,
       clientRequestId,
       transportRequestId,
       providerStreamIdleTimeoutMillis: this.#streamIdleTimeoutMillis,
+      ...(reasoning === undefined ? {} : { reasoning }),
+      ...(v3CacheContext === undefined ? {} : { cacheContext: v3CacheContext }),
     });
-    let link = await this.#prepareLink(exact, clientRequestId, baseMaterial.requestDigest);
+    let link = await this.#prepareLink(
+      exact,
+      clientRequestId,
+      baseMaterial.requestDigest,
+      request.schemaVersion === "v1alpha2" ? v3CreatedAt : undefined,
+    );
     if (link.messageCommittedAt !== undefined) {
       yield ModelStreamEventSchema.parse({ type: "started" });
       yield ModelStreamEventSchema.parse({ type: "completed", finishReason: "durable_replay" });
       return;
     }
-    const cacheContext = await this.#cacheContext({
+    const cacheContext = request.schemaVersion === "v1alpha2" ? v3CacheContext : await this.#cacheContext({
       invocationKind: "assistant_message",
       invocationLinkId: link.clientRequestId,
       sessionId: exact.sessionId,
@@ -155,7 +190,7 @@ export class DurableEnterpriseModelProvider implements ModelProvider {
     });
     const material = cacheContext === undefined
       ? baseMaterial
-      : this.#converter.convert({
+      : request.schemaVersion === "v1alpha2" ? baseMaterial : this.#converter.convert({
         invocation: exact,
         clientRequestId,
         transportRequestId,
@@ -281,7 +316,10 @@ export class DurableEnterpriseModelProvider implements ModelProvider {
         }
         terminal = true;
         if (event.eventType === "completed") {
-          yield ModelStreamEventSchema.parse({ type: "completed", finishReason: "stop" });
+          yield ModelStreamEventSchema.parse({
+            type: "completed",
+            finishReason: toolCallIds.size === 0 ? "stop" : "tool_calls",
+          });
         } else {
           yield failedEvent(statusError({
             ...status,
@@ -360,6 +398,7 @@ export class DurableEnterpriseModelProvider implements ModelProvider {
     invocation: Extract<ModelProviderInvocation, { assistantMessageId: string }>,
     clientRequestId: string,
     centralAcceptRequestDigest: string,
+    createdAt?: string,
   ): Promise<ModelInvocationLink> {
     return requireWrite(await this.#links.prepare({
       ...(invocation.dynamicContext === undefined
@@ -370,6 +409,7 @@ export class DurableEnterpriseModelProvider implements ModelProvider {
           contextAssemblyReceiptDigest:
             invocation.dynamicContext.contextAssemblyReceiptDigest,
         }),
+      providerRequestDeadlineAt: invocation.deadlineAt,
       taskId: invocation.taskId,
       runId: invocation.runId,
       stepId: invocation.stepId,
@@ -384,12 +424,12 @@ export class DurableEnterpriseModelProvider implements ModelProvider {
       dataScopeDigest: invocation.dataScopeDigest,
       clientRequestId,
       centralAcceptRequestDigest: prefixed(centralAcceptRequestDigest),
-      createdAt: this.#clock.now(),
+      createdAt: createdAt ?? this.#clock.now(),
     }));
   }
 
   async *#streamCompactionSummary(
-    request: ModelRequest,
+    request: ReadableModelRequest,
     signal: AbortSignal,
     invocation: Extract<ModelProviderInvocation, { purpose: "compaction_summary" }>,
   ): AsyncIterable<ModelStreamEvent> {
@@ -397,11 +437,32 @@ export class DurableEnterpriseModelProvider implements ModelProvider {
     if (links === undefined) throw new Error("Compaction Model invocation persistence is unavailable");
     const clientRequestId = stableUuid(invocation.compactionJobId, "compaction-summary-client-request");
     const transportRequestId = this.#ids.next();
+    const existingV3Link = request.schemaVersion === "v1alpha2"
+      ? await links.loadByCompactionJobId(invocation.compactionJobId)
+      : undefined;
+    if (existingV3Link?.summaryCommittedAt !== undefined) {
+      yield ModelStreamEventSchema.parse({ type: "started" });
+      yield ModelStreamEventSchema.parse({ type: "completed", finishReason: "durable_replay" });
+      return;
+    }
+    const reasoning = await this.#reasoningSidecar(request, invocation);
+    const v3CreatedAt = existingV3Link?.createdAt ?? this.#clock.now();
+    const v3CacheContext = request.schemaVersion === "v1alpha2"
+      ? await this.#cacheContext({
+        invocationKind: "compaction_summary",
+        invocationLinkId: invocation.compactionJobId,
+        sessionId: invocation.sessionId,
+        createdAt: v3CreatedAt,
+        accepted: existingV3Link?.invocationId !== undefined,
+      })
+      : undefined;
     const baseMaterial = this.#converter.convert({
       invocation,
       clientRequestId,
       transportRequestId,
       providerStreamIdleTimeoutMillis: this.#streamIdleTimeoutMillis,
+      ...(reasoning === undefined ? {} : { reasoning }),
+      ...(v3CacheContext === undefined ? {} : { cacheContext: v3CacheContext }),
     });
     let link = requireCompactionWrite(await links.prepare({
       ...(invocation.dynamicContext === undefined
@@ -420,14 +481,14 @@ export class DurableEnterpriseModelProvider implements ModelProvider {
       confirmationId: invocation.admission.confirmationId,
       scopeDigest: invocation.admission.scopeDigest,
       dataScopeDigest: invocation.dataScopeDigest,
-      createdAt: this.#clock.now(),
+      createdAt: request.schemaVersion === "v1alpha2" ? v3CreatedAt : this.#clock.now(),
     }));
     if (link.summaryCommittedAt !== undefined) {
       yield ModelStreamEventSchema.parse({ type: "started" });
       yield ModelStreamEventSchema.parse({ type: "completed", finishReason: "durable_replay" });
       return;
     }
-    const cacheContext = await this.#cacheContext({
+    const cacheContext = request.schemaVersion === "v1alpha2" ? v3CacheContext : await this.#cacheContext({
       invocationKind: "compaction_summary",
       invocationLinkId: link.compactionJobId,
       sessionId: invocation.sessionId,
@@ -436,7 +497,7 @@ export class DurableEnterpriseModelProvider implements ModelProvider {
     });
     const material = cacheContext === undefined
       ? baseMaterial
-      : this.#converter.convert({
+      : request.schemaVersion === "v1alpha2" ? baseMaterial : this.#converter.convert({
         invocation,
         clientRequestId,
         transportRequestId,
@@ -589,6 +650,26 @@ export class DurableEnterpriseModelProvider implements ModelProvider {
     });
   }
 
+  async #reasoningSidecar(
+    request: ReadableModelRequest,
+    invocation: ModelProviderInvocation,
+  ): Promise<EnterpriseReasoningSafeSidecar | undefined> {
+    if (request.schemaVersion === "v1alpha1") return undefined;
+    const installed = this.#reasoning;
+    if (installed === undefined) throw new ReasoningProtocolUnavailableError();
+    const mapping = await installed.mapper.map({
+      invocation,
+      providerFamily: installed.providerFamily,
+      exactSubject: deriveEnterpriseReasoningProfileSubject({
+        modelLock: invocation.modelLock,
+        adapterDescriptorId: this.adapterDescriptorId,
+        adapterDescriptorRevision: this.adapterDescriptorRevision,
+      }),
+      timeoutPolicyIdentity: installed.timeoutPolicyIdentity,
+    });
+    return projectEnterpriseReasoningSidecar({ request, invocation, mapping });
+  }
+
   async #reconcileAssistantTerminalFacts(input: Readonly<{
     operation: ReturnType<EnterpriseModelGatewayClient["begin"]>;
     status: EnterpriseModelStatus;
@@ -727,11 +808,11 @@ export class DurableEnterpriseModelProvider implements ModelProvider {
 }
 
 function requireInvocation(
-  request: ModelRequest,
+  request: ReadableModelRequest,
   invocation: ModelProviderInvocation | undefined,
   provider: DurableEnterpriseModelProvider,
 ): ModelProviderInvocation {
-  const parsed = ModelRequestSchema.parse(request);
+  const parsed = parseReadableModelRequest(request);
   if (
     invocation === undefined
     || invocation.modelRequest.requestDigest !== parsed.requestDigest
@@ -746,7 +827,7 @@ function requireInvocation(
 
 function mapToolCall(
   invocation: ModelProviderInvocation,
-  request: ModelRequest,
+  request: ReadableModelRequest,
   call: Readonly<{
     toolCallId: string;
     name: string;
@@ -754,7 +835,13 @@ function mapToolCall(
     argumentsDigest: string;
   }>,
 ): AssistantToolCall {
-  const tool = request.tools.find((candidate) => candidate.name === call.name);
+  const matches = request.tools.filter((candidate) =>
+    candidate.name === call.name
+    || projectEnterpriseProviderToolName(candidate.capabilityId) === call.name);
+  if (matches.length > 1) {
+    throw new Error("Model returned an ambiguous Tool Call name");
+  }
+  const tool = matches[0];
   if (tool === undefined) throw new Error("Model returned a Tool Call outside the locked request");
   const digest = sha256CanonicalJson(JsonValueSchema.parse(call.arguments));
   if (prefixed(call.argumentsDigest) !== digest) {
@@ -772,7 +859,10 @@ function mapToolCall(
   };
 }
 
-function assertStatusIdentity(status: EnterpriseModelStatus, link: ModelInvocationLink): void {
+function assertStatusIdentity(
+  status: EnterpriseModelStatus,
+  link: ModelInvocationLink,
+): void {
   if (
     status.invocationId !== link.invocationId
     || status.clientRequestId !== link.clientRequestId

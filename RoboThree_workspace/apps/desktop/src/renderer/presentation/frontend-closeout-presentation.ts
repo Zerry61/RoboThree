@@ -1,4 +1,7 @@
-import type { PrimaryNavigationKey } from "../app/navigation.js";
+import {
+  primaryNavigationItems,
+  type PrimaryNavigationKey,
+} from "../app/navigation.js";
 
 export type FrontendCloseoutState =
   | "loading"
@@ -162,7 +165,7 @@ export const legacyWorkbenchCloseoutDecision: LegacyWorkbenchCloseoutDecision = 
 });
 
 export function primaryCloseoutAreaKeys(): readonly PrimaryNavigationKey[] {
-  return frontendCloseoutAreas.map((area) => area.key);
+  return primaryNavigationItems.map((item) => item.key);
 }
 
 export function missingStatesForArea(area: FrontendCloseoutArea): readonly FrontendCloseoutState[] {

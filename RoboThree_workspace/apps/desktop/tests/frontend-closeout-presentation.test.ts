@@ -15,6 +15,13 @@ describe("DFE-6B frontend foundation closeout model", () => {
   it("covers every primary navigation area exactly once", () => {
     expect(primaryCloseoutAreaKeys()).toEqual(primaryNavigationItems.map((item) => item.key));
     expect(new Set(primaryCloseoutAreaKeys()).size).toBe(primaryNavigationItems.length);
+    expect(frontendCloseoutAreas.map((area) => area.key)).toEqual([
+      "workbench",
+      "tasks",
+      "intelligence",
+      "knowledge",
+      "settings",
+    ]);
     expect(frontendCloseoutAreas.every((area) => area.closesFoundation)).toBe(true);
   });
 

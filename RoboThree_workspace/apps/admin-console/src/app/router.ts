@@ -6,11 +6,9 @@ import { provisionalPermissionAlias } from './route-meta';
 import LoginPage from '../pages/system/LoginPage.vue';
 import ModelsPage from '../pages/models/ModelsPage.vue';
 import ModelDetailPage from '../pages/models/ModelDetailPage.vue';
+import ModelFormPage from '../pages/models/ModelFormPage.vue';
 import ToolsPage from '../pages/tools/ToolsPage.vue';
 import ToolDetailPage from '../pages/tools/ToolDetailPage.vue';
-import ToolApiCreatePage from '../pages/tools/ToolApiCreatePage.vue';
-import ToolMcpCreatePage from '../pages/tools/ToolMcpCreatePage.vue';
-import ToolPolicyPage from '../pages/tools/ToolPolicyPage.vue';
 import RobotsPage from '../pages/robots/RobotsPage.vue';
 import RobotDetailPage from '../pages/robots/RobotDetailPage.vue';
 import SkillsPage from '../pages/skills/SkillsPage.vue';
@@ -70,6 +68,36 @@ export const routes: readonly AdminRouteRecord[] = [
     }
   },
   {
+    path: '/models/new',
+    name: 'admin.models.new',
+    component: ModelFormPage,
+    meta: {
+      module: 'models',
+      navKey: 'models',
+      pageTitle: '添加企业模型',
+      implementationGate: 'shellImplemented',
+      routePermissionAlias: provisionalPermissionAlias('admin.models.route'),
+      operationPermissionAlias: provisionalPermissionAlias('admin.models.operate'),
+      capabilityKey: 'admin.models.mutation',
+      sensitiveSurface: true
+    }
+  },
+  {
+    path: '/models/:modelId/edit',
+    name: 'admin.models.edit',
+    component: ModelFormPage,
+    meta: {
+      module: 'models',
+      navKey: 'models',
+      pageTitle: '编辑企业模型',
+      implementationGate: 'shellImplemented',
+      routePermissionAlias: provisionalPermissionAlias('admin.models.route'),
+      operationPermissionAlias: provisionalPermissionAlias('admin.models.operate'),
+      capabilityKey: 'admin.models.mutation',
+      sensitiveSurface: true
+    }
+  },
+  {
     path: '/models/:modelId',
     name: 'admin.models.detail',
     component: ModelDetailPage,
@@ -99,51 +127,6 @@ export const routes: readonly AdminRouteRecord[] = [
     }
   },
   {
-    path: '/tools/new/api',
-    name: 'admin.tools.newApi',
-    component: ToolApiCreatePage,
-    meta: {
-      module: 'tools',
-      navKey: 'tools',
-      pageTitle: '连接 API',
-      implementationGate: 'prototype',
-      routePermissionAlias: provisionalPermissionAlias('admin.tools.route'),
-      operationPermissionAlias: provisionalPermissionAlias('admin.tools.operate'),
-      capabilityKey: 'admin.tools.newApi',
-      sensitiveSurface: true
-    }
-  },
-  {
-    path: '/tools/new/mcp',
-    name: 'admin.tools.newMcp',
-    component: ToolMcpCreatePage,
-    meta: {
-      module: 'tools',
-      navKey: 'tools',
-      pageTitle: '连接 MCP',
-      implementationGate: 'prototype',
-      routePermissionAlias: provisionalPermissionAlias('admin.tools.route'),
-      operationPermissionAlias: provisionalPermissionAlias('admin.tools.operate'),
-      capabilityKey: 'admin.tools.newMcp',
-      sensitiveSurface: true
-    }
-  },
-  {
-    path: '/tools/:toolId/policy',
-    name: 'admin.tools.policy',
-    component: ToolPolicyPage,
-    meta: {
-      module: 'tools',
-      navKey: 'tools',
-      pageTitle: 'Tool 策略',
-      implementationGate: 'prototype',
-      routePermissionAlias: provisionalPermissionAlias('admin.tools.route'),
-      operationPermissionAlias: provisionalPermissionAlias('admin.tools.operate'),
-      capabilityKey: 'admin.tools.policy',
-      sensitiveSurface: true
-    }
-  },
-  {
     path: '/tools/:toolId',
     name: 'admin.tools.detail',
     component: ToolDetailPage,
@@ -168,6 +151,7 @@ export const routes: readonly AdminRouteRecord[] = [
       implementationGate: 'shellImplemented',
       menuPermissionAlias: provisionalPermissionAlias('admin.robots.menu'),
       routePermissionAlias: provisionalPermissionAlias('admin.robots.route'),
+      operationPermissionAlias: provisionalPermissionAlias('admin.robots.operate'),
       capabilityKey: 'admin.robots'
     }
   },
@@ -181,6 +165,7 @@ export const routes: readonly AdminRouteRecord[] = [
       pageTitle: '机器人详情',
       implementationGate: 'shellImplemented',
       routePermissionAlias: provisionalPermissionAlias('admin.robots.route'),
+      operationPermissionAlias: provisionalPermissionAlias('admin.robots.operate'),
       capabilityKey: 'admin.robots.detail'
     }
   },

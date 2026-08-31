@@ -24,27 +24,28 @@ defineProps<{
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 20px;
+  gap: 16px;
 }
 
 .r3-page-header__eyebrow {
-  margin: 0 0 4px;
-  color: var(--r3-color-primary);
+  margin: 0 0 3px;
+  color: var(--r3-color-text-tertiary);
   font-size: var(--r3-font-size-xs);
-  font-weight: 700;
-  text-transform: uppercase;
+  font-weight: 650;
 }
 
 .r3-page-header__title {
   margin: 0;
-  font-size: var(--r3-font-size-2xl);
-  line-height: 1.2;
+  font-size: 21px;
+  font-weight: 680;
+  line-height: 1.25;
 }
 
 .r3-page-header__description {
   max-width: 720px;
-  margin: 8px 0 0;
+  margin: 5px 0 0;
   color: var(--r3-color-text-secondary);
+  font-size: var(--r3-font-size-sm);
 }
 
 .r3-page-header__actions {

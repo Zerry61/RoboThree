@@ -22,10 +22,11 @@ defineProps<{
   border: 1px solid var(--r3-color-border);
   border-radius: var(--r3-radius-md);
   background: var(--r3-color-surface);
+  box-shadow: var(--r3-shadow-sm);
 }
 
 .r3-card__header {
-  padding: 14px 16px;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--r3-color-border);
 }
 
@@ -36,6 +37,6 @@ defineProps<{
 }
 
 .r3-card__body {
-  padding: 16px;
+  padding: 14px;
 }
 </style>

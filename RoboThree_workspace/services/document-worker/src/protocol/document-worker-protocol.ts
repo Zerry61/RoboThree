@@ -32,6 +32,33 @@ export type DocumentWorkerInvokeMessage = Readonly<{
   requestDigest?: string;
 }>;
 
+/** Core-private, read-only postcondition inspection for WFW recovery. */
+export type DocumentWorkerTextWriteInspectMessage = Readonly<{
+  type: "inspect_text_write_postcondition";
+  protocolVersion: typeof DOCUMENT_WORKER_PRIVATE_PROTOCOL_VERSION;
+  requestId: string;
+  actionId: string;
+  effectAttemptId: string;
+  capabilityId: "tool.workspace.file.write_text";
+  workspaceRoot: string;
+  relativePath: string;
+  options: Record<string, unknown>;
+  limits: DocumentWorkerLimits;
+  idempotencyKey: string;
+  requestDigest: string;
+}>;
+
+export type DocumentWorkerTextWritePostconditionMessage = Readonly<{
+  type: "text_write_postcondition";
+  protocolVersion: typeof DOCUMENT_WORKER_PRIVATE_PROTOCOL_VERSION;
+  requestId: string;
+  actionId: string;
+  effectAttemptId: string;
+  decision: "not_found" | "safe_retry" | "recovered_success" | "unknown";
+  output?: unknown;
+  metadata?: DocumentWorkerResultMetadata;
+}>;
+
 /** Sent by the worker when processing succeeds (possibly truncated). */
 export type DocumentWorkerResultMessage = Readonly<{
   type: "result";
@@ -57,6 +84,8 @@ export type DocumentWorkerErrorMessage = Readonly<{
 export type DocumentWorkerProtocolMessage =
   | DocumentWorkerReadyMessage
   | DocumentWorkerInvokeMessage
+  | DocumentWorkerTextWriteInspectMessage
+  | DocumentWorkerTextWritePostconditionMessage
   | DocumentWorkerResultMessage
   | DocumentWorkerErrorMessage;
 
@@ -286,10 +315,13 @@ export function parseDocumentWorkerInvoke(
   );
   const capabilityId = requireNonEmptyString(value.capabilityId, "capabilityId");
 
-  if (!capabilityId.startsWith("tool.document.")) {
+  const privateWorkspaceTextWrite =
+    protocolVersion === DOCUMENT_WORKER_PRIVATE_PROTOCOL_VERSION
+    && capabilityId === "tool.workspace.file.write_text";
+  if (!capabilityId.startsWith("tool.document.") && !privateWorkspaceTextWrite) {
     throw new DocumentWorkerProtocolError(
       "document_worker.invalid_message",
-      `capabilityId must start with tool.document., got ${capabilityId}`,
+      `capabilityId must use tool.document.* or an exact private workspace capability, got ${capabilityId}`,
     );
   }
 
@@ -346,6 +378,64 @@ export function parseDocumentWorkerInvoke(
     ...(value.requestDigest === undefined
       ? {}
       : { requestDigest: requireSha256Hex(value.requestDigest, "requestDigest") }),
+  };
+}
+
+export function parseDocumentWorkerTextWriteInspect(
+  frame: string,
+): DocumentWorkerTextWriteInspectMessage {
+  const value = parseObject(frame);
+  requireExactKeys(value, [
+    "actionId",
+    "capabilityId",
+    "effectAttemptId",
+    "idempotencyKey",
+    "limits",
+    "options",
+    "protocolVersion",
+    "relativePath",
+    "requestDigest",
+    "requestId",
+    "type",
+    "workspaceRoot",
+  ]);
+  if (value.type !== "inspect_text_write_postcondition") {
+    throw new DocumentWorkerProtocolError(
+      "document_worker.invalid_message",
+      "Expected text write postcondition inspection message",
+    );
+  }
+  if (value.protocolVersion !== DOCUMENT_WORKER_PRIVATE_PROTOCOL_VERSION) {
+    throw new DocumentWorkerProtocolError(
+      "document_worker.protocol_mismatch",
+      "Text write postcondition inspection requires the private protocol",
+    );
+  }
+  if (value.capabilityId !== "tool.workspace.file.write_text") {
+    throw new DocumentWorkerProtocolError(
+      "document_worker.invalid_message",
+      "Text write postcondition inspection requires the exact WFW capability",
+    );
+  }
+  if (typeof value.options !== "object" || value.options === null || Array.isArray(value.options)) {
+    throw new DocumentWorkerProtocolError(
+      "document_worker.invalid_message",
+      "options must be an object",
+    );
+  }
+  return {
+    type: "inspect_text_write_postcondition",
+    protocolVersion: DOCUMENT_WORKER_PRIVATE_PROTOCOL_VERSION,
+    requestId: requireNonEmptyString(value.requestId, "requestId"),
+    actionId: requireNonEmptyString(value.actionId, "actionId"),
+    effectAttemptId: requireNonEmptyString(value.effectAttemptId, "effectAttemptId"),
+    capabilityId: "tool.workspace.file.write_text",
+    workspaceRoot: requireNonEmptyString(value.workspaceRoot, "workspaceRoot", 4096),
+    relativePath: requireNonEmptyString(value.relativePath, "relativePath", 4096),
+    options: value.options as Record<string, unknown>,
+    limits: parseLimits(value.limits),
+    idempotencyKey: requireNonEmptyString(value.idempotencyKey, "idempotencyKey", 240),
+    requestDigest: requireSha256Hex(value.requestDigest, "requestDigest"),
   };
 }
 
@@ -430,6 +520,64 @@ export function parseDocumentWorkerResult(
     status: value.status as "succeeded" | "truncated",
     output: value.output,
     metadata,
+  };
+}
+
+export function parseDocumentWorkerTextWritePostcondition(
+  frame: string,
+): DocumentWorkerTextWritePostconditionMessage {
+  const value = parseObject(frame);
+  requireExactKeys(value, [
+    "actionId",
+    "decision",
+    "effectAttemptId",
+    "metadata",
+    "output",
+    "protocolVersion",
+    "requestId",
+    "type",
+  ], ["metadata", "output"]);
+  if (value.type !== "text_write_postcondition") {
+    throw new DocumentWorkerProtocolError(
+      "document_worker.invalid_message",
+      "Expected text write postcondition result",
+    );
+  }
+  if (value.protocolVersion !== DOCUMENT_WORKER_PRIVATE_PROTOCOL_VERSION) {
+    throw new DocumentWorkerProtocolError(
+      "document_worker.protocol_mismatch",
+      "Text write postcondition result requires the private protocol",
+    );
+  }
+  const decisions = new Set(["not_found", "safe_retry", "recovered_success", "unknown"]);
+  if (typeof value.decision !== "string" || !decisions.has(value.decision)) {
+    throw new DocumentWorkerProtocolError(
+      "document_worker.invalid_message",
+      "Invalid text write postcondition decision",
+    );
+  }
+  const metadata = value.metadata === undefined ? undefined : parseResultMetadata(value.metadata);
+  if (value.decision === "recovered_success" && (value.output === undefined || metadata === undefined)) {
+    throw new DocumentWorkerProtocolError(
+      "document_worker.invalid_message",
+      "Recovered text write result requires output and metadata",
+    );
+  }
+  if (value.decision !== "recovered_success" && (value.output !== undefined || metadata !== undefined)) {
+    throw new DocumentWorkerProtocolError(
+      "document_worker.invalid_message",
+      "Non-success postcondition must not contain output or metadata",
+    );
+  }
+  return {
+    type: "text_write_postcondition",
+    protocolVersion: DOCUMENT_WORKER_PRIVATE_PROTOCOL_VERSION,
+    requestId: requireNonEmptyString(value.requestId, "requestId"),
+    actionId: requireNonEmptyString(value.actionId, "actionId"),
+    effectAttemptId: requireNonEmptyString(value.effectAttemptId, "effectAttemptId"),
+    decision: value.decision as DocumentWorkerTextWritePostconditionMessage["decision"],
+    ...(value.output === undefined ? {} : { output: value.output }),
+    ...(metadata === undefined ? {} : { metadata }),
   };
 }
 
@@ -594,6 +742,24 @@ export function createResultMessage(
     status: metadata.truncated ? "truncated" : "succeeded",
     output,
     metadata,
+  };
+}
+
+export function createDocumentWorkerTextWritePostconditionMessage(input: Readonly<{
+  request: DocumentWorkerTextWriteInspectMessage;
+  decision: DocumentWorkerTextWritePostconditionMessage["decision"];
+  output?: unknown;
+  metadata?: DocumentWorkerResultMetadata;
+}>): DocumentWorkerTextWritePostconditionMessage {
+  return {
+    type: "text_write_postcondition",
+    protocolVersion: DOCUMENT_WORKER_PRIVATE_PROTOCOL_VERSION,
+    requestId: input.request.requestId,
+    actionId: input.request.actionId,
+    effectAttemptId: input.request.effectAttemptId,
+    decision: input.decision,
+    ...(input.output === undefined ? {} : { output: input.output }),
+    ...(input.metadata === undefined ? {} : { metadata: input.metadata }),
   };
 }
 

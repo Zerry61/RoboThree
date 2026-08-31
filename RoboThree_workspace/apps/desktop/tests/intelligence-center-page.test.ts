@@ -5,12 +5,18 @@ import { createMemoryHistory, createRouter } from "vue-router";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  agentLifecycleAdapterKey,
+  AgentLifecycleAdapterError,
+  type AgentLifecycleAdapter,
+} from "../src/renderer/adapters/agent-lifecycle-adapter.js";
+import {
   DesktopIntelligenceAdapterError,
   intelligenceAdapterKey,
   type IntelligenceCatalogAdapter,
 } from "../src/renderer/adapters/intelligence-adapter.js";
 import IntelligenceCenterPage from "../src/renderer/pages/intelligence/IntelligenceCenterPage.vue";
 import IntelligenceCreationPage from "../src/renderer/pages/intelligence/IntelligenceCreationPage.vue";
+import IntelligenceDetailPage from "../src/renderer/pages/intelligence/IntelligenceDetailPage.vue";
 
 const digest = "a".repeat(64);
 
@@ -24,12 +30,16 @@ describe("DFE-7A intelligence catalog page", () => {
     expect(adapter.listTools).toHaveBeenCalledWith({ limit: 50 });
     expect(wrapper.text()).toContain("通用机器人");
     expect(wrapper.text()).toContain("已加载机器人");
-    expect(wrapper.text()).not.toMatch(/我创建的|模型可调用工具|模型可调用|已接入|文档审阅/u);
+    expect(wrapper.find("[data-intelligence-detail]").exists()).toBe(false);
+    expect(wrapper.text()).toContain("我创建的");
+    expect(wrapper.findAll("button").find((button) => button.text() === "我创建的")?.attributes("disabled"))
+      .toBeUndefined();
+    expect(wrapper.text()).not.toMatch(/模型可调用工具|模型可调用|已接入|文档审阅|v1alpha2 Catalog|Capability ID/u);
 
     await wrapper.findAll("button").find((button) => button.text() === "技能")?.trigger("click");
     await flushPromises();
     expect(wrapper.text()).toContain("技能目录待接入");
-    expect(wrapper.text()).toContain("不展示生产 Mock Skill 条目");
+    expect(wrapper.text()).toContain("当前版本尚未提供技能数据服务");
     expect(wrapper.text()).not.toContain("我的报告助手");
   });
 
@@ -38,7 +48,7 @@ describe("DFE-7A intelligence catalog page", () => {
     const wrapper = await mountPage("/intelligence/tools/tool.document.xlsx.write", adapter);
 
     expect(adapter.getTool).toHaveBeenCalledWith({ toolId: "tool.document.xlsx.write" });
-    expect(wrapper.text()).toContain("工具详情来自真实 Catalog detail");
+    expect(wrapper.text()).toContain("工具用途、读写边界和风险摘要");
     expect(wrapper.text()).toContain("结构化输入");
     expect(wrapper.text()).toContain("结构化输出");
     expect(wrapper.text()).toContain("可能修改或删除文件");
@@ -57,6 +67,18 @@ describe("DFE-7A intelligence catalog page", () => {
     expect(wrapper.text()).toContain("默认模型");
     expect(wrapper.text()).toContain("GPT Test");
     expect(wrapper.find("[data-intelligence-detail='robots']").exists()).toBe(true);
+    expect(wrapper.text()).toContain("返回智能中心");
+  });
+
+  it("keeps gated skill detail on its own child page without inventing fixture data", async () => {
+    const adapter = createAdapter();
+    const wrapper = await mountPage("/intelligence/skills/skill.example", adapter);
+
+    expect(wrapper.text()).toContain("返回智能中心");
+    expect(wrapper.text()).toContain("技能详情待接入");
+    expect(wrapper.text()).toContain("暂不展示示例数据");
+    expect(adapter.listRobots).not.toHaveBeenCalled();
+    expect(adapter.listTools).not.toHaveBeenCalled();
   });
 
   it("clears catalog state on runtime changed and waits for explicit refresh", async () => {
@@ -77,23 +99,95 @@ describe("DFE-7A intelligence catalog page", () => {
     expect(adapter.negotiateCatalog).toHaveBeenCalledTimes(1);
     expect(adapter.listRobots).toHaveBeenCalledTimes(1);
   });
+
+  it("lists personal drafts separately with safe lifecycle labels", async () => {
+    const lifecycle = createLifecycleAdapter();
+    const wrapper = await mountPage("/intelligence", createAdapter(), lifecycle);
+
+    await wrapper.findAll("button").find((item) => item.text() === "我创建的")?.trigger("click");
+    await flushPromises();
+
+    expect(lifecycle.listDrafts).toHaveBeenCalledTimes(1);
+    expect(wrapper.text()).toContain("我的发布机器人");
+    expect(wrapper.text()).toContain("已发布到企业机器人目录");
+    expect(wrapper.text()).toContain("测试通过");
+    expect(wrapper.text()).not.toMatch(/pending_review|approved|sha256:/u);
+  });
+
+  it("shows a real reconnect action instead of draft fixtures when lifecycle is unavailable", async () => {
+    const lifecycle = createLifecycleAdapter();
+    lifecycle.listDrafts
+      .mockRejectedValueOnce(new AgentLifecycleAdapterError(
+        "agentlifecycle.service_unavailable",
+        "unavailable",
+      ))
+      .mockResolvedValueOnce({
+        contractVersion: "agent-lifecycle.v1alpha1",
+        queryRevision: `sha256:${digest}`,
+        items: [],
+      });
+    const wrapper = await mountPage("/intelligence", createAdapter(), lifecycle);
+
+    await wrapper.findAll("button").find((item) => item.text() === "我创建的")?.trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).toContain("机器人生命周期服务不可用");
+    expect(wrapper.text()).toContain("不会使用本地假数据代替");
+
+    await wrapper.findAll("button").find((item) => item.text() === "重新连接")?.trigger("click");
+    await flushPromises();
+    expect(lifecycle.listDrafts).toHaveBeenCalledTimes(2);
+    expect(wrapper.text()).toContain("还没有个人机器人");
+  });
 });
 
-async function mountPage(path: string, adapter: IntelligenceCatalogAdapter) {
+async function mountPage(
+  path: string,
+  adapter: IntelligenceCatalogAdapter,
+  lifecycle = createLifecycleAdapter(),
+) {
   const router = createTestRouter();
   await router.push(path);
   await router.isReady();
-  const wrapper = mount(IntelligenceCenterPage, {
+  const page = path === "/intelligence" ? IntelligenceCenterPage : IntelligenceDetailPage;
+  const wrapper = mount(page, {
     global: {
       plugins: [router],
       provide: {
         [intelligenceAdapterKey as symbol]: adapter,
+        [agentLifecycleAdapterKey as symbol]: lifecycle,
       },
     },
   });
   await flushPromises();
   await flushPromises();
   return wrapper;
+}
+
+function createLifecycleAdapter() {
+  return {
+    listDrafts: vi.fn(async () => ({
+      contractVersion: "agent-lifecycle.v1alpha1",
+      queryRevision: `sha256:${digest}`,
+      items: [{
+        robotId: "agent.personal-published",
+        draftRevision: `sha256:${digest}`,
+        instructionRevision: `sha256:${digest}`,
+        name: "我的发布机器人",
+        description: "只在个人草稿分区展示。",
+        avatar: { source: "system" as const, assetId: "robot-avatar.default" as const },
+        tags: ["文档"],
+        testState: "passed" as const,
+        submissionState: "approved" as const,
+        updatedAt: "2026-08-31T00:00:00.000Z",
+      }],
+    })),
+    getDraft: vi.fn(),
+    createDraft: vi.fn(),
+    updateDraft: vi.fn(),
+    startTest: vi.fn(),
+    submitDraft: vi.fn(),
+    withdrawSubmission: vi.fn(),
+  } as unknown as AgentLifecycleAdapter & { listDrafts: ReturnType<typeof vi.fn> };
 }
 
 function createTestRouter() {
@@ -103,9 +197,9 @@ function createTestRouter() {
       { path: "/intelligence", name: "intelligence", component: IntelligenceCenterPage },
       { path: "/intelligence/create-robot", name: "intelligenceCreateRobot", component: IntelligenceCreationPage },
       { path: "/intelligence/create-skill", name: "intelligenceCreateSkill", component: IntelligenceCreationPage },
-      { path: "/intelligence/robots/:robotId", name: "intelligenceRobotDetail", component: IntelligenceCenterPage },
-      { path: "/intelligence/skills/:skillId", name: "intelligenceSkillDetail", component: IntelligenceCenterPage },
-      { path: "/intelligence/tools/:toolId", name: "intelligenceToolDetail", component: IntelligenceCenterPage },
+      { path: "/intelligence/robots/:robotId", name: "intelligenceRobotDetail", component: IntelligenceDetailPage },
+      { path: "/intelligence/skills/:skillId", name: "intelligenceSkillDetail", component: IntelligenceDetailPage },
+      { path: "/intelligence/tools/:toolId", name: "intelligenceToolDetail", component: IntelligenceDetailPage },
     ],
   });
 }

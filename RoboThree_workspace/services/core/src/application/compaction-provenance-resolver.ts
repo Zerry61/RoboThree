@@ -4,8 +4,8 @@ import type {
   ModelExternalDataCategory,
   TaskCapabilityLock,
 } from "@robothree/contracts";
-import type { ReadableTaskRuntimeSelection } from
-  "@robothree/contracts/runtime-selection/v1alpha2";
+import type { ReadableTaskRuntimeSelectionV1Alpha4 } from
+  "@robothree/contracts/runtime-selection/v1alpha4";
 
 import type { ConversationPersistence } from "../ports/conversation-persistence.js";
 import { digestConversationRange } from "../persistence/conversation-validation.js";
@@ -36,7 +36,7 @@ export class CompactionProvenanceResolver {
     sourceDigest: string;
     baseActiveCompactionId?: string;
     baseSummaryDigest?: string;
-    runtimeSelection: ReadableTaskRuntimeSelection;
+    runtimeSelection: ReadableTaskRuntimeSelectionV1Alpha4;
     modelLock: TaskCapabilityLock;
     externalTarget: string;
     summarizerPromptRevision: string;
@@ -100,7 +100,7 @@ export class CompactionProvenanceResolver {
 }
 
 function exactAssistantTuple(input: Readonly<{
-  runtimeSelection: ReadableTaskRuntimeSelection;
+  runtimeSelection: ReadableTaskRuntimeSelectionV1Alpha4;
   modelLock: TaskCapabilityLock;
   externalTarget: string;
 }>): Omit<AssistantMessageProvenance, "messageId"> {

@@ -1,6 +1,7 @@
-import type { TaskResourceEntitlementSnapshotV1 } from "../application/task-resource-entitlement.js";
+import type { ReadableTaskResourceEntitlementSnapshot } from "../application/task-resource-entitlement.js";
 
 export type TaskResourceEntitlementLoadInput = Readonly<{
+  acceptanceLeaseId: string;
   verifiedRuntimeSubjectBindingDigest: string;
   acceptedClientBindingDigest: string;
   requestedAgentRef: Readonly<{
@@ -13,5 +14,5 @@ export type TaskResourceEntitlementLoadInput = Readonly<{
 export interface TaskResourceEntitlementSource {
   loadExact(
     input: TaskResourceEntitlementLoadInput,
-  ): Promise<TaskResourceEntitlementSnapshotV1>;
+  ): Promise<ReadableTaskResourceEntitlementSnapshot>;
 }

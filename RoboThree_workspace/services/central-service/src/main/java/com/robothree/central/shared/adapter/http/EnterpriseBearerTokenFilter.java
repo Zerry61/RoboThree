@@ -47,6 +47,10 @@ public final class EnterpriseBearerTokenFilter extends OncePerRequestFilter {
         boolean configuration = "GET".equals(method)
                 && (path.equals("/v1alpha1/configuration")
                         || path.startsWith("/v1alpha1/configuration/"));
+        boolean internalTrialAdminModel = "GET".equals(method)
+                && path.equals("/internal-trial/v1/admin-models/default");
+        boolean internalTrialAgentLifecycle = path.startsWith(
+                "/internal-trial/v1/agent-lifecycle/");
         boolean modelInvocation = path.matches("^/v1alpha[12]/model-invocations$")
                 ? "POST".equals(method)
                 : path.matches("^/v1alpha[12]/model-invocations/[^/]+$")
@@ -55,7 +59,8 @@ public final class EnterpriseBearerTokenFilter extends OncePerRequestFilter {
                                 ? "POST".equals(method)
                                 : path.matches("^/v1alpha[12]/model-invocations/[^/]+/events$")
                                         && "GET".equals(method);
-        return !configuration && !modelInvocation;
+        return !configuration && !modelInvocation && !internalTrialAdminModel
+                && !internalTrialAgentLifecycle;
     }
 
     @Override
@@ -75,17 +80,36 @@ public final class EnterpriseBearerTokenFilter extends OncePerRequestFilter {
                 request.removeAttribute(ACCESS_TOKEN_ATTRIBUTE);
             }
         } catch (EnterpriseAuthenticationException ignored) {
-            writeInvalidToken(response);
+            writeInvalidToken(request, response);
         }
     }
 
-    private void writeInvalidToken(HttpServletResponse response) throws IOException {
+    private void writeInvalidToken(
+            HttpServletRequest request,
+            HttpServletResponse response) throws IOException {
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         traceContext.recordHttpError("access_token_invalid", false);
         traceContext.writeResponseHeader(response);
+        if (request.getRequestURI().startsWith("/internal-trial/v1/agent-lifecycle/")) {
+            objectMapper.writeValue(response.getOutputStream(), java.util.Map.of(
+                    "contractVersion", "agent-lifecycle.v1alpha1",
+                    "errorCode", "agentlifecycle.unauthorized",
+                    "safeSummary", "当前身份不能执行此操作。",
+                    "correlationId", safeCorrelationId(request)));
+            return;
+        }
         objectMapper.writeValue(response.getOutputStream(),
                 GatewayErrorResponseFactory.invalidAccessToken());
+    }
+
+    private static java.util.UUID safeCorrelationId(HttpServletRequest request) {
+        try {
+            return java.util.UUID.fromString(
+                    request.getHeader("X-RoboThree-Correlation-Id"));
+        } catch (RuntimeException ignored) {
+            return java.util.UUID.randomUUID();
+        }
     }
 }

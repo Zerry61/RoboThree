@@ -93,6 +93,6 @@ export interface EnterpriseModelGatewayOperation {
 export interface EnterpriseModelGatewayClient {
   begin(
     scope: EnterpriseIdentityScope,
-    contractVersion?: "v1alpha1" | "v1alpha2",
+    contractVersion?: "v1alpha1" | "v1alpha2" | "v1alpha3",
   ): EnterpriseModelGatewayOperation;
 }

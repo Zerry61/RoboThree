@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.robothree.central.modelgateway.application.ModelInvocationRuntime.AcceptCommand;
+import com.robothree.central.modelgateway.application.EnterpriseReasoningSafeIdentity;
 import com.robothree.central.shared.json.CanonicalJson;
 import java.time.Instant;
 import java.util.HashSet;
@@ -35,6 +36,83 @@ public final class ModelInvocationHttpMapper {
         return parseAccept(document, "v1alpha2", true);
     }
 
+    public static ParsedAcceptV1Alpha3 parseAcceptV1Alpha3(ObjectNode document) {
+        boolean cachePresent = document.has("cacheContext")
+                || document.has("cacheContextDigest");
+        if (document.has("cacheContext") != document.has("cacheContextDigest")) {
+            throw invalid("cache context and digest must be present together");
+        }
+        Set<String> fields = new HashSet<>(Set.of(
+                "contractVersion", "clientRequestId", "requestId", "requestDigest",
+                "audience", "requiredPermission", "modelRequest", "admission",
+                "timeoutPolicy"));
+        if (cachePresent) {
+            fields.add("cacheContext");
+            fields.add("cacheContextDigest");
+        }
+        exact(document, fields);
+        requireText(document, "contractVersion", "v1alpha3");
+        requireText(document, "audience", "enterprise-model-gateway");
+        requireText(document, "requiredPermission", "model.use");
+        ObjectNode modelRequest = object(document, "modelRequest");
+        EnterpriseReasoningSafeIdentity reasoning = validateReasoning(
+                object(modelRequest, "reasoning"));
+        validateModelRequest(modelRequest, true);
+        ObjectNode admission = object(document, "admission");
+        validateUserConfirmedAdmission(admission);
+        ObjectNode timeout = object(document, "timeoutPolicy");
+        exact(timeout, Set.of(
+                "providerRequestDeadlineAt", "providerStreamIdleTimeoutMillis"));
+        Instant deadline = Instant.parse(text(timeout, "providerRequestDeadlineAt"));
+        long idleTimeout = integer(
+                timeout, "providerStreamIdleTimeoutMillis", 1_000, 300_000);
+        String sessionScopeDigest = null;
+        String cacheContextDigest = null;
+        if (cachePresent) {
+            ObjectNode cacheContext = object(document, "cacheContext");
+            exact(cacheContext, Set.of("sessionScopeDigest"));
+            sessionScopeDigest = digest(cacheContext, "sessionScopeDigest");
+            cacheContextDigest = digest(document, "cacheContextDigest");
+            if (!cacheContextDigest.equals(CanonicalJson.sha256(
+                    CanonicalJson.canonicalize(cacheContext)))) {
+                throw invalid("cacheContextDigest does not match exact cache context");
+            }
+        }
+        ObjectNode digestMaterial = document.objectNode();
+        digestMaterial.set("modelRequest", modelRequest);
+        digestMaterial.set("admission", admission);
+        digestMaterial.set("timeoutPolicy", timeout);
+        if (cacheContextDigest != null) {
+            digestMaterial.put("cacheContextDigest", cacheContextDigest);
+        }
+        String declaredDigest = digest(document, "requestDigest");
+        if (!declaredDigest.equals(CanonicalJson.sha256(
+                CanonicalJson.canonicalize(digestMaterial)))) {
+            throw invalid("requestDigest does not match exact invocation material");
+        }
+        ObjectNode model = object(modelRequest, "model");
+        AcceptCommand command = new AcceptCommand(
+                uuid(document, "clientRequestId"),
+                uuid(document, "requestId"),
+                declaredDigest,
+                resource(model, "modelId"),
+                digest(model, "modelRevision"),
+                digest(model, "configurationRevision"),
+                digest(model, "runtimeRegistryGeneration"),
+                "user_confirmed",
+                CanonicalJson.sha256(CanonicalJson.canonicalize(admission)),
+                deadline,
+                idleTimeout);
+        ObjectNode providerRequest = modelRequest.deepCopy();
+        providerRequest.remove("reasoning");
+        return new ParsedAcceptV1Alpha3(
+                command,
+                CanonicalJson.canonicalize(providerRequest),
+                sessionScopeDigest,
+                cacheContextDigest,
+                reasoning);
+    }
+
     private static ParsedAccept parseAccept(
             ObjectNode document,
             String contractVersion,
@@ -58,7 +136,7 @@ public final class ModelInvocationHttpMapper {
         requireText(document, "audience", "enterprise-model-gateway");
         requireText(document, "requiredPermission", "model.use");
         ObjectNode modelRequest = object(document, "modelRequest");
-        validateModelRequest(modelRequest);
+        validateModelRequest(modelRequest, false);
         ObjectNode admission = object(document, "admission");
         validateUserConfirmedAdmission(admission);
         ObjectNode timeout = object(document, "timeoutPolicy");
@@ -118,6 +196,10 @@ public final class ModelInvocationHttpMapper {
         return parseCancel(document, "v1alpha2");
     }
 
+    public static ParsedCancel parseCancelV1Alpha3(ObjectNode document) {
+        return parseCancel(document, "v1alpha3");
+    }
+
     private static ParsedCancel parseCancel(ObjectNode document, String contractVersion) {
         exact(document, Set.of(
                 "contractVersion",
@@ -148,14 +230,16 @@ public final class ModelInvocationHttpMapper {
         }
     }
 
-    private static void validateModelRequest(ObjectNode request) {
-        exact(request, Set.of(
+    private static void validateModelRequest(ObjectNode request, boolean reasoningRequired) {
+        Set<String> fields = new HashSet<>(Set.of(
                 "snapshotId",
                 "contextSourceDigest",
                 "model",
                 "messages",
                 "tools",
                 "maxOutputTokens"));
+        if (reasoningRequired) fields.add("reasoning");
+        exact(request, fields);
         uuid(request, "snapshotId");
         digest(request, "contextSourceDigest");
         ObjectNode model = object(request, "model");
@@ -194,6 +278,38 @@ public final class ModelInvocationHttpMapper {
             }
         });
         integer(request, "maxOutputTokens", 1, 262_144);
+    }
+
+    private static EnterpriseReasoningSafeIdentity validateReasoning(
+            ObjectNode reasoning) {
+        String mode = text(reasoning, "mode");
+        if ("default_passthrough".equals(mode)) {
+            exact(reasoning, Set.of(
+                    "mode", "reasoningModeLockId", "reasoningModeLockDigest"));
+            return new EnterpriseReasoningSafeIdentity.DefaultPassthrough(
+                    uuid(reasoning, "reasoningModeLockId"),
+                    digest(reasoning, "reasoningModeLockDigest"));
+        }
+        if (!"locked_max_strategy".equals(mode)) {
+            throw invalid("reasoning mode is invalid");
+        }
+        exact(reasoning, Set.of(
+                "mode", "reasoningModeLockId", "reasoningModeLockDigest",
+                "profileId", "profileRevision", "profileDigest",
+                "strategyId", "strategyRevision", "strategyDigest",
+                "mappingRevision", "mappingDigest", "timeoutPolicyRef"));
+        return new EnterpriseReasoningSafeIdentity.LockedMaxStrategy(
+                uuid(reasoning, "reasoningModeLockId"),
+                digest(reasoning, "reasoningModeLockDigest"),
+                resource(reasoning, "profileId"),
+                digest(reasoning, "profileRevision"),
+                digest(reasoning, "profileDigest"),
+                resource(reasoning, "strategyId"),
+                digest(reasoning, "strategyRevision"),
+                digest(reasoning, "strategyDigest"),
+                digest(reasoning, "mappingRevision"),
+                digest(reasoning, "mappingDigest"),
+                resource(reasoning, "timeoutPolicyRef"));
     }
 
     private static void validateMessage(JsonNode value) {
@@ -348,6 +464,13 @@ public final class ModelInvocationHttpMapper {
             String canonicalProviderRequestJson,
             String sessionScopeDigest,
             String cacheContextDigest) {}
+
+    public record ParsedAcceptV1Alpha3(
+            AcceptCommand command,
+            String canonicalProviderRequestJson,
+            String sessionScopeDigest,
+            String cacheContextDigest,
+            EnterpriseReasoningSafeIdentity reasoning) {}
 
     public record ParsedCancel(
             UUID requestId,

@@ -1,18 +1,18 @@
-import type { AgentDefinitionRevisionV1Alpha2 } from "@robothree/contracts/runtime-selection/agent-definition/v1alpha2";
-
 import type {
   EntitledToolRefV1,
-  TaskResourceEntitlementSnapshotV1,
+  ReadableTaskResourceEntitlementSnapshot,
 } from "../application/task-resource-entitlement.js";
+import type { ReadableAgentDefinitionRevision } from
+  "../application/agent-definition-v1alpha2.js";
 
 export type TaskToolCandidatePolicyInput = Readonly<{
-  exactAgent: AgentDefinitionRevisionV1Alpha2;
+  exactAgent: ReadableAgentDefinitionRevision;
   selectedSkillRefs: readonly Readonly<{
     skillId: string;
     revision: string;
     contentDigest: string;
   }>[];
-  entitlementSnapshot: TaskResourceEntitlementSnapshotV1;
+  entitlementSnapshot: ReadableTaskResourceEntitlementSnapshot;
   registryRevision: string;
   workspaceAndAuthorizationFactsDigest: string;
 }>;

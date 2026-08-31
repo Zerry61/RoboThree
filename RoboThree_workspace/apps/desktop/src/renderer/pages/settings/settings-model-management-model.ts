@@ -1,4 +1,6 @@
 import type { ModelProjection } from "@robothree/contracts";
+import type { PersonalModelSafeProjectionV1Alpha1 } from
+  "@robothree/contracts/desktop-local/personal-model-management/v1alpha1";
 
 export type SettingsModelSource = ModelProjection["source"];
 
@@ -55,6 +57,18 @@ export type DetailedStatusPresentation = {
   helpText: string;
 };
 
+export type PersonalModelSettingsRow = Readonly<{
+  personalModelId: string;
+  displayName: string;
+  providerLabel: string;
+  providerModelId: string;
+  endpointDisplayHost: string;
+  capabilityLabel: string;
+  statusLabel: string;
+  statusHelp: string;
+  preferenceSelected: boolean;
+}>;
+
 export function presentModelManagement(
   models: readonly ModelProjection[],
 ): SettingsModelManagementView {
@@ -69,7 +83,7 @@ export function presentModelManagement(
     {
       key: "personal",
       title: "个人模型",
-      description: "真实个人模型管理仍待 Personal Model 与 Credential 链路接入。",
+      description: "个人模型管理将在安全凭据服务接入后开放。",
       rows: rows.filter((row) => row.section === "personal"),
     },
     {
@@ -90,8 +104,8 @@ export function presentModelManagement(
     personalGate: {
       title: "个人模型管理待接入",
       statusLabel: "待接入",
-      description: "添加、编辑、查看 Key、删除和设为默认都需要受控 Credential 链路与 Core Projection。当前页面不接收真实 API Key，也不声明任何已保存、已删除或已设默认结果。",
-      actionsDisabledReason: "Personal Model / Credential 后端链路尚未授权实现。",
+      description: "添加、编辑、查看密钥、删除和设为默认都需要安全的凭据管理服务。当前页面不接收真实 API Key，也不会显示任何虚假的保存、删除或默认设置结果。",
+      actionsDisabledReason: "个人模型与安全凭据管理服务尚未开放。",
     },
   };
 }
@@ -107,8 +121,8 @@ export function presentModelRow(model: ModelProjection): SettingsModelRow {
     availability: model.available ? "available" : "unavailable",
     statusLabel: model.available ? "可用" : "不可用",
     statusHelp: model.available
-      ? "当前 Projection 只表示粗粒度可用性；详细模型状态由后续真实状态链路提供。"
-      : model.unavailableReason ?? "当前 Projection 标记此模型不可用。",
+      ? "当前只提供基础可用性；更详细的模型状态将在真实服务接入后显示。"
+      : model.unavailableReason ?? "当前模型不可用。",
   };
 }
 
@@ -132,7 +146,7 @@ export function presentDetailedModelStatus(
       return {
         label: "认证失败",
         selectable: false,
-        helpText: "Provider 拒绝凭证，需要更换 Key。",
+        helpText: "模型服务拒绝凭据，需要更换 API Key。",
       };
     case "network_failed":
       return {
@@ -144,19 +158,19 @@ export function presentDetailedModelStatus(
       return {
         label: "协议不兼容",
         selectable: false,
-        helpText: "响应不符合已支持协议，需要修改 Provider 或 Endpoint。",
+        helpText: "响应不符合已支持协议，需要检查模型服务或访问地址。",
       };
     case "model_not_found":
       return {
         label: "模型不存在",
         selectable: false,
-        helpText: "Provider 不识别模型标识，需要修改模型标识。",
+        helpText: "模型服务不识别该模型标识，需要修改模型标识。",
       };
     case "unavailable":
       return {
         label: "不可用",
         selectable: false,
-        helpText: "Provider、模型或本机 Credential Store 当前不可用。",
+        helpText: "模型服务、模型或本机安全凭据服务当前不可用。",
       };
     case "permission_denied":
       return {
@@ -168,7 +182,24 @@ export function presentDetailedModelStatus(
 }
 
 export function modelIdentifierExplanation(): string {
-  return "显示名称来自当前兼容 Projection 的 name 字段；Provider 模型标识尚无真实字段，不能用显示名称伪装。";
+  return "当前仅提供模型显示名称；模型服务使用的精确标识尚未开放，不能用显示名称代替。";
+}
+
+export function presentPersonalModelRow(
+  model: PersonalModelSafeProjectionV1Alpha1,
+): PersonalModelSettingsRow {
+  const status = presentDetailedModelStatus(model.status);
+  return {
+    personalModelId: model.personalModelId,
+    displayName: model.displayName,
+    providerLabel: personalProviderLabel(model.provider),
+    providerModelId: model.providerModelId,
+    endpointDisplayHost: model.endpointDisplayHost,
+    capabilityLabel: capabilitiesLabel(model.capabilities),
+    statusLabel: status.label,
+    statusHelp: status.helpText,
+    preferenceSelected: model.preferenceSelected,
+  };
 }
 
 function sectionForSource(source: SettingsModelSource): SettingsModelRow["section"] {
@@ -186,10 +217,17 @@ function sourceLabel(source: SettingsModelSource): string {
 function capabilitiesLabel(capabilities: readonly ModelProjection["capabilities"][number][]): string {
   if (capabilities.length === 0) return "未声明能力";
   const labels = capabilities.map((capability) => {
-    if (capability === "tool_calling") return "Tool Calling";
-    if (capability === "streaming") return "Streaming";
-    if (capability === "vision") return "Vision";
-    return "Text";
+    if (capability === "tool_calling") return "工具调用";
+    if (capability === "streaming") return "流式响应";
+    if (capability === "vision") return "图像理解";
+    return "文本";
   });
   return labels.join(" / ");
+}
+
+function personalProviderLabel(provider: PersonalModelSafeProjectionV1Alpha1["provider"]): string {
+  if (provider === "deepseek") return "DeepSeek";
+  if (provider === "zhipu") return "智谱";
+  if (provider === "kimi") return "Kimi";
+  return "自定义服务";
 }

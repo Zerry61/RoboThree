@@ -143,6 +143,25 @@ final class CentralSchemaSpecification {
             "ck_enterprise_session_lease_wire_digests",
             "ck_enterprise_session_lease_permissions",
             "ck_enterprise_session_lease_documents",
+            "admin_model_revision_pkey",
+            "ck_admin_model_revision_digest",
+            "ck_admin_model_revision_document",
+            "admin_model_head_pkey",
+            "fk_admin_model_head_revision",
+            "admin_model_default_pkey",
+            "fk_admin_model_default_revision",
+            "admin_model_credential_pkey",
+            "ck_admin_model_credential_revision",
+            "ck_admin_model_credential_ciphertext",
+            "admin_model_gateway_binding_pkey",
+            "ck_admin_model_gateway_binding_digests",
+            "ck_admin_model_gateway_binding_document",
+            "admin_model_command_receipt_pkey",
+            "ck_admin_model_command_digest",
+            "ck_admin_model_command_result",
+            "admin_model_audit_pkey",
+            "ck_admin_model_audit_revision",
+            "ck_admin_model_audit_fields",
             "robothree_schema_version_pkey",
             "robothree_schema_version_script_name_key",
             "robothree_schema_version_version_check",
@@ -176,7 +195,10 @@ final class CentralSchemaSpecification {
             "ix_prompt_cache_plan_key",
             "ix_enterprise_session_challenge_identity_created",
             "ix_enterprise_session_lease_subject_expiry",
-            "ix_enterprise_session_lease_source_decision");
+            "ix_enterprise_session_lease_source_decision",
+            "ix_admin_model_revision_display",
+            "ix_admin_model_credential_model",
+            "ix_admin_model_audit_time");
 
     private CentralSchemaSpecification() {}
 
@@ -467,6 +489,66 @@ final class CentralSchemaSpecification {
                         required("source_decision_digest", "varchar"),
                         required("request_digest", "bpchar"),
                         required("record_digest", "bpchar")));
+        tables.put(
+                "admin_model_revision",
+                List.of(
+                        required("model_id", "varchar"),
+                        required("model_revision", "varchar"),
+                        required("display_name", "varchar"),
+                        required("record_json", "text"),
+                        required("record_digest", "bpchar"),
+                        required("created_at", "timestamptz")));
+        tables.put(
+                "admin_model_head",
+                List.of(
+                        required("model_id", "varchar"),
+                        required("model_revision", "varchar"),
+                        required("updated_at", "timestamptz")));
+        tables.put(
+                "admin_model_default",
+                List.of(
+                        required("singleton", "bool"),
+                        required("model_id", "varchar"),
+                        required("model_revision", "varchar"),
+                        required("updated_at", "timestamptz")));
+        tables.put(
+                "admin_model_credential",
+                List.of(
+                        required("credential_reference", "varchar"),
+                        required("model_id", "varchar"),
+                        required("credential_revision", "varchar"),
+                        required("key_id", "varchar"),
+                        required("nonce", "bytea"),
+                        required("ciphertext", "bytea"),
+                        required("created_at", "timestamptz")));
+        tables.put(
+                "admin_model_command_receipt",
+                List.of(
+                        required("command_id", "uuid"),
+                        required("correlation_id", "uuid"),
+                        required("command_digest", "varchar"),
+                        required("result_json", "text"),
+                        required("occurred_at", "timestamptz")));
+        tables.put(
+                "admin_model_gateway_binding",
+                List.of(
+                        required("decision_digest", "bpchar"),
+                        required("binding_revision", "varchar"),
+                        required("binding_digest", "varchar"),
+                        required("binding_json", "text"),
+                        required("created_at", "timestamptz")));
+        tables.put(
+                "admin_model_audit",
+                List.of(
+                        required("event_id", "uuid"),
+                        required("actor_summary", "varchar"),
+                        required("action", "varchar"),
+                        required("model_id", "varchar"),
+                        required("model_revision", "varchar"),
+                        required("changed_field_names", "_text"),
+                        required("occurred_at", "timestamptz"),
+                        required("result", "varchar"),
+                        required("correlation_id", "uuid")));
         tables.put(
                 "robothree_schema_version",
                 List.of(

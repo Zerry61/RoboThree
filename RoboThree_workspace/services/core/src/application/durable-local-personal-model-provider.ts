@@ -3,7 +3,6 @@ import { createHash } from "node:crypto";
 import {
   JsonValueSchema,
   ModelStreamEventSchema,
-  type ModelRequest,
   type ModelStreamEvent,
   type RuntimeError,
   type TaskCapabilityLock,
@@ -45,7 +44,14 @@ import {
 import { mapPersonalModelProviderObservation } from "./personal-model-provider-status.js";
 import { createPersonalModelCommandReceipt } from "../ports/personal-model-persistence.js";
 import { ModelStreamResumeUnavailableError } from "./durable-enterprise-model-provider.js";
-import { requireLegacyModelRequestForUnmappedProvider } from "./model-reasoning-protocol.js";
+import { parseReadableModelRequest } from "./model-request-revisions.js";
+import {
+  deriveLocalPersonalReasoningProfileSubject,
+  localPersonalReasoningTimeoutPolicyIdentity,
+  projectLocalPersonalReasoningMapping,
+} from "./local-personal-reasoning-mapping.js";
+import { TaskLockedReasoningProviderMapper } from
+  "./task-locked-reasoning-provider-mapper.js";
 import {
   validateDynamicRequestFacts,
   type DynamicRequestFactsSubject,
@@ -79,6 +85,7 @@ export class DurableLocalPersonalModelProvider implements ModelProvider {
   readonly #definition: PersonalModelDefinition;
   readonly #clock: Clock;
   readonly #timeoutPolicy: ModelInvocationTimeoutPolicy;
+  readonly #reasoningMapper: TaskLockedReasoningProviderMapper;
   readonly #faultInjector: ((point: LocalPersonalInvocationFaultPoint) => void) | undefined;
 
   public constructor(input: Readonly<{
@@ -89,6 +96,7 @@ export class DurableLocalPersonalModelProvider implements ModelProvider {
     definition: PersonalModelDefinition;
     clock: Clock;
     timeoutPolicy: ModelInvocationTimeoutPolicy;
+    reasoningMapper?: TaskLockedReasoningProviderMapper;
     faultInjector?: (point: LocalPersonalInvocationFaultPoint) => void;
   }>) {
     this.#raw = input.raw;
@@ -100,6 +108,7 @@ export class DurableLocalPersonalModelProvider implements ModelProvider {
     this.#definition = input.definition;
     this.#clock = input.clock;
     this.#timeoutPolicy = input.timeoutPolicy;
+    this.#reasoningMapper = input.reasoningMapper ?? emptyReasoningMapper();
     this.#faultInjector = input.faultInjector;
   }
 
@@ -108,11 +117,43 @@ export class DurableLocalPersonalModelProvider implements ModelProvider {
     signal: AbortSignal,
     invocation?: ModelProviderInvocation,
   ): AsyncIterable<ModelStreamEvent> {
-    // DFI-5.3 owns real reasoning parameter mapping. Reject v1alpha2 before
-    // durable invocation preparation, credential resolution or any upstream I/O.
-    const request = requireLegacyModelRequestForUnmappedProvider(candidate);
+    const request = parseReadableModelRequest(candidate);
     const exact = requireInvocation(request, invocation, this);
     const identity = invocationIdentity(exact);
+    const replay = await this.#invocations.loadInvocation({
+      invocationKind: identity.invocationKind,
+      invocationLinkId: identity.invocationLinkId,
+    });
+    if (replay !== undefined) {
+      assertExistingIdentity(replay, exact, this.#ownerIdentity, this.#definition);
+      if (replay.status === "terminal") {
+        if (replay.terminalClass === "completed") throw new ModelStreamResumeUnavailableError();
+        yield ModelStreamEventSchema.parse({ type: "started" });
+        yield failedEvent(
+          replay.typedErrorCode ?? "personal_model.provider_failed",
+          replay.terminalClass,
+        );
+        return;
+      }
+      if (replay.status === "recovery_exhausted") {
+        throw new ModelStreamResumeUnavailableError();
+      }
+    }
+    const reasoningProjection = request.schemaVersion === "v1alpha1"
+      ? projectLocalPersonalReasoningMapping({ disposition: "omit" })
+      : projectLocalPersonalReasoningMapping(await this.#reasoningMapper.map({
+        invocation: exact,
+        providerFamily: "local_openai",
+        exactSubject: deriveLocalPersonalReasoningProfileSubject({
+          definition: this.#definition,
+          modelLock: exact.modelLock,
+          adapterDescriptorId: this.adapterDescriptorId,
+          adapterDescriptorRevision: this.adapterDescriptorRevision,
+        }),
+        timeoutPolicyIdentity: localPersonalReasoningTimeoutPolicyIdentity(
+          this.#timeoutPolicy,
+        ),
+      }));
     const loaded = await this.#loadOrPrepare(exact, identity);
     let link = loaded.link;
     if (link.status === "terminal") {
@@ -168,6 +209,7 @@ export class DurableLocalPersonalModelProvider implements ModelProvider {
         onUsage: (value) => { rawUsage = structuredClone(value); },
         onTerminal: (kind) => { observedTerminal = kind; },
       },
+      reasoningProjection,
     )[Symbol.asyncIterator]();
     try {
       const started = await iterator.next();
@@ -492,7 +534,7 @@ export class DurableLocalPersonalModelProvider implements ModelProvider {
 }
 
 function requireInvocation(
-  request: ModelRequest,
+  request: ReadableModelRequest,
   invocation: ModelProviderInvocation | undefined,
   provider: DurableLocalPersonalModelProvider,
 ): ModelProviderInvocation {
@@ -506,6 +548,13 @@ function requireInvocation(
     throw new Error("Local Personal Provider requires the exact locked invocation context");
   }
   return invocation;
+}
+
+function emptyReasoningMapper(): TaskLockedReasoningProviderMapper {
+  return new TaskLockedReasoningProviderMapper({
+    profiles: { loadExact: async () => undefined },
+    mappings: { loadExact: async () => [] },
+  });
 }
 
 function invocationIdentity(invocation: ModelProviderInvocation): Readonly<{

@@ -3,7 +3,8 @@ import type {
   TaskCapabilityLock,
 } from "@robothree/contracts";
 import type { ReadableModelRequest } from "@robothree/contracts/model-protocol/v1alpha2";
-import type { ReadableTaskRuntimeSelection } from "@robothree/contracts/runtime-selection/v1alpha2";
+import type { ReadableTaskRuntimeSelectionV1Alpha4 } from
+  "@robothree/contracts/runtime-selection/v1alpha4";
 import type {
   ModelInvocationTimeoutMaterial,
 } from "./model-invocation-timeout.js";
@@ -21,7 +22,7 @@ type ModelProviderInvocationBase = Readonly<{
   stepId: string;
   actionId: string;
   round: number;
-  runtimeSelection: ReadableTaskRuntimeSelection;
+  runtimeSelection: ReadableTaskRuntimeSelectionV1Alpha4;
   modelLock: TaskCapabilityLock;
   modelRequest: ReadableModelRequest;
   deadlineAt: string;

@@ -1,0 +1,39 @@
+{
+  "status": "PASS",
+  "outcome": "DFI543A_LOCAL_PERSONAL_PRODUCTION_GRAPH_CONFORMANT",
+  "qaMatrixCount": 96,
+  "focusedTestFileCount": 2,
+  "focusedTestCount": 9,
+  "structuralProductionGraphEnabled": true,
+  "uniqueProductionSubmitHandlerCount": 1,
+  "productionTaskResourceEntitlementSourceCount": 1,
+  "exactAdmittedPolicyCount": 1,
+  "productionPreinstalledUserReleaseCount": 0,
+  "normalGraphFixtureFallback": false,
+  "productionCredentialRuntimeReady": false,
+  "compatibilityReasonWithoutVerifiedHelper": "runtime_dependencies_unavailable",
+  "migrationMax": 26,
+  "lockfileDigest": "sha256:5b15ae0197c6f7a1450a49551fbfb50a9e0edc32f0fbe75a9259a360ed874f31",
+  "versions": {
+    "root": "0.0.0-dfi.5.4.3a",
+    "core": "0.0.0-dfi.5.4.3a",
+    "contracts": "0.0.0-dfi.5.4.2",
+    "desktop": "0.0.0-dfi.5.4.3a",
+    "admin": "0.0.0-afe.6c"
+  },
+  "historicalEvidence": {
+    "dfi541": "sha256:165d1544a66ed12578271b490767fc5be1d513c2324355adf4da6a74e9735ed4",
+    "dfi542": "sha256:e0abc2a01e1192e59be9afc91fe0b701909bc794d86f82f8ef2504ecb685a8d8",
+    "r2dp2": "sha256:796f268f3af56ea59b6e101f5bb8f76b234e71f15534fe01639af5b351dc8abf",
+    "r2dp3": "sha256:7d85a493e311d94c0512e398f67062ad77f1f37c7e6752b059529ad4942678bb",
+    "pra3": "sha256:ef0fb7a58439ccc60710b9211782010d7b61481e5e3196058cf3c0f44ca21e2b",
+    "dfi534": "sha256:bf89b2fda81f2b11cac63ca0ad58f1962bd309b587b48b0e1e19ba2c493c3a08"
+  },
+  "enterpriseGatewayProductionRouteReady": false,
+  "deepSeekAdmitted": false,
+  "tgmReady": false,
+  "knowledgeProviderReady": false,
+  "agentLifecycleReady": false,
+  "adminV2Ready": false,
+  "evidenceDigest": "sha256:321528d6af5ff7ed57ea26373f2061173e441d4df2f2bfa9457b856627a9a46a"
+}

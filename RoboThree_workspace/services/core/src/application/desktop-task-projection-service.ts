@@ -1119,7 +1119,7 @@ implements DesktopTaskSummaryReader {
       : actionPayloadRecord(match.step.action.payload);
     if (typeof payload.workspaceGrantId === "string") return payload.workspaceGrantId;
     if (match.internalTaskId === undefined) return undefined;
-    const selection = await this.#tasks.loadTaskRuntimeSelection(match.internalTaskId);
+    const selection = await this.#tasks.loadReadableTaskRuntimeSelection(match.internalTaskId);
     return selection?.workspaceGrantId;
   }
 
@@ -1313,7 +1313,7 @@ implements DesktopTaskSummaryReader {
   ): Promise<TaskSummaryProjection | undefined> {
     const [binding, selection, attempts] = await Promise.all([
       this.#tasks.loadSubmitTurnBindingByTaskId(task.head.taskId),
-      this.#tasks.loadTaskRuntimeSelection(task.head.taskId),
+      this.#tasks.loadReadableTaskRuntimeSelection(task.head.taskId),
       this.#tasks.listEffectAttemptsByTask(task.head.taskId),
     ]);
     if (binding === undefined || selection === undefined) return undefined;

@@ -5,11 +5,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   createRoboThreeRoutes,
+  demoRouteNames,
   productionRouteNames,
 } from "../src/renderer/app/router.js";
 
 describe("DFE renderer router", () => {
-  it("keeps the production route map to the shell routes and five primary entries", () => {
+  it("keeps product routes while only three areas remain in primary navigation", () => {
     const routes = createRoboThreeRoutes({ includeDesignSystem: false });
     expect(routes.map((route) => route.path)).toEqual([
       "/",
@@ -33,6 +34,9 @@ describe("DFE renderer router", () => {
     ]);
     expect(routes.find((route) => route.path === "/workbench")?.name).toBe(productionRouteNames.workbench);
     expect(routes.find((route) => route.path === "/tasks")?.name).toBe(productionRouteNames.tasks);
+    expect(routes.find((route) => route.path === "/tasks")?.meta?.navKey).toBe("workbench");
+    expect(routes.find((route) => route.path === "/tasks")?.component).toBeUndefined();
+    expect(routes.find((route) => route.path === "/tasks")?.redirect).toBeTypeOf("function");
     expect(routes.find((route) => route.path === "/intelligence")?.name).toBe(productionRouteNames.intelligence);
     expect(routes.find((route) => route.path === "/intelligence/create-robot")?.name)
       .toBe(productionRouteNames.intelligenceCreateRobot);
@@ -44,6 +48,14 @@ describe("DFE renderer router", () => {
       .toBe(productionRouteNames.intelligenceSkillDetail);
     expect(routes.find((route) => route.path === "/intelligence/tools/:toolId")?.name)
       .toBe(productionRouteNames.intelligenceToolDetail);
+    for (const path of [
+      "/intelligence/robots/:robotId",
+      "/intelligence/skills/:skillId",
+      "/intelligence/tools/:toolId",
+    ]) {
+      expect(String(routes.find((route) => route.path === path)?.component))
+        .toContain("IntelligenceDetailPage.vue");
+    }
     expect(routes.find((route) => route.path === "/knowledge")?.name).toBe(productionRouteNames.knowledge);
     expect(routes.find((route) => route.path === "/knowledge/:knowledgeId")?.name)
       .toBe(productionRouteNames.knowledgeDetail);
@@ -59,6 +71,8 @@ describe("DFE renderer router", () => {
       .toBe(productionRouteNames.settingsFeedback);
     expect(routes.find((route) => route.path === "/settings/identity")?.name)
       .toBe(productionRouteNames.settingsIdentity);
+    expect(routes.find((route) => route.path === "/settings/identity")?.redirect)
+      .toBe("/settings/models");
     for (const path of [
       "/settings/models",
       "/settings/personalization",
@@ -73,6 +87,22 @@ describe("DFE renderer router", () => {
     expect(routes.find((route) => route.path === "/settings")?.redirect).toBe("/settings/models");
     expect(routes.find((route) => route.path === "/legacy")?.component).toBeDefined();
     expect(routes.some((route) => route.path === "/__design-system")).toBe(false);
+    expect(routes.some((route) => route.path === "/login")).toBe(false);
+  });
+
+  it("registers the chrome-free demo entry only in explicit local_demo mode", () => {
+    const routes = createRoboThreeRoutes({
+      includeDesignSystem: false,
+      runtimeMode: "local_demo",
+    });
+    const login = routes.find((route) => route.path === "/login");
+    expect(login?.name).toBe(demoRouteNames.login);
+    expect(login?.meta).toEqual(expect.objectContaining({
+      chrome: false,
+      guestOnly: true,
+      title: "进入本地演示",
+    }));
+    expect(Object.values(productionRouteNames)).not.toContain(demoRouteNames.login);
   });
 
   it("keeps the Design System gallery behind a DEV-only dynamic import", async () => {

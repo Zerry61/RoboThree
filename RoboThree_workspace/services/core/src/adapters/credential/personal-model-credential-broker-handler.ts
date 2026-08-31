@@ -43,7 +43,7 @@ export function createPersonalModelCredentialBrokerHandler(
       commandId: header.commandId,
       commandType: header.commandType,
       personalModelId: header.personalModelId,
-      ...(header.expectedConfigurationRevision === undefined
+      ...(header.commandType === "create" || header.expectedConfigurationRevision === undefined
         ? {}
         : { expectedConfigurationRevision: header.expectedConfigurationRevision }),
       requestDigest: header.commandRequestDigest,

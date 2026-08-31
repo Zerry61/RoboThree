@@ -32,8 +32,7 @@ public sealed interface ModelProviderStreamEvent
                     providerToolCallId,
                     "providerToolCallId");
             name = optionalText(name, "name");
-            argumentsFragment =
-                    optionalText(argumentsFragment, "argumentsFragment");
+            argumentsFragment = optionalFragment(argumentsFragment);
             if (providerToolCallId == null && name == null && argumentsFragment == null) {
                 throw new IllegalArgumentException("tool call delta is empty");
             }
@@ -85,5 +84,9 @@ public sealed interface ModelProviderStreamEvent
                 : com.robothree.central.shared.domain.DomainValueChecks.text(
                         value,
                         name);
+    }
+
+    private static String optionalFragment(String value) {
+        return value == null || value.isEmpty() ? null : value;
     }
 }

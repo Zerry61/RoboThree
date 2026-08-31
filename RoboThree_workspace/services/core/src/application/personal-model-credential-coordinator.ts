@@ -35,6 +35,8 @@ import {
   InMemoryPersonalModelOperationGate,
   type PersonalModelOperationGate,
 } from "./personal-model-operation-gate.js";
+import type { PersonalModelManagementAuthoritySource } from
+  "./personal-model-management-authority.js";
 import type { Clock } from "../ports/clock.js";
 import type { PersonalCredentialStore } from "../ports/personal-credential-store.js";
 import type {
@@ -212,7 +214,8 @@ export function calculatePersonalModelCredentialCommandDigest(
 export class PersonalModelCredentialCoordinator {
   readonly #persistence: PersonalModelPersistence;
   readonly #credentials: PersonalCredentialStore;
-  readonly #authorityContexts: PersonalModelOwnerAuthorityContextProvider;
+  readonly #authorityContexts: PersonalModelOwnerAuthorityContextProvider | undefined;
+  readonly #managementAuthority: PersonalModelManagementAuthoritySource | undefined;
   readonly #authority = new StrictPersonalModelOwnerAuthorityResolver();
   readonly #deletionGuard: PersonalModelDeletionGuard;
   readonly #usage: PersonalCredentialReferenceUsage;
@@ -223,7 +226,8 @@ export class PersonalModelCredentialCoordinator {
   public constructor(input: {
     persistence: PersonalModelPersistence;
     credentials: PersonalCredentialStore;
-    authorityContexts: PersonalModelOwnerAuthorityContextProvider;
+    authorityContexts?: PersonalModelOwnerAuthorityContextProvider;
+    managementAuthority?: PersonalModelManagementAuthoritySource;
     deletionGuard: PersonalModelDeletionGuard;
     credentialUsage: PersonalCredentialReferenceUsage;
     clock: Clock;
@@ -232,6 +236,10 @@ export class PersonalModelCredentialCoordinator {
     this.#persistence = input.persistence;
     this.#credentials = input.credentials;
     this.#authorityContexts = input.authorityContexts;
+    this.#managementAuthority = input.managementAuthority;
+    if ((this.#authorityContexts === undefined) === (this.#managementAuthority === undefined)) {
+      throw new Error("Personal Model coordinator requires exactly one authority source");
+    }
     this.#deletionGuard = input.deletionGuard;
     this.#usage = input.credentialUsage;
     this.#clock = input.clock;
@@ -382,8 +390,22 @@ export class PersonalModelCredentialCoordinator {
   }
 
   async #resolveOwner(action: "configure" | "delete"): Promise<PersonalModelOwnerIdentity> {
+    if (this.#managementAuthority !== undefined) {
+      await this.ensureOwnerNamespace();
+      const authority = await this.#managementAuthority.resolve();
+      const allowed = action === "delete"
+        ? authority?.permissions.delete
+        : authority?.permissions.configure;
+      if (authority === undefined || !allowed) {
+        throw new PersonalModelOwnerAuthorityError("personal_model.permission_denied");
+      }
+      return {
+        ownerScopeNamespaceRevision: authority.ownerScopeNamespaceRevision,
+        ownerScopeDigest: authority.ownerScopeDigest,
+      };
+    }
     const namespace = await this.ensureOwnerNamespace();
-    const context = await this.#authorityContexts.load(action);
+    const context = await this.#authorityContexts!.load(action);
     try {
       return this.#authority.resolve({ ...context, namespace, action }).ownerIdentity;
     } catch (error) {

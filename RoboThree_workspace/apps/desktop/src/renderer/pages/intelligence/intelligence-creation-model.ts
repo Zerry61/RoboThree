@@ -7,6 +7,8 @@ export type RobotAvatarState = {
   source: RobotAvatarSource;
   label: string;
   previewUrl?: string;
+  mediaType?: "image/png" | "image/jpeg";
+  contentBase64?: string;
 };
 
 export type RobotCapabilityState = {
@@ -94,10 +96,10 @@ export function createDefaultRobotDraft(): RobotDraftState {
     intro: "",
     behaviorRules: "",
     capabilities: {
-      model: { enabled: false, selectedIds: ["model.default"] },
-      skills: { enabled: false, selectedIds: ["skill.document.review"] },
-      tools: { enabled: false, selectedIds: ["tool.document.pdf.extract_text"] },
-      knowledge: { enabled: false, selectedIds: ["knowledge.local.workspace"] },
+      model: { enabled: false, selectedIds: [] },
+      skills: { enabled: false, selectedIds: [] },
+      tools: { enabled: false, selectedIds: [] },
+      knowledge: { enabled: false, selectedIds: [] },
     },
     uploadError: "",
   };
@@ -131,6 +133,7 @@ export function setUploadedAvatarPreview(
   draft: RobotDraftState,
   fileName: string,
   previewUrl: string,
+  mediaType?: "image/png" | "image/jpeg",
 ): RobotDraftState {
   return {
     ...draft,
@@ -138,6 +141,10 @@ export function setUploadedAvatarPreview(
       source: "upload",
       label: initialsFromFileName(fileName),
       previewUrl,
+      ...(mediaType === undefined ? {} : {
+        mediaType,
+        contentBase64: previewUrl.slice(previewUrl.indexOf(",") + 1),
+      }),
     },
     uploadError: "",
   };
@@ -181,7 +188,7 @@ export function toggleRobotCapability(
 export function validateRobotDraft(draft: RobotDraftState): RobotDraftValidation {
   const errors: RobotDraftValidation = {};
   if (draft.name.trim() === "") errors.name = "请输入机器人名称";
-  if (draft.intro.trim() === "") errors.intro = "请输入机器人介绍";
+  if (draft.intro.trim() === "") errors.intro = "请输入机器人简介";
   return errors;
 }
 
@@ -190,8 +197,8 @@ export function validateSkillCreatorForm(
 ): SkillCreatorValidation {
   const errors: SkillCreatorValidation = {};
   if (form.name.trim() === "") errors.name = "请输入技能名称";
-  if (form.description.trim() === "") errors.description = "请输入技能说明";
-  if (form.capabilities.trim() === "") errors.capabilities = "请输入希望技能完成的任务";
+  if (form.description.trim() === "") errors.description = "请输入技能描述";
+  if (form.capabilities.trim() === "") errors.capabilities = "请输入技能主要功能";
   return errors;
 }
 
@@ -208,7 +215,7 @@ export function buildSkillCreatorConversation(
   return {
     assistantName: "技能创建助手",
     firstUserMessage: `请创建技能「${name}」。目标：${description}。能力要求：${capabilities}。`,
-    draftFiles: ["SKILL.md", "references/README.md", "scripts/"],
+    draftFiles: [],
   };
 }
 

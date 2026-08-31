@@ -5,6 +5,7 @@ import com.robothree.central.persistence.mybatis.adapter.MyBatisConfigurationPer
 import com.robothree.central.persistence.mybatis.adapter.MyBatisEnterpriseSessionPersistence;
 import com.robothree.central.persistence.mybatis.adapter.MyBatisModelInvocationPersistence;
 import com.robothree.central.persistence.mybatis.mapper.AuthenticationPersistenceMapper;
+import com.robothree.central.persistence.mybatis.mapper.AgentLifecyclePersistenceMapper;
 import com.robothree.central.persistence.mybatis.mapper.ConfigurationPersistenceMapper;
 import com.robothree.central.persistence.mybatis.mapper.EnterpriseSessionPersistenceMapper;
 import com.robothree.central.persistence.mybatis.mapper.ModelInvocationPersistenceMapper;
@@ -38,6 +39,7 @@ final class CentralPersistenceVariants {
             configuration.getTypeHandlerRegistry()
                     .register(PostgresUuidTypeHandler.class);
             configuration.addMapper(MyBatisConnectionIdentityMapper.class);
+            configuration.addMapper(AgentLifecyclePersistenceMapper.class);
 
             SqlSessionFactoryBean factoryBean = new SqlSessionFactoryBean();
             factoryBean.setDataSource(dataSource);

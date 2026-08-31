@@ -4,6 +4,7 @@ import com.robothree.central.modelgateway.port.ModelProviderRequestSource;
 import com.robothree.central.shared.json.CanonicalJson;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import com.robothree.central.modelgateway.domain.ProviderReasoningProjection;
 
 /**
  * Holds provider request content only for the live execution node. Content is
@@ -18,18 +19,31 @@ public final class TransientModelProviderRequestSource
     public void register(
             String acceptRequestDigest,
             String canonicalProviderRequestJson) {
+        register(
+                acceptRequestDigest,
+                canonicalProviderRequestJson,
+                ProviderReasoningProjection.Omit.instance());
+    }
+
+    public void register(
+            String acceptRequestDigest,
+            String canonicalProviderRequestJson,
+            ProviderReasoningProjection reasoningProjection) {
         Objects.requireNonNull(acceptRequestDigest, "acceptRequestDigest");
         String providerDigest = CanonicalJson.sha256(canonicalProviderRequestJson);
         ResolvedRequest proposed = new ResolvedRequest(
                 providerDigest,
-                canonicalProviderRequestJson);
+                canonicalProviderRequestJson,
+                reasoningProjection);
         ResolvedRequest existing = requests.putIfAbsent(
                 acceptRequestDigest,
                 proposed);
         if (existing != null
                 && (!existing.requestDigest().equals(proposed.requestDigest())
                         || !existing.canonicalRequestJson()
-                                .equals(proposed.canonicalRequestJson()))) {
+                                .equals(proposed.canonicalRequestJson())
+                        || !existing.reasoningProjection()
+                                .equals(proposed.reasoningProjection()))) {
             throw ModelGatewayException.conflict(
                     "model_gateway.provider_request_conflict",
                     "The accepted request is already bound to different provider data.");

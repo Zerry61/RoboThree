@@ -12,6 +12,10 @@ import java.util.List;
 public final class CanonicalStaticPromptMaterialPlanner {
 
     private static final int MAX_REQUEST_BYTES = 4 * 1024 * 1024;
+    private static final String REQUEST_SCOPED_SYSTEM_SOURCE_ID =
+            "core.request-context.v1";
+    private static final String TASK_SCOPED_INSTRUCTION_BUNDLE_SOURCE_ID =
+            "core.instruction-bundle.v1";
     private static final String PROJECTION_REVISION =
             CanonicalJson.sha256("robothree.static-prefix-projection.v1");
 
@@ -31,6 +35,11 @@ public final class CanonicalStaticPromptMaterialPlanner {
                 throw new IllegalArgumentException("message must be an object");
             }
             if (!"system".equals(message.path("role").asText())) break;
+            String sourceId = message.path("sourceId").asText();
+            if (REQUEST_SCOPED_SYSTEM_SOURCE_ID.equals(sourceId)
+                    || TASK_SCOPED_INSTRUCTION_BUNDLE_SOURCE_ID.equals(sourceId)) {
+                break;
+            }
             leadingSystems.add(message.deepCopy());
         }
         List<ObjectNode> sortedTools = new ArrayList<>();

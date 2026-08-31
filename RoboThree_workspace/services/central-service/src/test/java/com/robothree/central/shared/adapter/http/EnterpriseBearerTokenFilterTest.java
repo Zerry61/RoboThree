@@ -97,6 +97,51 @@ class EnterpriseBearerTokenFilterTest {
     }
 
     @Test
+    void protectsOnlyTheExactInternalTrialAdminModelDiscoveryRoute() throws Exception {
+        MockHttpServletRequest discovery =
+                request("GET", "/internal-trial/v1/admin-models/default");
+        MockHttpServletResponse rejected = new MockHttpServletResponse();
+        filter.doFilter(discovery, rejected, new MockFilterChain());
+        assertThat(rejected.getStatus()).isEqualTo(401);
+
+        MockHttpServletRequest wrongMethod =
+                request("POST", "/internal-trial/v1/admin-models/default");
+        MockFilterChain wrongMethodChain = new MockFilterChain();
+        filter.doFilter(wrongMethod, new MockHttpServletResponse(), wrongMethodChain);
+        assertThat(wrongMethodChain.getRequest()).isSameAs(wrongMethod);
+
+        MockHttpServletRequest suffix =
+                request("GET", "/internal-trial/v1/admin-models/default/extra");
+        MockFilterChain suffixChain = new MockFilterChain();
+        filter.doFilter(suffix, new MockHttpServletResponse(), suffixChain);
+        assertThat(suffixChain.getRequest()).isSameAs(suffix);
+    }
+
+    @Test
+    void lifecycleAuthenticationFailuresUseTheStrictLifecycleErrorSurface()
+            throws Exception {
+        MockHttpServletRequest request =
+                request("GET", "/internal-trial/v1/agent-lifecycle/drafts");
+        request.addHeader(
+                "X-RoboThree-Correlation-Id",
+                "00000000-0000-4000-8000-000000000322");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, new MockFilterChain());
+
+        assertThat(response.getStatus()).isEqualTo(401);
+        assertThat(objectMapper.readTree(response.getContentAsByteArray()))
+                .isEqualTo(objectMapper.readTree("""
+                        {
+                          "contractVersion":"agent-lifecycle.v1alpha1",
+                          "errorCode":"agentlifecycle.unauthorized",
+                          "safeSummary":"当前身份不能执行此操作。",
+                          "correlationId":"00000000-0000-4000-8000-000000000322"
+                        }
+                        """));
+    }
+
+    @Test
     void filterOrderIsExecutableArchitectureAndNotDocumentation() {
         Order order = EnterpriseBearerTokenFilter.class.getAnnotation(Order.class);
 

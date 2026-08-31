@@ -25,8 +25,8 @@ import type {
   TaskRuntimeSelection,
   PersistedUserConfirmation,
 } from "@robothree/contracts";
-import type { ReadableTaskRuntimeSelection } from
-  "@robothree/contracts/runtime-selection/v1alpha2";
+import type { ReadableTaskRuntimeSelectionV1Alpha4 } from
+  "@robothree/contracts/runtime-selection/v1alpha4";
 
 import type { Clock } from "../../ports/clock.js";
 import type {
@@ -42,6 +42,10 @@ import type {
   PersistedAuthorizationAwareSubmitTurnTaskBundle,
   PersistedReasoningAwareAuthorizationSubmitTurnTaskBundle,
   PersistedReasoningAwareSubmitTurnTaskBundle,
+  PersistedR2D3SubmitTurnTaskBundle,
+  R2D3SubmitTurnTaskBundle,
+  Dfi541SubmitTurnTaskBundle,
+  PersistedDfi541SubmitTurnTaskBundle,
   ReasoningAwareAuthorizationSubmitTurnTaskBundle,
   TaskAuthorizationMaterializationCommit,
   TaskAuthorizationMaterializationResult,
@@ -64,11 +68,23 @@ import {
   validateTaskCreation,
   validateTaskCapabilityLock,
 } from "../../persistence/validation.js";
-import { parseReadableTaskRuntimeSelection } from
+import { parseReadableTaskRuntimeSelectionV1Alpha4 } from
   "../../application/runtime-selection-revisions.js";
 import { sha256CanonicalJson } from "../../persistence/digest.js";
 import { parsePersistedTaskCheckpoint, parsePersistedTaskEvent } from "../../persistence/contract-upgrade.js";
 import { validateSubmitTurnTaskBundle } from "../../persistence/submit-turn-bundle-validation.js";
+import { validateR2D3SubmitTurnTaskBundle } from
+  "../../persistence/r2d3-task-bundle-validation.js";
+import { validateDfi541SubmitTurnTaskBundle } from
+  "../../persistence/dfi541-task-bundle-validation.js";
+import {
+  validateR2D3TaskBundleBindingEnvelopeV1,
+  type PersistedR2D3TaskBundleBindingEnvelopeV1,
+} from "../../application/r2d3-durable-acceptance.js";
+import {
+  validateDfi541TaskBundleEnvelopeV1,
+  type PersistedDfi541TaskBundleEnvelopeV1,
+} from "../../application/dfi541-durable-acceptance.js";
 import {
   parseTaskAuthorizationPersistenceRecord,
   sameTaskAuthorizationPersistenceRecord,
@@ -88,21 +104,49 @@ type ReadablePersistedAuthorizationAwareSubmitTurnTaskBundle =
   | PersistedAuthorizationAwareSubmitTurnTaskBundle
   | PersistedReasoningAwareAuthorizationSubmitTurnTaskBundle;
 
+type InMemoryTaskBundleState = {
+  heads: Map<string, TaskHead>;
+  checkpoints: Map<string, TaskCheckpoint>;
+  capabilityLocks: Map<string, TaskCapabilityLock>;
+  runtimeSelections: Map<string, ReadableTaskRuntimeSelectionV1Alpha4>;
+  submitTurnBindings: Map<string, TaskSubmitTurnBinding>;
+  authorizationRecords: Map<string, TaskAuthorizationPersistenceRecord>;
+  authorizationRuntimeSelectionIds: Map<string, string>;
+  capabilityLockIds: Map<string, string>;
+  r2d3BindingEnvelopes: Map<string, PersistedR2D3TaskBundleBindingEnvelopeV1>;
+  dfi541BindingEnvelopes: Map<string, PersistedDfi541TaskBundleEnvelopeV1>;
+};
+
 export class InMemoryTaskPersistence implements TaskPersistence {
   readonly adapterKind = "persistence" as const;
   readonly componentId = "persistence.memory";
   readonly #clock: Clock;
-  readonly #heads = new Map<string, TaskHead>();
-  readonly #checkpoints = new Map<string, TaskCheckpoint>();
+  #bundleState = createBundleState();
+  get #heads(): Map<string, TaskHead> { return this.#bundleState.heads; }
+  get #checkpoints(): Map<string, TaskCheckpoint> {
+    return this.#bundleState.checkpoints;
+  }
   readonly #events = new Map<string, Map<number, TaskEvent>>();
   readonly #eventIds = new Set<string>();
   readonly #receipts = new Map<string, CommandReceipt>();
-  readonly #capabilityLocks = new Map<string, TaskCapabilityLock>();
-  readonly #runtimeSelections = new Map<string, ReadableTaskRuntimeSelection>();
-  readonly #submitTurnBindings = new Map<string, TaskSubmitTurnBinding>();
-  readonly #authorizationRecords = new Map<string, TaskAuthorizationPersistenceRecord>();
-  readonly #authorizationRuntimeSelectionIds = new Map<string, string>();
-  readonly #capabilityLockIds = new Map<string, string>();
+  get #capabilityLocks(): Map<string, TaskCapabilityLock> {
+    return this.#bundleState.capabilityLocks;
+  }
+  get #runtimeSelections(): Map<string, ReadableTaskRuntimeSelectionV1Alpha4> {
+    return this.#bundleState.runtimeSelections;
+  }
+  get #submitTurnBindings(): Map<string, TaskSubmitTurnBinding> {
+    return this.#bundleState.submitTurnBindings;
+  }
+  get #authorizationRecords(): Map<string, TaskAuthorizationPersistenceRecord> {
+    return this.#bundleState.authorizationRecords;
+  }
+  get #authorizationRuntimeSelectionIds(): Map<string, string> {
+    return this.#bundleState.authorizationRuntimeSelectionIds;
+  }
+  get #capabilityLockIds(): Map<string, string> {
+    return this.#bundleState.capabilityLockIds;
+  }
   readonly #confirmations = new Map<string, PersistedUserConfirmation>();
   readonly #confirmationScopeIds = new Map<string, string>();
   readonly #effects = new Map<string, EffectAttempt>();
@@ -208,7 +252,7 @@ export class InMemoryTaskPersistence implements TaskPersistence {
     }
     this.#runtimeSelections.set(
       runtimeSelection.taskId,
-      parseReadableTaskRuntimeSelection(runtimeSelection),
+      parseReadableTaskRuntimeSelectionV1Alpha4(runtimeSelection),
     );
     this.#submitTurnBindings.set(
       validated.binding.submitTurnCommandId,
@@ -254,6 +298,179 @@ export class InMemoryTaskPersistence implements TaskPersistence {
         "persistence.invalid_runtime_selection",
         "Reasoning-aware Task bundle requires Runtime Selection v1alpha2",
       );
+  }
+
+  async commitR2D3SubmitTurnTaskBundle(
+    input: R2D3SubmitTurnTaskBundle,
+  ): Promise<PersistenceWriteResult<PersistedR2D3SubmitTurnTaskBundle>> {
+    this.#requireStarted();
+    const validated = validateR2D3SubmitTurnTaskBundle(input);
+    if ("ok" in validated) return validated;
+    const existing = this.#bundleState.r2d3BindingEnvelopes.get(
+      validated.binding.submitTurnCommandId,
+    );
+    if (existing !== undefined) {
+      if (existing.submitTurnBinding.bundleDigest !== validated.binding.bundleDigest) {
+        return failure(
+          "r2d.task_bundle_conflict",
+          "SubmitTurn command already owns another R2D3 Task bundle",
+        );
+      }
+      const replay = loadR2D3BundleFromState(this.#bundleState, existing);
+      return replay === undefined
+        ? failure("r2d.task_bundle_invalid", "Persisted R2D3 Task bundle is invalid")
+        : { ok: true, replayed: true, value: replay };
+    }
+    const staged = cloneBundleState(this.#bundleState);
+    const { task, capabilityLocks, runtimeSelection } = validated.input;
+    if (
+      staged.heads.has(task.head.taskId)
+      || staged.checkpoints.has(task.checkpoint.checkpointId)
+      || staged.runtimeSelections.has(task.head.taskId)
+      || staged.authorizationRecords.has(task.head.taskId)
+      || staged.authorizationRuntimeSelectionIds.has(runtimeSelection.runtimeSelectionId)
+      || [...staged.submitTurnBindings.values()].some((binding) =>
+        binding.taskId === task.head.taskId
+        || binding.userMessageId === validated.binding.userMessageId
+        || binding.runtimeSelectionId === runtimeSelection.runtimeSelectionId)
+      || capabilityLocks.some((lock) =>
+        staged.capabilityLockIds.has(lock.lockId)
+        || staged.capabilityLocks.has(lockKey(
+          lock.taskId,
+          lock.definitionSnapshot.capabilityId,
+        )))
+    ) {
+      return failure(
+        "r2d.task_bundle_conflict",
+        "R2D3 Task bundle identity already exists",
+      );
+    }
+    staged.heads.set(task.head.taskId, cloneHead(task.head));
+    staged.checkpoints.set(
+      task.checkpoint.checkpointId,
+      cloneCheckpoint(task.checkpoint),
+    );
+    for (const lock of capabilityLocks) {
+      const key = lockKey(lock.taskId, lock.definitionSnapshot.capabilityId);
+      staged.capabilityLocks.set(key, TaskCapabilityLockSchema.parse(lock));
+      staged.capabilityLockIds.set(lock.lockId, key);
+    }
+    staged.runtimeSelections.set(
+      runtimeSelection.taskId,
+      parseReadableTaskRuntimeSelectionV1Alpha4(runtimeSelection),
+    );
+    const authorization = parseTaskAuthorizationPersistenceRecord({
+      selection: validated.input.selection,
+      executionIdentity: validated.input.executionIdentity,
+    });
+    staged.authorizationRecords.set(task.head.taskId, authorization);
+    staged.authorizationRuntimeSelectionIds.set(
+      runtimeSelection.runtimeSelectionId,
+      task.head.taskId,
+    );
+    staged.submitTurnBindings.set(
+      validated.binding.submitTurnCommandId,
+      TaskSubmitTurnBindingSchema.parse(validated.binding),
+    );
+    staged.r2d3BindingEnvelopes.set(
+      validated.binding.submitTurnCommandId,
+      structuredClone(validated.bindingEnvelope),
+    );
+    const persisted = loadR2D3BundleFromState(staged, validated.bindingEnvelope);
+    if (persisted === undefined) {
+      return failure("r2d.task_bundle_invalid", "Staged R2D3 Task bundle is invalid");
+    }
+    this.#bundleState = staged;
+    return { ok: true, replayed: false, value: persisted };
+  }
+
+  async loadR2D3SubmitTurnTaskBundle(
+    submitTurnCommandId: string,
+  ): Promise<PersistedR2D3SubmitTurnTaskBundle | undefined> {
+    this.#requireStarted();
+    const envelope = this.#bundleState.r2d3BindingEnvelopes.get(
+      submitTurnCommandId,
+    );
+    return envelope === undefined
+      ? undefined
+      : loadR2D3BundleFromState(this.#bundleState, envelope);
+  }
+
+  async commitDfi541SubmitTurnTaskBundle(
+    input: Dfi541SubmitTurnTaskBundle,
+  ): Promise<PersistenceWriteResult<PersistedDfi541SubmitTurnTaskBundle>> {
+    this.#requireStarted();
+    const validated = validateDfi541SubmitTurnTaskBundle(input);
+    if ("ok" in validated) return validated;
+    const commandId = validated.binding.submitTurnCommandId;
+    const existing = this.#bundleState.dfi541BindingEnvelopes.get(commandId);
+    if (existing !== undefined) {
+      if (existing.submitTurnBinding.bundleDigest !== validated.binding.bundleDigest) {
+        return failure("dfi541.task_bundle_conflict",
+          "SubmitTurn command already owns another DFI-5.4.1 Task bundle");
+      }
+      const replay = loadDfi541BundleFromState(this.#bundleState, existing);
+      return replay === undefined
+        ? failure("dfi541.task_bundle_invalid", "Persisted DFI-5.4.1 bundle is invalid")
+        : { ok: true, replayed: true, value: replay };
+    }
+    const staged = cloneBundleState(this.#bundleState);
+    const { task, capabilityLocks, runtimeSelection } = validated.input;
+    if (
+      staged.heads.has(task.head.taskId)
+      || staged.checkpoints.has(task.checkpoint.checkpointId)
+      || staged.runtimeSelections.has(task.head.taskId)
+      || staged.authorizationRecords.has(task.head.taskId)
+      || staged.authorizationRuntimeSelectionIds.has(runtimeSelection.runtimeSelectionId)
+      || [...staged.submitTurnBindings.values()].some((binding) =>
+        binding.taskId === task.head.taskId
+        || binding.userMessageId === validated.binding.userMessageId
+        || binding.runtimeSelectionId === runtimeSelection.runtimeSelectionId)
+      || capabilityLocks.some((lock) => staged.capabilityLockIds.has(lock.lockId)
+        || staged.capabilityLocks.has(lockKey(
+          lock.taskId,
+          lock.definitionSnapshot.capabilityId,
+        )))
+    ) return failure("dfi541.task_bundle_conflict",
+      "DFI-5.4.1 Task bundle identity already exists");
+    staged.heads.set(task.head.taskId, cloneHead(task.head));
+    staged.checkpoints.set(task.checkpoint.checkpointId,
+      cloneCheckpoint(task.checkpoint));
+    for (const lock of capabilityLocks) {
+      const key = lockKey(lock.taskId, lock.definitionSnapshot.capabilityId);
+      staged.capabilityLocks.set(key, TaskCapabilityLockSchema.parse(lock));
+      staged.capabilityLockIds.set(lock.lockId, key);
+    }
+    staged.runtimeSelections.set(runtimeSelection.taskId,
+      parseReadableTaskRuntimeSelectionV1Alpha4(runtimeSelection));
+    const authorization = parseTaskAuthorizationPersistenceRecord({
+      selection: validated.input.selection,
+      executionIdentity: validated.input.executionIdentity,
+    });
+    staged.authorizationRecords.set(task.head.taskId, authorization);
+    staged.authorizationRuntimeSelectionIds.set(runtimeSelection.runtimeSelectionId,
+      task.head.taskId);
+    staged.submitTurnBindings.set(commandId,
+      TaskSubmitTurnBindingSchema.parse(validated.binding));
+    staged.dfi541BindingEnvelopes.set(commandId,
+      structuredClone(validated.bindingEnvelope));
+    const persisted = loadDfi541BundleFromState(staged, validated.bindingEnvelope);
+    if (persisted === undefined) return failure("dfi541.task_bundle_invalid",
+      "Staged DFI-5.4.1 Task bundle is invalid");
+    this.#bundleState = staged;
+    return { ok: true, replayed: false, value: persisted };
+  }
+
+  async loadDfi541SubmitTurnTaskBundle(
+    submitTurnCommandId: string,
+  ): Promise<PersistedDfi541SubmitTurnTaskBundle | undefined> {
+    this.#requireStarted();
+    const envelope = this.#bundleState.dfi541BindingEnvelopes.get(
+      submitTurnCommandId,
+    );
+    return envelope === undefined
+      ? undefined
+      : loadDfi541BundleFromState(this.#bundleState, envelope);
   }
 
   async #commitReadableAuthorizationAwareSubmitTurnTaskBundle(
@@ -333,7 +550,7 @@ export class InMemoryTaskPersistence implements TaskPersistence {
     }
     this.#runtimeSelections.set(
       runtimeSelection.taskId,
-      parseReadableTaskRuntimeSelection(runtimeSelection),
+      parseReadableTaskRuntimeSelectionV1Alpha4(runtimeSelection),
     );
     this.#authorizationRecords.set(
       task.head.taskId,
@@ -380,6 +597,8 @@ export class InMemoryTaskPersistence implements TaskPersistence {
 
   async loadExecutableSubmitTurnTaskBundle(submitTurnCommandId: string) {
     this.#requireStarted();
+    const dfi541 = await this.loadDfi541SubmitTurnTaskBundle(submitTurnCommandId);
+    if (dfi541 !== undefined) return dfi541;
     const binding = this.#submitTurnBindings.get(submitTurnCommandId);
     if (binding === undefined) return undefined;
     const authorized = this.#loadAuthorizationAwareSubmitTurnTaskBundle(binding);
@@ -423,7 +642,7 @@ export class InMemoryTaskPersistence implements TaskPersistence {
         }
         return validateTaskAuthorizationRecordAgainstRuntimeSelection(
           record,
-          runtimeSelection,
+          TaskRuntimeSelectionSchema.parse(runtimeSelection),
         );
       })
       .sort((left, right) => left.selection.taskId.localeCompare(right.selection.taskId));
@@ -680,7 +899,7 @@ export class InMemoryTaskPersistence implements TaskPersistence {
     const selection = this.#runtimeSelections.get(taskId);
     return selection === undefined
       ? undefined
-      : parseReadableTaskRuntimeSelection(structuredClone(selection));
+      : parseReadableTaskRuntimeSelectionV1Alpha4(structuredClone(selection));
   }
 
   async loadUserConfirmation(confirmationId: string): Promise<PersistedUserConfirmation | undefined> {
@@ -1163,7 +1382,7 @@ export class InMemoryTaskPersistence implements TaskPersistence {
       binding: TaskSubmitTurnBindingSchema.parse(binding),
       task,
       capabilityLocks: locks,
-      runtimeSelection: parseReadableTaskRuntimeSelection(selection),
+      runtimeSelection: parseReadableTaskRuntimeSelectionV1Alpha4(selection),
     } as ReadablePersistedSubmitTurnTaskBundle;
   }
 
@@ -1297,7 +1516,7 @@ function lockKey(taskId: string, capabilityId: string): string {
 }
 
 function selectionReferencesExactLocks(
-  selection: ReadableTaskRuntimeSelection,
+  selection: ReadableTaskRuntimeSelectionV1Alpha4,
   locks: readonly TaskCapabilityLock[],
 ): boolean {
   const locksById = new Map(locks.map((lock) => [lock.lockId, lock]));
@@ -1309,4 +1528,142 @@ function selectionReferencesExactLocks(
       && lock.definitionSnapshot.capabilityId === reference.capabilityId
       && sha256CanonicalJson(JsonValueSchema.parse(lock)) === reference.lockDigest;
   });
+}
+
+function createBundleState(): InMemoryTaskBundleState {
+  return {
+    heads: new Map(),
+    checkpoints: new Map(),
+    capabilityLocks: new Map(),
+    runtimeSelections: new Map(),
+    submitTurnBindings: new Map(),
+    authorizationRecords: new Map(),
+    authorizationRuntimeSelectionIds: new Map(),
+    capabilityLockIds: new Map(),
+    r2d3BindingEnvelopes: new Map(),
+    dfi541BindingEnvelopes: new Map(),
+  };
+}
+
+function cloneBundleState(current: InMemoryTaskBundleState): InMemoryTaskBundleState {
+  return {
+    heads: cloneMap(current.heads),
+    checkpoints: cloneMap(current.checkpoints),
+    capabilityLocks: cloneMap(current.capabilityLocks),
+    runtimeSelections: cloneMap(current.runtimeSelections),
+    submitTurnBindings: cloneMap(current.submitTurnBindings),
+    authorizationRecords: cloneMap(current.authorizationRecords),
+    authorizationRuntimeSelectionIds: new Map(current.authorizationRuntimeSelectionIds),
+    capabilityLockIds: new Map(current.capabilityLockIds),
+    r2d3BindingEnvelopes: cloneMap(current.r2d3BindingEnvelopes),
+    dfi541BindingEnvelopes: cloneMap(current.dfi541BindingEnvelopes),
+  };
+}
+
+function cloneMap<T>(source: ReadonlyMap<string, T>): Map<string, T> {
+  return new Map([...source].map(([key, value]) => [key, structuredClone(value)]));
+}
+
+function loadR2D3BundleFromState(
+  state: InMemoryTaskBundleState,
+  rawEnvelope: PersistedR2D3TaskBundleBindingEnvelopeV1,
+): PersistedR2D3SubmitTurnTaskBundle | undefined {
+  try {
+    const envelope = validateR2D3TaskBundleBindingEnvelopeV1(rawEnvelope);
+    const binding = envelope.submitTurnBinding;
+    const head = state.heads.get(binding.taskId);
+    const selection = state.runtimeSelections.get(binding.taskId);
+    const authorization = state.authorizationRecords.get(binding.taskId);
+    if (head === undefined || selection?.schemaVersion !== "v1alpha3"
+      || authorization === undefined) return undefined;
+    const checkpoint = state.checkpoints.get(head.latestCheckpointId);
+    if (checkpoint === undefined) return undefined;
+    const locksById = new Map(
+      [...state.capabilityLocks.values()].map((lock) => [lock.lockId, lock]),
+    );
+    const locks = [selection.resolvedModelLock, ...selection.toolLocks]
+      .map((reference) => locksById.get(reference.lockId));
+    if (locks.some((lock) => lock === undefined)) return undefined;
+    const input: R2D3SubmitTurnTaskBundle = {
+      submitTurnCommandId: binding.submitTurnCommandId,
+      userMessageId: binding.userMessageId,
+      task: { head: cloneHead(head), checkpoint: cloneCheckpoint(checkpoint) },
+      capabilityLocks: locks as TaskCapabilityLock[],
+      runtimeSelection: selection,
+      selection: authorization.selection,
+      executionIdentity: authorization.executionIdentity,
+      submitTurnBinding: binding,
+      taskInstructionBinding: envelope.taskInstructionBinding,
+      committedAt: binding.committedAt,
+    };
+    const validated = validateR2D3SubmitTurnTaskBundle(input);
+    if ("ok" in validated) return undefined;
+    return {
+      binding: validated.binding,
+      taskInstructionBinding: validated.input.taskInstructionBinding,
+      task: cloneTask(validated.input.task),
+      capabilityLocks: validated.input.capabilityLocks.map((lock) =>
+        TaskCapabilityLockSchema.parse(lock)),
+      runtimeSelection: validated.input.runtimeSelection,
+      selection: validated.input.selection,
+      executionIdentity: validated.input.executionIdentity,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function loadDfi541BundleFromState(
+  state: InMemoryTaskBundleState,
+  rawEnvelope: PersistedDfi541TaskBundleEnvelopeV1,
+): PersistedDfi541SubmitTurnTaskBundle | undefined {
+  try {
+    const envelope = validateDfi541TaskBundleEnvelopeV1(rawEnvelope);
+    const binding = envelope.submitTurnBinding;
+    const head = state.heads.get(binding.taskId);
+    const selection = state.runtimeSelections.get(binding.taskId);
+    const authorization = state.authorizationRecords.get(binding.taskId);
+    if (head === undefined || selection?.schemaVersion !== "v1alpha4"
+      || authorization === undefined) return undefined;
+    const checkpoint = state.checkpoints.get(head.latestCheckpointId);
+    if (checkpoint === undefined) return undefined;
+    const locksById = new Map([...state.capabilityLocks.values()]
+      .map((lock) => [lock.lockId, lock]));
+    const locks = [selection.resolvedModelLock, ...selection.toolLocks]
+      .map((reference) => locksById.get(reference.lockId));
+    if (locks.some((lock) => lock === undefined)) return undefined;
+    const validated = validateDfi541SubmitTurnTaskBundle({
+      submitTurnCommandId: binding.submitTurnCommandId,
+      userMessageId: binding.userMessageId,
+      task: { head: cloneHead(head), checkpoint: cloneCheckpoint(checkpoint) },
+      capabilityLocks: locks as TaskCapabilityLock[],
+      runtimeSelection: selection,
+      selection: authorization.selection,
+      executionIdentity: authorization.executionIdentity,
+      submitTurnBinding: binding,
+      taskInstructionBinding: envelope.taskInstructionBinding,
+      admissionEvidence: envelope.admissionEvidence,
+      ...(envelope.resolutionEvidence === undefined
+        ? {}
+        : { resolutionEvidence: envelope.resolutionEvidence }),
+      committedAt: binding.committedAt,
+    });
+    if ("ok" in validated) return undefined;
+    return {
+      binding: validated.binding,
+      taskInstructionBinding: validated.input.taskInstructionBinding,
+      task: cloneTask(validated.input.task),
+      capabilityLocks: validated.input.capabilityLocks.map((lock) =>
+        TaskCapabilityLockSchema.parse(lock)),
+      runtimeSelection: validated.input.runtimeSelection,
+      selection: validated.input.selection,
+      executionIdentity: validated.input.executionIdentity,
+      admissionEvidence: validated.input.admissionEvidence,
+      ...(validated.input.resolutionEvidence === undefined
+        ? {}
+        : { resolutionEvidence: validated.input.resolutionEvidence }),
+    };
+  } catch {
+    return undefined;
+  }
 }

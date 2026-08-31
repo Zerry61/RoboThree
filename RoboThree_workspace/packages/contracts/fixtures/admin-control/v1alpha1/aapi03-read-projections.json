@@ -1,0 +1,70 @@
+{
+  "schemaVersion": "admin-control.aapi03-read-projections.v1",
+  "modelDetail": {
+    "modelId": "model.fixture",
+    "modelRevision": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "displayName": "Fixture Model",
+    "providerLabel": "Fixture Provider",
+    "lifecycle": "unavailable",
+    "credentialStatus": "unavailable",
+    "safeSummary": "Cross-language conformance only.",
+    "contextWindowState": "unavailable",
+    "defaultForNewTasks": false
+  },
+  "robotDetail": {
+    "robotId": "agent.fixture",
+    "publishedRobotRevision": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    "displayName": "Fixture Robot",
+    "description": "Cross-language conformance only.",
+    "source": "enterprise_published",
+    "lifecycle": "unavailable",
+    "restrictionSummary": {
+      "models": "restricted_nonempty",
+      "skills": "restricted_empty",
+      "tools": "unrestricted",
+      "knowledge": "restricted_empty"
+    },
+    "reviewState": "unavailable",
+    "policyState": "unavailable"
+  },
+  "skillDetail": {
+    "skillId": "skill.fixture",
+    "skillRevision": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+    "displayName": "Fixture Skill",
+    "description": "Cross-language conformance only.",
+    "lifecycle": "unavailable",
+    "packageValidationState": "valid",
+    "packageDigest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+    "validationSummary": "Package integrity verified for conformance."
+  },
+  "toolDetail": {
+    "toolId": "tool.fixture",
+    "toolDefinitionRevision": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+    "displayName": "Fixture Tool",
+    "description": "Cross-language conformance only.",
+    "source": "official_package",
+    "lifecycle": "unavailable",
+    "readOnly": true,
+    "riskSummary": ["routine_file"],
+    "policyState": "unavailable",
+    "connectionState": "unavailable",
+    "credentialStatus": "unavailable",
+    "healthState": "unavailable"
+  },
+  "knowledgeDetail": {
+    "knowledgeId": "knowledge.fixture",
+    "knowledgeRevision": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+    "displayName": "Fixture Knowledge",
+    "safeSummary": "Cross-language conformance only.",
+    "state": "partial",
+    "retrievalState": "gated"
+  },
+  "auditSummary": {
+    "auditEventId": "30000000-0000-4000-8000-000000000003",
+    "auditRevision": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+    "occurredAt": "2026-08-27T02:00:00Z",
+    "actorSummary": "System",
+    "actionSummary": "fixture.event",
+    "result": "unavailable"
+  }
+}

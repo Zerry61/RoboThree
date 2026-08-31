@@ -105,7 +105,7 @@ export const intelligenceSectionTabs = Object.freeze([
 
 export const skillGateView: SkillGateView = Object.freeze({
   title: "技能目录待接入",
-  description: "当前版本尚未提供真实 Skill Catalog。这里不展示 Mock 技能条目。",
+  description: "当前版本尚未提供技能数据服务，这里不会展示示例技能。",
   capabilityState: "gated",
 });
 
@@ -153,18 +153,45 @@ const riskLabels = {
 
 const catalogErrorLabels = {
   "catalog.invalid_query": "目录请求无效，请刷新后重试。",
-  "catalog.cursor_invalid": "目录分页位置不属于当前运行实例，请刷新。",
+  "catalog.cursor_invalid": "当前分页位置已失效，请刷新。",
   "catalog.stale_cursor": "目录已变化，请刷新。",
   "catalog.registry_unavailable": "目录暂时不可用。",
   "catalog.integrity_violation": "受信目录完整性校验失败。",
   "catalog.response_too_large": "目录响应超出安全大小限制。",
   "catalog.robot_not_found": "机器人不存在或已不可见。",
   "catalog.tool_not_found": "工具不存在或已不可见。",
-  "catalog.client_mismatch": "当前窗口目录客户端身份不匹配，请刷新。",
-  "catalog.runtime_changed": "本地 Core 已重启，请刷新目录。",
+  "catalog.client_mismatch": "当前窗口与智能资源服务连接不一致，请刷新。",
+  "catalog.runtime_changed": "应用服务已重新连接，请刷新智能资源。",
   "contract.feature_unavailable": "目录能力暂不可用。",
   "runtime.request_aborted": "请求已被取消或被较新的页面状态取代。",
 } as const;
+
+const builtInToolPresentations: Readonly<Record<string, { name: string; description: string }>> = Object.freeze({
+  "tool.document.docx.read": {
+    name: "DOCX 读取",
+    description: "读取 DOCX 文档中的标题、段落、列表、表格和定位信息。",
+  },
+  "tool.document.pdf.extract_tables": {
+    name: "PDF 表格提取",
+    description: "从带文本层的 PDF 中提取表格。扫描件、图片型 PDF 和 OCR 不在当前能力范围内。",
+  },
+  "tool.document.pdf.extract_text": {
+    name: "PDF 文本提取",
+    description: "从授权工作区内的 PDF 文件中只读提取文本。",
+  },
+  "tool.document.pptx.write": {
+    name: "PPTX 生成",
+    description: "在授权工作区内创建新的 PPTX 演示文稿；远程图片由受控资源解析器处理。",
+  },
+  "tool.document.xlsx.read": {
+    name: "XLSX 读取",
+    description: "读取 XLSX 工作簿中的工作表、行列、单元格、公式表达式和定位信息。",
+  },
+  "tool.document.xlsx.write": {
+    name: "XLSX 写入",
+    description: "创建新的 XLSX 文件；覆盖已有文件时必须经过精确用户确认。",
+  },
+});
 
 export function buildRobotSummaryCard(robot: RobotCatalogSummary): RobotSummaryCard {
   return {
@@ -182,12 +209,13 @@ export function buildRobotSummaryCard(robot: RobotCatalogSummary): RobotSummaryC
 }
 
 export function buildToolSummaryCard(tool: ToolCatalogSummary): ToolSummaryCard {
+  const display = presentToolDisplay(tool);
   return {
     section: "tools",
     id: tool.toolId,
-    name: tool.displayName,
+    name: display.name,
     sourceLabel: toolSourceLabels[tool.source],
-    description: safeSummary(tool.description),
+    description: safeSummary(display.description),
     readOnlyLabel: tool.readOnly ? "只读" : "可产生变更",
     riskLabels: tool.riskSummary.length === 0
       ? ["风险状态未知"]
@@ -217,12 +245,13 @@ export function buildRobotDetailView(robot: RobotCatalogDetail): RobotDetailView
 }
 
 export function buildToolDetailView(tool: ToolCatalogDetail): ToolDetailView {
+  const display = presentToolDisplay(tool);
   return {
     section: "tools",
     id: tool.toolId,
-    name: tool.displayName,
+    name: display.name,
     sourceLabel: toolSourceLabels[tool.source],
-    description: safeSummary(tool.description),
+    description: safeSummary(display.description),
     readOnlyLabel: tool.readOnly ? "只读" : "可产生变更",
     riskLabels: tool.riskSummary.length === 0
       ? ["风险状态未知"]
@@ -337,6 +366,16 @@ function buildResourceView(resource: CatalogResourceSummaryV1Alpha2): ResourceVi
   return {
     name: resource.displayName,
     availabilityLabel: presentAvailability(resource.availability, resource.unavailableReason),
+  };
+}
+
+function presentToolDisplay(tool: Pick<ToolCatalogSummary, "toolId" | "displayName" | "description">): {
+  name: string;
+  description: string;
+} {
+  return builtInToolPresentations[tool.toolId] ?? {
+    name: tool.displayName,
+    description: tool.description,
   };
 }
 

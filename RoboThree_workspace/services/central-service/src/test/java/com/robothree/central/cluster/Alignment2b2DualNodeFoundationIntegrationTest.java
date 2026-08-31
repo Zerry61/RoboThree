@@ -723,7 +723,7 @@ class Alignment2b2DualNodeFoundationIntegrationTest {
                 PreparedStatement statement = connection.prepareStatement(
                         "SELECT script_digest "
                                 + "FROM robothree_schema_version "
-                                + "WHERE version = 10");
+                                + "WHERE version = 12");
                 ResultSet rows = statement.executeQuery()) {
             assertThat(rows.next()).isTrue();
             String digest = rows.getString(1);
@@ -739,7 +739,7 @@ class Alignment2b2DualNodeFoundationIntegrationTest {
                 PreparedStatement statement = connection.prepareStatement(
                         "UPDATE robothree_schema_version "
                                 + "SET script_digest = ? "
-                                + "WHERE version = 10")) {
+                                + "WHERE version = 12")) {
             statement.setString(1, digest);
             assertThat(statement.executeUpdate()).isEqualTo(1);
         }

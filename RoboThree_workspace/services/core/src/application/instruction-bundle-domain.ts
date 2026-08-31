@@ -1,4 +1,5 @@
 import {
+  DesktopResourceIdSchema,
   EntityIdSchema,
   JsonValueSchema,
   MaterializedResourceRevisionSchema,
@@ -6,12 +7,15 @@ import {
   type MaterializedResourceRevision,
   type Sha256Digest,
 } from "@robothree/contracts";
-import type { ReadableTaskRuntimeSelection } from
-  "@robothree/contracts/runtime-selection/v1alpha2";
+import type { ReadableTaskRuntimeSelectionV1Alpha3 } from
+  "@robothree/contracts/runtime-selection/v1alpha3";
+import type { TaskRuntimeSelectionV1Alpha4 } from
+  "@robothree/contracts/runtime-selection/v1alpha4";
 import { z } from "zod";
 
 import { sha256CanonicalJson } from "../persistence/digest.js";
-import { parseReadableTaskRuntimeSelection } from "./runtime-selection-revisions.js";
+import { parseReadableTaskRuntimeSelectionV1Alpha3 } from
+  "./runtime-selection-revisions.js";
 
 const TASK_INSTRUCTION_BINDING_DIGEST_DOMAIN =
   "robothree.task-instruction-binding.v1\n";
@@ -25,6 +29,20 @@ const InstructionSourceKindSchema = z.enum([
   "skill",
 ]);
 const InstructionAuthorityModeSchema = z.enum(["hard", "role", "advisory"]);
+
+// v1-v1alpha3 durable selections keep their historical Core-private
+// materializedRef. Runtime Selection v1alpha4 deliberately removed local
+// handles, so its additive readable form persists only the portable exact ref.
+const PortableLockedSkillRevisionSchema = z.object({
+  id: DesktopResourceIdSchema,
+  revision: Sha256DigestSchema,
+  contentDigest: Sha256DigestSchema,
+}).strict();
+
+const LockedSkillRevisionSchema = z.union([
+  MaterializedResourceRevisionSchema,
+  PortableLockedSkillRevisionSchema,
+]);
 
 const InstructionSourceIdentitySchema = z.object({
   sourceKind: InstructionSourceKindSchema,
@@ -49,7 +67,7 @@ const TaskInstructionBindingFields = {
   platformPromptRevision: Sha256DigestSchema,
   agentRevision: Sha256DigestSchema,
   agentDigest: Sha256DigestSchema,
-  orderedSkillRefs: z.array(MaterializedResourceRevisionSchema).max(64),
+  orderedSkillRefs: z.array(LockedSkillRevisionSchema).max(64),
   assemblyRevision: Sha256DigestSchema,
 };
 
@@ -128,13 +146,13 @@ export function createInstructionSourceV1(
 }
 
 export function deriveTaskInstructionBindingV1(input: Readonly<{
-  runtimeSelection: ReadableTaskRuntimeSelection;
+  runtimeSelection: ReadableTaskRuntimeSelectionV1Alpha3;
   submitTurnBundleDigest: string;
   assemblyRevision?: string;
 }>): TaskInstructionBindingV1 {
-  let selection: ReadableTaskRuntimeSelection;
+  let selection: ReadableTaskRuntimeSelectionV1Alpha3;
   try {
-    selection = parseReadableTaskRuntimeSelection(input.runtimeSelection);
+    selection = parseReadableTaskRuntimeSelectionV1Alpha3(input.runtimeSelection);
   } catch {
     throw new CpcInstructionFoundationError(
       "context.instruction_binding_invalid",
@@ -152,7 +170,7 @@ export function deriveTaskInstructionBindingV1(input: Readonly<{
 
 export function deriveTaskInstructionBindingV1FromValidatedSelection(
   input: Readonly<{
-    runtimeSelection: ReadableTaskRuntimeSelection;
+    runtimeSelection: ReadableTaskRuntimeSelectionV1Alpha3;
     submitTurnBundleDigest: string;
     assemblyRevision?: string;
   }>,
@@ -167,7 +185,35 @@ export function deriveTaskInstructionBindingV1FromValidatedSelection(
     platformPromptRevision: selection.platformPromptRevision,
     agentRevision: selection.agent.revision,
     agentDigest: selection.agent.digest,
-    orderedSkillRefs: selection.activeSkillRevisions,
+    orderedSkillRefs: portableInstructionSkillRefs(selection.activeSkillRevisions),
+    assemblyRevision: Sha256DigestSchema.parse(
+      input.assemblyRevision ?? CPC1_INSTRUCTION_ASSEMBLY_REVISION,
+    ),
+  });
+  return TaskInstructionBindingV1Schema.parse({
+    ...material,
+    bindingDigest: calculateTaskInstructionBindingDigest(material),
+  });
+}
+
+export function deriveTaskInstructionBindingV1FromValidatedSelectionV1Alpha4(
+  input: Readonly<{
+    runtimeSelection: TaskRuntimeSelectionV1Alpha4;
+    submitTurnBundleDigest: string;
+    assemblyRevision?: string;
+  }>,
+): TaskInstructionBindingV1 {
+  const selection = input.runtimeSelection;
+  const material = TaskInstructionBindingMaterialSchema.parse({
+    schemaVersion: "v1",
+    taskId: selection.taskId,
+    runtimeSelectionId: selection.runtimeSelectionId,
+    runtimeSelectionDigest: selection.selectionDigest,
+    submitTurnBundleDigest: Sha256DigestSchema.parse(input.submitTurnBundleDigest),
+    platformPromptRevision: selection.platformPromptRevision,
+    agentRevision: selection.agent.revision,
+    agentDigest: selection.agent.digest,
+    orderedSkillRefs: portableInstructionSkillRefs(selection.activeSkillRevisions),
     assemblyRevision: Sha256DigestSchema.parse(
       input.assemblyRevision ?? CPC1_INSTRUCTION_ASSEMBLY_REVISION,
     ),
@@ -190,6 +236,24 @@ export function validateTaskInstructionBindingV1(
     );
   }
   return parsed;
+}
+
+function portableInstructionSkillRefs(
+  references: readonly Readonly<{
+    revision: string;
+    contentDigest: string;
+    id?: string;
+    skillId?: string;
+    materializedRef?: string;
+  }>[],
+) {
+  return references.map((reference) => reference.skillId === undefined
+    ? reference
+    : {
+      id: reference.skillId,
+      revision: reference.revision,
+      contentDigest: reference.contentDigest,
+    });
 }
 
 export function createInstructionBundleDescriptorV1(input: Readonly<{

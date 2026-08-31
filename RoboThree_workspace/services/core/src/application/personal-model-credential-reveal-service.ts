@@ -31,6 +31,8 @@ import type {
 } from "../ports/personal-credential-store.js";
 import type { PersonalModelOwnerAuthorityContextProvider } from "../ports/personal-model-credential-coordination.js";
 import type { PersonalModelPersistence } from "../ports/personal-model-persistence.js";
+import type { PersonalModelManagementAuthoritySource } from
+  "./personal-model-management-authority.js";
 
 const DeadlineSchema = z.string().datetime({ offset: true });
 const MAX_SECRET_BYTES = 16_384;
@@ -215,7 +217,8 @@ export class PersonalModelRevealAttemptRegistry {
 export class PersonalModelCredentialRevealService {
   readonly #persistence: PersonalModelPersistence;
   readonly #credentials: PersonalCredentialStore;
-  readonly #authorityContexts: PersonalModelOwnerAuthorityContextProvider;
+  readonly #authorityContexts: PersonalModelOwnerAuthorityContextProvider | undefined;
+  readonly #managementAuthority: PersonalModelManagementAuthoritySource | undefined;
   readonly #authority = new StrictPersonalModelOwnerAuthorityResolver();
   readonly #clock: Clock;
   readonly #attempts: PersonalModelRevealAttemptRegistry;
@@ -224,7 +227,8 @@ export class PersonalModelCredentialRevealService {
   public constructor(input: {
     persistence: PersonalModelPersistence;
     credentials: PersonalCredentialStore;
-    authorityContexts: PersonalModelOwnerAuthorityContextProvider;
+    authorityContexts?: PersonalModelOwnerAuthorityContextProvider;
+    managementAuthority?: PersonalModelManagementAuthoritySource;
     clock: Clock;
     attempts?: PersonalModelRevealAttemptRegistry;
     operationGate?: PersonalModelOperationGate;
@@ -232,6 +236,10 @@ export class PersonalModelCredentialRevealService {
     this.#persistence = input.persistence;
     this.#credentials = input.credentials;
     this.#authorityContexts = input.authorityContexts;
+    this.#managementAuthority = input.managementAuthority;
+    if ((this.#authorityContexts === undefined) === (this.#managementAuthority === undefined)) {
+      throw new Error("Personal Model reveal requires exactly one authority source");
+    }
     this.#clock = input.clock;
     this.#attempts = input.attempts ?? new PersonalModelRevealAttemptRegistry();
     this.#operationGate = input.operationGate ?? new InMemoryPersonalModelOperationGate();
@@ -374,12 +382,22 @@ export class PersonalModelCredentialRevealService {
   }
 
   async #resolveOwner(): Promise<PersonalModelOwnerIdentity> {
+    if (this.#managementAuthority !== undefined) {
+      const authority = await this.#managementAuthority.resolve();
+      if (authority === undefined || !authority.permissions.reveal) {
+        throw new PersonalModelOwnerAuthorityError("personal_model.permission_denied");
+      }
+      return {
+        ownerScopeNamespaceRevision: authority.ownerScopeNamespaceRevision,
+        ownerScopeDigest: authority.ownerScopeDigest,
+      };
+    }
     const loaded = await this.#persistence.loadActiveOwnerNamespace();
     if (loaded === undefined) throw new PersonalModelOwnerAuthorityError("personal_model.permission_denied");
     let namespace: ReturnType<typeof validatePersonalModelOwnerNamespace> | undefined;
     try {
       namespace = validatePersonalModelOwnerNamespace(loaded);
-      const context = await this.#authorityContexts.load("reveal");
+      const context = await this.#authorityContexts!.load("reveal");
       return this.#authority.resolve({ ...context, namespace, action: "reveal" }).ownerIdentity;
     } finally {
       loaded.namespaceKey.fill(0);

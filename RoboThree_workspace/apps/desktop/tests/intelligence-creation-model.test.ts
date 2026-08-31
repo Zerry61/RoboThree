@@ -17,18 +17,18 @@ import {
 } from "../src/renderer/pages/intelligence/intelligence-creation-model.js";
 
 describe("DFE-4B intelligence creation model", () => {
-  it("keeps robot capability switches disabled by default while retaining selections", () => {
+  it("keeps robot capabilities empty until the user explicitly selects resources", () => {
     const draft = createDefaultRobotDraft();
 
     expect(Object.values(draft.capabilities).every((capability) => !capability.enabled)).toBe(true);
-    expect(draft.capabilities.skills.selectedIds).toContain("skill.document.review");
+    expect(draft.capabilities.skills.selectedIds).toEqual([]);
 
     const enabled = toggleRobotCapability(draft, "skills");
     const disabled = toggleRobotCapability(enabled, "skills");
 
     expect(enabled.capabilities.skills.enabled).toBe(true);
     expect(disabled.capabilities.skills.enabled).toBe(false);
-    expect(disabled.capabilities.skills.selectedIds).toEqual(["skill.document.review"]);
+    expect(disabled.capabilities.skills.selectedIds).toEqual([]);
   });
 
   it("only removes uploaded avatars and keeps other draft fields intact", () => {
@@ -48,7 +48,7 @@ describe("DFE-4B intelligence creation model", () => {
   it("validates robot and skill creation drafts without adding hidden backend fields", () => {
     expect(validateRobotDraft(createDefaultRobotDraft())).toEqual({
       name: "请输入机器人名称",
-      intro: "请输入机器人介绍",
+      intro: "请输入机器人简介",
     });
     expect(hasValidationErrors(validateSkillCreatorForm({
       name: "",
@@ -66,6 +66,7 @@ describe("DFE-4B intelligence creation model", () => {
 
     expect(conversation.assistantName).toBe("技能创建助手");
     expect(conversation.firstUserMessage).toContain("周报整理技能");
+    expect(conversation.draftFiles).toEqual([]);
     expect(JSON.stringify(conversation)).not.toMatch(/workspaceRoot|rootRealPath|submitTurn/u);
   });
 

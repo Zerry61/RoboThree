@@ -55,11 +55,13 @@ final class ProviderToolCallAccumulator {
                 throw invalid("model_gateway.provider_tool_arguments_oversized");
             }
         }
-        sink.accept(new ModelProviderStreamEvent.ToolCallDelta(
-                index,
-                providerToolCallId,
-                name,
-                argumentsFragment));
+        if (providerToolCallId != null || name != null || argumentsFragment != null) {
+            sink.accept(new ModelProviderStreamEvent.ToolCallDelta(
+                    index,
+                    providerToolCallId,
+                    name,
+                    argumentsFragment));
+        }
     }
 
     void requireComplete(String finishReason) {

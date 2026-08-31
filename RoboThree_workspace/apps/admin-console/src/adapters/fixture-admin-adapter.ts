@@ -2,17 +2,40 @@ import type { AdminAdapter } from './admin-adapter';
 import type { CapabilityProjection } from '../app/route-meta';
 
 export function createFixtureAdminAdapter(capabilities: readonly CapabilityProjection[]): AdminAdapter {
-  const byKey = new Map(capabilities.map((capability) => [capability.capabilityKey, capability]));
+  const unavailable = async (): Promise<never> => {
+    throw new Error('admin.fixture_inventory_unavailable');
+  };
 
   return {
-    async getCapability(capabilityKey: string): Promise<CapabilityProjection> {
-      return (
-        byKey.get(capabilityKey) ?? {
-          capabilityKey,
-          state: 'gated',
-          safeReason: 'prototype/gated fixture'
-        }
-      );
-    }
+    async getCurrentCapabilities() {
+      return {
+        capabilitySetRevision: 'fixture-only',
+        capabilities,
+        testIdentityUsed: true,
+        productionIdentityReady: false
+      };
+    },
+    listModels: unavailable,
+    getModel: unavailable,
+    listManagedModels: unavailable,
+    getManagedModel: unavailable,
+    listRobots: unavailable,
+    getRobot: unavailable,
+    listRobotReviews: unavailable,
+    getRobotReview: unavailable,
+    approveRobotReview: unavailable,
+    rejectRobotReview: unavailable,
+    listSkills: unavailable,
+    getSkill: unavailable,
+    listTools: unavailable,
+    getTool: unavailable,
+    listKnowledge: unavailable,
+    getKnowledge: unavailable,
+    listAuditEvents: unavailable,
+    createModel: unavailable,
+    updateModel: unavailable,
+    testModelConnection: unavailable,
+    setModelLifecycle: unavailable,
+    setDefaultModel: unavailable
   };
 }

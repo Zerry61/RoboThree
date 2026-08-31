@@ -1,25 +1,14 @@
 <template>
-  <section class="settings-model-page" aria-labelledby="settings-model-title">
-    <R3PageHeader
-      eyebrow="Settings"
-      title="模型管理"
-      description="查看当前可用的模型安全摘要。个人模型管理和 Credential 链路仍待接入。"
-    >
+  <SettingsPageFrame title="模型管理" description="查看企业、平台和个人模型的安全只读信息。">
       <template #actions>
         <R3Button variant="secondary" :disabled="loading" @click="void refresh()">
           刷新
         </R3Button>
       </template>
-    </R3PageHeader>
 
-    <SettingsSectionLayout>
-      <template #nav>
-        <SettingsSectionNav />
-      </template>
-
-      <div class="settings-model-page__content">
-        <R3InlineNotice tone="warning" title="Credential 安全边界">
-          当前页面不会接收真实 API Key，不会显示 Credential Reference，也不会声明任何添加、保存、删除或设为默认结果。
+      <div class="settings-model-page__content" aria-label="模型管理内容">
+        <R3InlineNotice tone="warning" title="凭证安全说明">
+          当前页面不会接收或显示真实密钥，也不会声明任何添加、保存、删除或设为默认结果。
         </R3InlineNotice>
 
         <R3InlineNotice v-if="error" tone="danger" title="模型管理加载失败">
@@ -33,7 +22,7 @@
         </section>
 
         <R3EmptyState
-          v-else-if="view.empty"
+          v-else-if="view.empty && personalRows.length === 0"
           :title="view.emptyTitle"
           :description="view.emptyDescription"
           icon="M"
@@ -80,44 +69,46 @@
           <template #header>
             <div class="settings-model-page__section-header">
               <div>
-                <h2>{{ view.personalGate.title }}</h2>
-                <p>{{ view.personalGate.description }}</p>
+                <h2>个人模型</h2>
+                <p>只读展示已通过安全凭据链路注册的个人模型。</p>
               </div>
-              <R3Tag tone="warning">{{ view.personalGate.statusLabel }}</R3Tag>
+              <R3Tag :tone="personalCatalogAvailable ? 'neutral' : 'warning'">
+                {{ personalCatalogAvailable ? `${personalRows.length} 项` : "待接入" }}
+              </R3Tag>
             </div>
           </template>
 
           <div class="settings-model-page__gate">
-            <dl>
-              <div>
-                <dt>Provider</dt>
-                <dd>DeepSeek、智谱、Kimi、自定义；真实默认 Endpoint 由后续受控配置提供。</dd>
-              </div>
-              <div>
-                <dt>模型标识</dt>
-                <dd>提交给 Provider 的精确 Model ID；当前真实 Projection 尚未提供该字段。</dd>
-              </div>
-              <div>
-                <dt>显示名称</dt>
-                <dd>用户在列表和任务选择器看到的名称；当前兼容期只来自安全显示字段。</dd>
-              </div>
-            </dl>
+            <R3Skeleton v-if="personalLoading" height="64px" />
+            <R3InlineNotice v-else-if="personalError" tone="danger" title="个人模型加载失败">{{ personalError }}</R3InlineNotice>
+            <R3InlineNotice v-else-if="!personalCatalogAvailable" tone="warning" title="个人模型目录不可用">{{ personalUnavailableMessage }}</R3InlineNotice>
+            <p v-else-if="personalRows.length === 0" class="settings-model-page__empty-copy">当前没有个人模型。</p>
+            <ul v-else class="settings-model-page__model-list" aria-label="个人模型列表">
+              <li v-for="row in personalRows" :key="row.personalModelId" class="settings-model-page__model-row">
+                <div class="settings-model-page__model-main">
+                  <span class="settings-model-page__name-line"><strong>{{ row.displayName }}</strong><R3Tag v-if="row.preferenceSelected" tone="neutral">个人默认</R3Tag></span>
+                  <span>{{ row.providerLabel }} · {{ row.endpointDisplayHost }}</span>
+                  <small>模型标识：{{ row.providerModelId }}</small>
+                  <small>{{ row.capabilityLabel }}</small>
+                </div>
+                <div class="settings-model-page__model-state">
+                  <R3StatusBadge tone="neutral">{{ row.statusLabel }}</R3StatusBadge>
+                  <span>{{ row.statusHelp }}</span>
+                </div>
+              </li>
+            </ul>
 
             <R3InlineNotice tone="info" title="禁用原因">
-              {{ view.personalGate.actionsDisabledReason }}
+              个人模型添加与凭证管理尚未开放。本页不会接收或显示 API Key。
             </R3InlineNotice>
 
-            <div class="settings-model-page__actions" aria-label="个人模型待接入操作">
+            <div class="settings-model-page__actions">
               <R3Button variant="secondary" disabled>添加个人模型</R3Button>
-              <R3Button variant="secondary" disabled>查看 Key</R3Button>
-              <R3Button variant="secondary" disabled>设为默认</R3Button>
-              <R3Button variant="danger" disabled>删除</R3Button>
             </div>
           </div>
         </R3Card>
       </div>
-    </SettingsSectionLayout>
-  </section>
+  </SettingsPageFrame>
 </template>
 
 <script setup lang="ts">
@@ -128,31 +119,44 @@ import {
   R3Card,
   R3EmptyState,
   R3InlineNotice,
-  R3PageHeader,
   R3Skeleton,
   R3StatusBadge,
   R3Tag,
 } from "../../components/ui";
 import {
+  desktopPersonalModelSettingsAdapter,
+  personalModelSettingsAdapterKey,
+  type PersonalModelSettingsAdapter,
+} from "../../adapters/personal-model-settings-adapter.js";
+import {
+  DesktopSettingsAdapterError,
   desktopSettingsAdapter,
+  safeSettingsErrorMessage,
   settingsAdapterKey,
   type SettingsAdapter,
 } from "../../adapters/settings-adapter.js";
-import SettingsSectionLayout from "./SettingsSectionLayout.vue";
-import SettingsSectionNav from "./SettingsSectionNav.vue";
+import SettingsPageFrame from "./SettingsPageFrame.vue";
 import {
   modelIdentifierExplanation,
   presentModelManagement,
+  presentPersonalModelRow,
 } from "./settings-model-management-model.js";
 
 defineOptions({ name: "RoboThreeSettingsModelPage" });
 
 const adapter = inject<SettingsAdapter>(settingsAdapterKey, desktopSettingsAdapter);
+const personalAdapter = inject<PersonalModelSettingsAdapter>(personalModelSettingsAdapterKey, desktopPersonalModelSettingsAdapter);
 const models = ref<Awaited<ReturnType<SettingsAdapter["loadSettingsModels"]>>["models"]>([]);
+const personalModels = ref<Awaited<ReturnType<PersonalModelSettingsAdapter["loadPersonalModels"]>>["models"]>([]);
 const loading = ref(true);
 const error = ref("");
+const personalLoading = ref(true);
+const personalError = ref("");
+const personalCatalogAvailable = ref(false);
+const personalUnavailableMessage = ref("个人模型目录尚未开放。");
 
-const view = computed(() => presentModelManagement(models.value));
+const view = computed(() => presentModelManagement(models.value.filter((model) => model.source !== "personal")));
+const personalRows = computed(() => personalModels.value.map(presentPersonalModelRow));
 
 onMounted(() => {
   void refresh();
@@ -160,26 +164,34 @@ onMounted(() => {
 
 async function refresh(): Promise<void> {
   loading.value = true;
-  try {
-    const data = await adapter.loadSettingsModels();
-    models.value = data.models;
-    error.value = "";
-  } catch (caught) {
-    error.value = caught instanceof Error ? caught.message : "未知错误。";
+  personalLoading.value = true;
+  await Promise.all([loadSharedModels(), loadPersonalModels()]);
+}
+
+async function loadSharedModels(): Promise<void> {
+  try { models.value = (await adapter.loadSettingsModels()).models; error.value = ""; }
+  catch (caught) {
+    error.value = caught instanceof DesktopSettingsAdapterError ? safeSettingsErrorMessage(caught.message) : "模型管理暂不可用，请稍后重试。";
     models.value = [];
-  } finally {
-    loading.value = false;
-  }
+  } finally { loading.value = false; }
+}
+
+async function loadPersonalModels(): Promise<void> {
+  try {
+    const data = await personalAdapter.loadPersonalModels();
+    personalModels.value = data.models;
+    personalCatalogAvailable.value = data.catalogAvailable;
+    personalUnavailableMessage.value = data.unavailableMessage ?? "个人模型目录尚未开放。";
+    personalError.value = "";
+  } catch {
+    personalModels.value = [];
+    personalCatalogAvailable.value = false;
+    personalError.value = "个人模型目录暂不可用，请稍后重试。";
+  } finally { personalLoading.value = false; }
 }
 </script>
 
 <style scoped>
-.settings-model-page {
-  display: grid;
-  gap: 20px;
-  padding: 24px;
-}
-
 .settings-model-page__content,
 .settings-model-page__stack,
 .settings-model-page__gate {
@@ -213,18 +225,21 @@ async function refresh(): Promise<void> {
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 12px;
+  gap: 0;
 }
 
 .settings-model-page__model-row {
   min-width: 0;
-  border: 1px solid var(--r3-color-border);
-  border-radius: var(--r3-radius-md);
-  padding: 12px;
+  border-bottom: 1px solid var(--r3-color-border);
+  padding: 11px 2px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(240px, 340px);
   gap: 12px;
   align-items: start;
+}
+
+.settings-model-page__model-row:last-child {
+  border-bottom: 0;
 }
 
 .settings-model-page__model-main,
@@ -237,6 +252,9 @@ async function refresh(): Promise<void> {
 .settings-model-page__model-main strong {
   overflow-wrap: anywhere;
 }
+
+.settings-model-page__name-line { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+.settings-model-page__empty-copy { margin: 0; color: var(--r3-color-text-secondary); font-size: var(--r3-font-size-sm); }
 
 .settings-model-page__gate dl {
   margin: 0;
@@ -266,4 +284,5 @@ async function refresh(): Promise<void> {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
 </style>
