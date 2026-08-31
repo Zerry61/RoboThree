@@ -14,6 +14,8 @@ import { lstat, readFile, realpath, stat } from "node:fs/promises";
 import { isAbsolute, resolve, win32 } from "node:path";
 import {
   PPTX_WRITE_CAPABILITY_ID,
+  TEXT_FILE_WRITE_CAPABILITY_ID,
+  TEXT_FILE_WRITE_LIMITS_REVISION,
   computePptxWriteRequestDigest,
   computeXlsxOverwriteRequestDigest,
   normalizePptxWriteOptions,
@@ -215,6 +217,10 @@ import { RuntimeAdmissionController } from "../application/runtime-admission-con
 import { TaskCapabilityLockService } from "../application/task-capability-lock-service.js";
 import { TurnSnapshotBuilder } from "../application/turn-snapshot-builder.js";
 import { ToolExecutionService } from "../application/tool-execution-service.js";
+import { deriveWorkspaceTextArtifactProof } from
+  "../application/workspace-text-artifact-authority.js";
+import { workspaceTextPostconditionToEffectQueryResult } from
+  "../application/workspace-text-effect-recovery.js";
 import { UserConfirmationCoordinator } from "../application/user-confirmation-coordinator.js";
 import { WorkspaceGrantService } from "../application/workspace-grant-service.js";
 import { WorkspaceBrowserService } from "../application/workspace-browser-service.js";
@@ -230,6 +236,13 @@ import {
   DOCUMENT_TOOL_SOURCE,
   registerDocumentToolRecords,
 } from "../registry/document-tool-registry.js";
+import {
+  WORKSPACE_TEXT_TOOL_ADAPTER_DESCRIPTOR,
+  WORKSPACE_TEXT_TOOL_BINDING,
+  WORKSPACE_TEXT_TOOL_DEFINITION,
+  WORKSPACE_TEXT_TOOL_SOURCE,
+  registerWorkspaceTextToolRecords,
+} from "../registry/workspace-text-tool-registry.js";
 import { isDocumentToolCapabilityId } from "../application/document-tool-context.js";
 import { RegistryBuilder } from "../registry/registry-builder.js";
 import { RuntimeAdapterHandles } from "../registry/runtime-adapter-handles.js";
@@ -243,6 +256,7 @@ import { createInternalTrialEnterpriseR2DProductionComposition } from
 import type { AgentLoopStarter } from "../ports/agent-loop-starter.js";
 import type { Clock } from "../ports/clock.js";
 import type {
+  ArtifactLifecyclePersistence,
   ManualArtifactRegistrationPersistence,
   WorkspaceGrantPersistence,
 } from "../ports/desktop-foundation-persistence.js";
@@ -426,6 +440,12 @@ export function createDesktopPrivateRuntime(input: {
     capabilityId: definition!.capabilityId,
     capabilityRevision: definition!.revision,
   }));
+  const generalToolRefs = internalTrialDeployment === undefined
+    ? presentationToolRefs
+    : [...presentationToolRefs, {
+      capabilityId: WORKSPACE_TEXT_TOOL_DEFINITION.capabilityId,
+      capabilityRevision: WORKSPACE_TEXT_TOOL_DEFINITION.revision,
+    }];
   const presentationSkillRef = presentationSkill === undefined
     ? undefined
     : {
@@ -530,7 +550,15 @@ export function createDesktopPrivateRuntime(input: {
         DOCUMENT_TOOL_REGISTRY_RECORDS.descriptor.revision,
       clock,
     });
+  const workspaceTextHandle = documentBackend?.createTextWriteHandle({
+    adapterDescriptorId: WORKSPACE_TEXT_TOOL_ADAPTER_DESCRIPTOR.adapterDescriptorId,
+    adapterDescriptorRevision: WORKSPACE_TEXT_TOOL_ADAPTER_DESCRIPTOR.revision,
+  });
+  const documentWorkerHandles = documentBackend === undefined || workspaceTextHandle === undefined
+    ? undefined
+    : new RuntimeAdapterHandles([documentBackend, workspaceTextHandle]);
   const documentToolService = documentBackend === undefined
+    || documentWorkerHandles === undefined
     ? undefined
     : new ToolExecutionService({
       lockService,
@@ -543,13 +571,44 @@ export function createDesktopPrivateRuntime(input: {
           adapterDescriptorId:
             DOCUMENT_TOOL_REGISTRY_RECORDS.descriptor.adapterDescriptorId,
           persistence: tasks,
-          handles: new RuntimeAdapterHandles([documentBackend]),
+          handles: documentWorkerHandles,
           clock,
           hydrateAction: (hydration) => hydrateDesktopDocumentToolAction({
             action: hydration.action,
             workspaces: foundation,
             manualArtifacts: foundation,
           }),
+        }), new ToolEffectExecutor({
+          adapterDescriptorId: WORKSPACE_TEXT_TOOL_ADAPTER_DESCRIPTOR.adapterDescriptorId,
+          persistence: tasks,
+          handles: documentWorkerHandles,
+          clock,
+          hydrateAction: (hydration) => hydrateWorkspaceTextToolAction({
+            action: hydration.action,
+            taskId: hydration.attempt.taskId,
+            tasks,
+            workspaces: foundation,
+            artifactLifecycles: foundation,
+          }),
+          queryResolver: async ({ attempt, action, lock }) => {
+            const inspected = await documentBackend.inspectTextWritePostcondition({
+              request: {
+                lock,
+                action,
+                effectAttemptId: attempt.effectAttemptId,
+                idempotencyKey: attempt.idempotencyKey,
+                requestedAt: clock.now(),
+              },
+              adapterDescriptorId: WORKSPACE_TEXT_TOOL_ADAPTER_DESCRIPTOR.adapterDescriptorId,
+              adapterDescriptorRevision: WORKSPACE_TEXT_TOOL_ADAPTER_DESCRIPTOR.revision,
+            });
+            return workspaceTextPostconditionToEffectQueryResult({
+              postcondition: inspected,
+              attempt,
+              action,
+              observedAt: clock.now(),
+            });
+          },
         })],
       }),
       authorization: new AuthorizationEvaluator(),
@@ -570,7 +629,19 @@ export function createDesktopPrivateRuntime(input: {
       service: documentToolService,
       persistence: tasks,
       buildExecution: async (call, signal) =>
-        buildDesktopDocumentToolExecution({
+        call.capabilityId === TEXT_FILE_WRITE_CAPABILITY_ID
+          ? buildWorkspaceTextToolExecution({
+            call,
+            signal,
+            taskRuntime,
+            tasks,
+            workspaces: foundation,
+            artifactLifecycles: foundation,
+            clock,
+            ids,
+            activeUserId,
+          })
+          : buildDesktopDocumentToolExecution({
           call,
           signal,
           taskRuntime,
@@ -581,7 +652,7 @@ export function createDesktopPrivateRuntime(input: {
           ids,
           activeUserId,
           pendingXlsxOverwriteConfirmations,
-        }),
+          }),
     });
   const scriptedModelProvider = new DesktopDocumentScriptedModelProvider({
     adapterDescriptorId: "adapter.model.desktop-scripted",
@@ -677,7 +748,7 @@ export function createDesktopPrivateRuntime(input: {
           internalTrialDeployment,
           activeRegistry.registryRevision,
           presentationSkillRef,
-          presentationToolRefs,
+          generalToolRefs,
         ),
         model: {
           modelId: internalTrialDeployment.capability.capabilityId,
@@ -687,7 +758,7 @@ export function createDesktopPrivateRuntime(input: {
         ...(presentationSkillRef === undefined
           ? {}
           : { skill: presentationSkillRef }),
-        tools: presentationToolRefs,
+        tools: generalToolRefs,
         ...(presentationAgent === undefined
           ? {}
           : { presentationAgent }),
@@ -697,10 +768,14 @@ export function createDesktopPrivateRuntime(input: {
           async resolveExact(input) {
             return { registryRevision: input.registryRevision,
               authorityFactsDigest: input.workspaceAndAuthorizationFactsDigest,
-              candidates: input.exactAgent.agentDefinitionId === "agent.presentation"
-                || input.exactAgent.agentDefinitionId === "agent.general"
+              candidates: input.exactAgent.agentDefinitionId === "agent.general"
                 ? input.entitlementSnapshot.tools
-                : [] };
+                : input.exactAgent.agentDefinitionId === "agent.presentation"
+                  ? input.entitlementSnapshot.tools.filter((tool) =>
+                    presentationToolRefs.some((ref) =>
+                      ref.capabilityId === tool.capabilityId
+                      && ref.capabilityRevision === tool.capabilityRevision))
+                  : [] };
           },
         },
         reasoningPlanner: new ReasoningModeLockPlanner({
@@ -862,6 +937,7 @@ export function createDesktopPrivateRuntime(input: {
     }),
     loop,
     taskRuntime,
+    scheduler: new SystemScheduler(),
     coordination,
     ephemeralEvents,
     adapterHandles: runtimeAdapterHandles,
@@ -1246,6 +1322,251 @@ export function createDesktopPrivateRuntime(input: {
       runtimeStatus = "failed";
     },
   });
+}
+
+async function buildWorkspaceTextToolExecution(input: {
+  call: AssistantToolCall;
+  signal: AbortSignal;
+  taskRuntime: DurableTaskRuntime;
+  tasks: TaskPersistence;
+  workspaces: WorkspaceGrantPersistence;
+  artifactLifecycles: ArtifactLifecyclePersistence;
+  clock: Clock;
+  ids: IdGenerator;
+  activeUserId: string;
+}) {
+  const { call } = input;
+  if (call.capabilityId !== TEXT_FILE_WRITE_CAPABILITY_ID) {
+    throw new Error("Workspace Text Tool received another capability");
+  }
+  const selection = await input.tasks.loadReadableTaskRuntimeSelection(call.taskId);
+  if (selection?.workspaceGrantId === undefined) {
+    throw new Error("Workspace Text Tool requires a locked workspace grant");
+  }
+  const grant = await input.workspaces.loadWorkspaceGrant(selection.workspaceGrantId);
+  if (grant === undefined || grant.status !== "active") {
+    throw new Error("Workspace Text Tool workspace grant is unavailable");
+  }
+  const model = parseWorkspaceTextModelArguments(call.arguments);
+  const contentSha256 = `sha256:${createHash("sha256").update(model.content, "utf8").digest("hex")}`;
+  const proof = model.mode === "replace_existing"
+    ? await deriveWorkspaceTextArtifactProof({
+      taskId: call.taskId,
+      workspaceGrantId: grant.workspaceGrantId,
+      relativePath: model.relativePath,
+      expectedPreviousSha256: model.expectedPreviousSha256!,
+      tasks: input.tasks,
+      artifactLifecycles: input.artifactLifecycles,
+    })
+    : undefined;
+  const payload = JsonObjectSchema.parse({
+    workspaceGrantId: grant.workspaceGrantId,
+    relativePath: model.relativePath,
+    content: model.content,
+    contentSha256,
+    mode: model.mode,
+    ...(model.expectedPreviousSha256 === undefined
+      ? {}
+      : { expectedPreviousSha256: model.expectedPreviousSha256 }),
+    ...(proof === undefined ? {} : { ownedArtifactProofDigest: proof.digest }),
+    limitsRevision: TEXT_FILE_WRITE_LIMITS_REVISION,
+    limits: DOCUMENT_TOOL_LIMITS,
+  });
+  const step = await ensureDocumentToolStep({
+    taskRuntime: input.taskRuntime,
+    clock: input.clock,
+    ids: input.ids,
+    call,
+    modelPayload: JsonObjectSchema.parse(call.arguments),
+  });
+  const operation = model.mode === "replace_existing" ? "modify" : "create";
+  const targetRealPath = resolve(grant.rootRealPath, model.relativePath);
+  return {
+    taskId: call.taskId,
+    runId: step.runId,
+    stepId: step.stepId,
+    registryRevision: selection.registryRevision,
+    capabilityId: call.capabilityId,
+    action: { actionId: call.actionId, kind: call.capabilityId, payload },
+    idempotencyKey: `workspace-text:${call.taskId}:${call.toolCallId}`,
+    riskFactKinds: ["routine_file"] satisfies readonly ToolRiskFactKind[],
+    authorization: {
+      context: documentToolAuthorizationContext({
+        activeUserId: input.activeUserId,
+        capabilityId: call.capabilityId,
+        workspaceGrantId: grant.workspaceGrantId,
+        workspaceRoot: grant.rootRealPath,
+        targetRealPath,
+        operation,
+      }),
+      currentContext: async () => {
+        const currentGrant = await input.workspaces.loadWorkspaceGrant(grant.workspaceGrantId);
+        if (currentGrant === undefined || currentGrant.status !== "active") {
+          return unavailableDocumentToolAuthorizationContext({
+            activeUserId: input.activeUserId,
+            capabilityId: call.capabilityId,
+            workspaceGrantId: grant.workspaceGrantId,
+            targetRealPath,
+            operation,
+          });
+        }
+        if (model.mode === "replace_existing") {
+          const currentProof = await deriveWorkspaceTextArtifactProof({
+            taskId: call.taskId,
+            workspaceGrantId: currentGrant.workspaceGrantId,
+            relativePath: model.relativePath,
+            expectedPreviousSha256: model.expectedPreviousSha256!,
+            tasks: input.tasks,
+            artifactLifecycles: input.artifactLifecycles,
+          });
+          if (currentProof.digest !== proof?.digest) {
+            return unavailableDocumentToolAuthorizationContext({
+              activeUserId: input.activeUserId,
+              capabilityId: call.capabilityId,
+              workspaceGrantId: currentGrant.workspaceGrantId,
+              targetRealPath: resolve(currentGrant.rootRealPath, model.relativePath),
+              operation,
+            });
+          }
+        }
+        return documentToolAuthorizationContext({
+          activeUserId: input.activeUserId,
+          capabilityId: call.capabilityId,
+          workspaceGrantId: currentGrant.workspaceGrantId,
+          workspaceRoot: currentGrant.rootRealPath,
+          targetRealPath: resolve(currentGrant.rootRealPath, model.relativePath),
+          operation,
+        });
+      },
+    },
+    deadlineAt: new Date(Date.parse(input.clock.now()) + 30_000).toISOString(),
+    signal: input.signal,
+    modelArguments: call.arguments,
+  };
+}
+
+async function hydrateWorkspaceTextToolAction(input: {
+  action: Action;
+  taskId: string;
+  tasks: TaskPersistence;
+  workspaces: WorkspaceGrantPersistence;
+  artifactLifecycles: ArtifactLifecyclePersistence;
+}): Promise<Action> {
+  const action = ActionSchema.parse(input.action);
+  if (action.kind !== TEXT_FILE_WRITE_CAPABILITY_ID) return action;
+  const payload = JsonObjectSchema.parse(action.payload);
+  const allowed = new Set([
+    "workspaceGrantId",
+    "relativePath",
+    "content",
+    "contentSha256",
+    "mode",
+    "expectedPreviousSha256",
+    "ownedArtifactProofDigest",
+    "limitsRevision",
+    "limits",
+  ]);
+  if (Object.keys(payload).some((key) => !allowed.has(key))) {
+    throw new Error("Workspace Text Tool durable Action contains unsupported fields");
+  }
+  const workspaceGrantId = requireActionString(payload.workspaceGrantId, "workspaceGrantId");
+  const relativePath = requireActionString(payload.relativePath, "relativePath");
+  const content = requireActionString(payload.content, "content", true);
+  const contentSha256 = `sha256:${createHash("sha256").update(content, "utf8").digest("hex")}`;
+  if (contentSha256 !== payload.contentSha256) {
+    throw new Error("workspace_text.content_digest_mismatch");
+  }
+  if (payload.limitsRevision !== TEXT_FILE_WRITE_LIMITS_REVISION) {
+    throw new Error("workspace_text.limits_revision_mismatch");
+  }
+  const mode = payload.mode === "replace_existing"
+    ? "replace_existing"
+    : payload.mode === "create_new"
+      ? "create_new"
+      : undefined;
+  if (mode === undefined) throw new Error("workspace_text.mode_invalid");
+  const grant = await input.workspaces.loadWorkspaceGrant(workspaceGrantId);
+  if (grant === undefined || grant.status !== "active") {
+    throw new Error("Workspace Text Tool workspace grant is unavailable before dispatch");
+  }
+  if (mode === "replace_existing") {
+    const expectedPreviousSha256 = requireActionString(
+      payload.expectedPreviousSha256,
+      "expectedPreviousSha256",
+    );
+    const proof = await deriveWorkspaceTextArtifactProof({
+      taskId: input.taskId,
+      workspaceGrantId,
+      relativePath,
+      expectedPreviousSha256,
+      tasks: input.tasks,
+      artifactLifecycles: input.artifactLifecycles,
+    });
+    if (proof.digest !== payload.ownedArtifactProofDigest) {
+      throw new Error("workspace_text.owned_artifact_proof_changed");
+    }
+  }
+  return ActionSchema.parse({
+    ...action,
+    payload: {
+      workspaceRoot: grant.rootRealPath,
+      workspaceGrantId,
+      relativePath,
+      content,
+      mode,
+      ...(payload.expectedPreviousSha256 === undefined
+        ? {}
+        : { expectedPreviousSha256: payload.expectedPreviousSha256 }),
+      ...(payload.ownedArtifactProofDigest === undefined
+        ? {}
+        : { ownedArtifactProofDigest: payload.ownedArtifactProofDigest }),
+      limitsRevision: payload.limitsRevision,
+      limits: payload.limits,
+    },
+  });
+}
+
+function parseWorkspaceTextModelArguments(value: unknown): Readonly<{
+  relativePath: string;
+  content: string;
+  mode: "create_new" | "replace_existing";
+  expectedPreviousSha256?: string;
+}> {
+  const parsed = JsonObjectSchema.parse(value);
+  const allowed = new Set(["relativePath", "content", "mode", "expectedPreviousSha256"]);
+  const extra = Object.keys(parsed).filter((key) => !allowed.has(key));
+  if (extra.length > 0) throw new Error(`Workspace Text Tool unsupported fields: ${extra.join(", ")}`);
+  const relativePath = requireActionString(parsed.relativePath, "relativePath")
+    .trim().replace(/^\/+/, "").normalize("NFC");
+  const content = requireActionString(parsed.content, "content", true);
+  const mode = parsed.mode === undefined || parsed.mode === "create_new"
+    ? "create_new"
+    : parsed.mode === "replace_existing"
+      ? "replace_existing"
+      : undefined;
+  if (mode === undefined) throw new Error("Workspace Text Tool mode is invalid");
+  const expectedPreviousSha256 = parsed.expectedPreviousSha256 === undefined
+    ? undefined
+    : requireActionString(parsed.expectedPreviousSha256, "expectedPreviousSha256");
+  if (mode === "create_new" && expectedPreviousSha256 !== undefined) {
+    throw new Error("Workspace Text create_new forbids expectedPreviousSha256");
+  }
+  if (mode === "replace_existing" && !/^sha256:[a-f0-9]{64}$/u.test(expectedPreviousSha256 ?? "")) {
+    throw new Error("Workspace Text replace_existing requires exact expectedPreviousSha256");
+  }
+  return {
+    relativePath,
+    content,
+    mode,
+    ...(expectedPreviousSha256 === undefined ? {} : { expectedPreviousSha256 }),
+  };
+}
+
+function requireActionString(value: unknown, name: string, allowEmpty = false): string {
+  if (typeof value !== "string" || (!allowEmpty && value.length === 0)) {
+    throw new Error(`Workspace Text Tool ${name} must be a string`);
+  }
+  return value;
 }
 
 async function buildDesktopDocumentToolExecution(input: {
@@ -1826,8 +2147,8 @@ function runtimeFixture(input: Readonly<{
     : undefined;
   const registryBuilder = new RegistryBuilder({
     trustedSources: fixtureMode
-      ? [source, DOCUMENT_TOOL_SOURCE]
-      : [DOCUMENT_TOOL_SOURCE],
+      ? [source, DOCUMENT_TOOL_SOURCE, WORKSPACE_TEXT_TOOL_SOURCE]
+      : [DOCUMENT_TOOL_SOURCE, WORKSPACE_TEXT_TOOL_SOURCE],
   });
   if (fixtureMode) {
     registryBuilder
@@ -1841,7 +2162,10 @@ function runtimeFixture(input: Readonly<{
       .registerAdapterDescriptor(tool.descriptor)
       .registerBinding(tool.binding);
   }
-  if (!demoMode) registerDocumentToolRecords(registryBuilder);
+  if (!demoMode) {
+    registerDocumentToolRecords(registryBuilder);
+    registerWorkspaceTextToolRecords(registryBuilder);
+  }
   const registry = registryBuilder.finalize();
   const model = createModelDefinition({
     schemaVersion: "v1alpha1",
@@ -2008,12 +2332,15 @@ function runtimeCapabilityAvailability(
       },
     };
   }
-  return Object.fromEntries(DOCUMENT_TOOL_REGISTRY_RECORDS.bindings.map((binding) => [
+  return Object.fromEntries([
+    ...DOCUMENT_TOOL_REGISTRY_RECORDS.bindings,
+    WORKSPACE_TEXT_TOOL_BINDING,
+  ].map((binding) => [
     binding.capability.capabilityId,
     {
       capabilityId: binding.capability.capabilityId,
       bindingId: binding.bindingId,
-      adapterDescriptorId: DOCUMENT_TOOL_REGISTRY_RECORDS.descriptor.adapterDescriptorId,
+      adapterDescriptorId: binding.adapterDescriptor.adapterDescriptorId,
       credentialStatus: "available" as const,
       healthStatus: "healthy" as const,
     },

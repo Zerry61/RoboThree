@@ -176,6 +176,10 @@ class SharedDocumentWorkerToolHandle implements ToolExecutionBackend {
       this.capabilities,
     );
   }
+
+  public processIdentity(): number | undefined {
+    return this.owner.processIdentity();
+  }
 }
 
 export class DocumentWorkerToolBackend implements ToolExecutionBackend, RuntimeComponent {
@@ -238,7 +242,7 @@ export class DocumentWorkerToolBackend implements ToolExecutionBackend, RuntimeC
   public createTextWriteHandle(input: Readonly<{
     adapterDescriptorId: string;
     adapterDescriptorRevision: string;
-  }>): ToolExecutionBackend {
+  }>): ToolExecutionBackend & Readonly<{ processIdentity(): number | undefined }> {
     return new SharedDocumentWorkerToolHandle(
       input.adapterDescriptorId,
       input.adapterDescriptorRevision,

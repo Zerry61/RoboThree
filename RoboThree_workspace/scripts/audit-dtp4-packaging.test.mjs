@@ -28,15 +28,15 @@ describe("DTP-4 packaging audit", () => {
     const violations = await collectDtp4PackagingAudit({ workspaceRoot: root });
 
     expect(violations.join("\n")).toContain(
-      "package.json: expected version 0.0.0-mvp.rsl.1-repair.1",
+      "package.json: expected version 0.0.0-mvp.safe-progress.1",
     );
     expect(violations.join("\n")).toContain("canvas packages are forbidden");
   });
 });
 
 async function createFixtureWorkspace({
-  rootVersion = "0.0.0-mvp.rsl.1-repair.1",
-  coreVersion = "0.0.0-mvp.workspace.1",
+  rootVersion = "0.0.0-mvp.safe-progress.1",
+  coreVersion = "0.0.0-mvp.safe-progress.1",
   includeCanvas = false,
 } = {}) {
   const root = await mkdtemp(join(tmpdir(), "robothree-dtp4-audit-"));
@@ -62,7 +62,7 @@ async function createFixtureWorkspace({
   });
   await writeJson(join(root, "apps/desktop/package.json"), {
     name: "@robothree/desktop",
-    version: "0.0.0-mvp.rsl.1-repair.1",
+    version: "0.0.0-mvp.safe-progress.1",
   });
   await writeJson(join(root, "packages/contracts/package.json"), {
     name: "@robothree/contracts",
@@ -70,7 +70,7 @@ async function createFixtureWorkspace({
   });
   await writeJson(join(root, "services/document-worker/package.json"), {
     name: "@robothree/document-worker",
-    version: "0.0.0-wfw.1",
+    version: "0.0.0-wfw.2",
     dependencies: {
       "pdfjs-dist": "6.2.108",
       "pptxgenjs": "4.0.1",

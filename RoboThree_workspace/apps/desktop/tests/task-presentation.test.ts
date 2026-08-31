@@ -69,6 +69,7 @@ describe("Task presentation", () => {
     expect(taskStatusGuidance("manual_attention")).toBe(
       "外部结果无法安全确认。请检查已完成内容，再决定是否重试或人工处理。",
     );
+    expect(taskStatusGuidance("timed_out")).toBe("任务执行超时，可重试。");
     expect(taskStatusGuidance("running")).toBeUndefined();
     expect(taskStatusGuidance("completed")).toBeUndefined();
   });

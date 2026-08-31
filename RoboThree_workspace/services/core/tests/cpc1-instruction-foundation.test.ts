@@ -99,7 +99,10 @@ describe("CPC-1 Platform Prompt and exact binding", () => {
 
 describe("CPC-1 materialization and compiler", () => {
   it("materializes a safe Task Boundary without internal identifiers or paths", () => {
-    const selection = selectionFixture([], { workspaceGrantId: "workspace.private" });
+    const selection = selectionFixture([], {
+      workspaceGrantId: "workspace.private",
+      toolLocked: true,
+    });
     const boundary = new TaskBoundaryInstructionMaterializer().materialize(selection);
     expect(boundary).toMatchObject({
       sourceKind: "task_boundary",
@@ -116,6 +119,12 @@ describe("CPC-1 materialization and compiler", () => {
       "Endpoint",
       "sha256:",
     ]) expect(boundary.content).not.toContain(forbidden);
+    expect(boundary.content).toContain(
+      "必须调用该工具并取得 succeeded 结果",
+    );
+    expect(boundary.content).toContain(
+      "只返回文本、代码或操作说明不算完成文件交付",
+    );
   });
 
   it("materializes the exact Agent revision once without a runtime compiler", () => {
@@ -410,7 +419,7 @@ function agentFixture(
 
 function selectionFixture(
   activeSkillRevisions: readonly MaterializedResourceRevision[] = [],
-  extra: Readonly<{ workspaceGrantId?: string }> = {},
+  extra: Readonly<{ workspaceGrantId?: string; toolLocked?: boolean }> = {},
 ): TaskRuntimeSelection {
   const agent = agentFixture(activeSkillRevisions);
   return createTaskRuntimeSelection({
@@ -429,7 +438,11 @@ function selectionFixture(
       lockDigest: digest("1"),
     },
     activeSkillRevisions: [...activeSkillRevisions],
-    toolLocks: [],
+    toolLocks: extra.toolLocked === true ? [{
+      lockId: "00000000-0000-4000-8000-000000000004",
+      capabilityId: "tool.workspace.file.write_text",
+      lockDigest: digest("3"),
+    }] : [],
     knowledgeRevisions: [],
     ...(extra.workspaceGrantId === undefined
       ? {}

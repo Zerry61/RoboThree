@@ -19,7 +19,7 @@ const CSP = [
   "object-src 'none'",
   "base-uri 'none'",
   "form-action 'none'",
-  "frame-ancestors 'none'",
+  "frame-ancestors file:",
   "connect-src 'none'",
   "img-src 'none'",
   "media-src 'none'",

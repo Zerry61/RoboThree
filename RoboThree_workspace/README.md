@@ -17,12 +17,62 @@ WFW Artifact 证明来源的摘要保护修改；此类 replace 作为 `routine_
 一次真实 Windows 本地 NTFS create/replace/`.prev`/restart 冒烟。目录创建、断电级 durability、强跨进程 CAS 和
 穷尽 fault matrix 后移至 WFW-H1。WFW-1 独立聚焦 QA 已由用户接受并正式 `PASS/CLOSED`；
 [WFW-2 Core Registry / Policy / Effect Recovery / Artifact Activation 详细方案](./docs/development/wfw/WFW-2-CORE-REGISTRY-POLICY-EFFECT-ARTIFACT-DEVELOPMENT-PLAN.md)
-已完成 Codex 文档复核，当前为 `PLAN DOCUMENT REVIEW PASS / USER ACCEPTANCE PENDING / CODING GATED`。
-Desktop 展示、真实 Electron E2E 与 Windows NTFS 门禁仍属于 WFW-3，继续 `GATED`，所以用户当前还不能从普通客户端调用该能力。
+已完成独立文档复核、用户接受与 WFW-2 编码：Core Registry、exact grant/policy、owned WFW Artifact replace authority、
+`query_then_retry` 恢复和 Artifact 自动投影已落地，现为
+`PASS/CLOSED / INDEPENDENT QA PASS / USER ACCEPTED`。Desktop 展示、真实 Electron E2E 与 Windows
+NTFS 门禁仍属于 WFW-3；已新增
+[WFW-3 Desktop Product E2E / Stage Closure 详细方案](./docs/development/wfw/WFW-3-DESKTOP-PRODUCT-E2E-STAGE-CLOSURE-DEVELOPMENT-PLAN.md)，
+计划评审已通过并获编码授权。Renderer 展示与安全 preview 消费已经实现；
+[WFW-3 repair.1](./docs/development/wfw/WFW-3-repair.1-TASK-GENERATED-WORKSPACE-HTML-PREVIEW-AUTHORITY-DEVELOPMENT-PLAN.md)
+也已完成 Main 对 Core-authorized Task HTML 的最小 routing 修复与 focused 验证。恢复真实 Electron E2E 后进一步发现
+WFW-2 Replace authority 错从模型可见 durable Step 读取私有 WorkspaceGrant，以及 Renderer CSP 阻止 loopback APV
+iframe 两项真实阻塞，已按边界再次停手并输出
+[恢复 E2E 停手报告](./docs/development/wfw/WFW-3-REPAIR.1-RESUMED-E2E-STOP-REPORT.md)。当前为
+`REPAIR.1 PASS/CLOSED / PARENT WFW-3 PAUSED / WINDOWS_NTFS_GATE_PENDING`。剩余两项差异已收敛为
+[WFW-3 repair.2 极小方案](./docs/development/wfw/WFW-3-repair.2-DURABLE-REPLACE-AUTHORITY-AND-LOOPBACK-APV-CSP-DEVELOPMENT-PLAN.md)：
+只修正 source Task durable WorkspaceGrant authority 与 existing loopback APV iframe CSP/真实加载证明。两项精确
+CSP 已先在 packaged Electron/Chromium 实测成立；repair.2 实现与 macOS 真实 Electron 全链路现已通过，覆盖默认目录、
+显式 Workspace、create、owned replace、`.prev`、Artifact、真实 HTML/Markdown preview 与 Core restart。当前为
+`REPAIR.2 PASS/CLOSED / INDEPENDENT QA PASS / USER ACCEPTED`；独立 QA 的 176/179 测试数差异按超集精度记录保留，
+外部 P3 不归因本批。父 WFW-3 仍因 Windows 11 本地 NTFS 门禁保持 `NOT CLOSED`；该门禁已记录为
+[Windows 11 / NTFS 定向回归说明](./docs/development/wfw/WFW-WINDOWS-NTFS-TARGETED-REGRESSION-NOTE.md)，待后续
+Windows 客户端回归窗口执行，不以模拟文件系统冒充通过。用户已确认当前 WFW 产品开发工作结束，Windows 回归不再
+阻塞后续 MVP 开发排期；这不改变父 WFW-3 `STAGE NOT CLOSED` 或非 production-ready 的诚实边界。
 
 本目录用于承载 RoboThree 的正式产品文档、架构决策、协议和后续实现。开源 Agent 的源码镜像、分析报告和跨项目研究位于相邻的 `robothree-agent-research/`，研究结论经过评审后才进入本产品工程。
 
 ## 当前阶段
+
+下一项 MVP 产品任务已收敛为
+[MVP-RSL-2 Skill Lifecycle End-to-End](./docs/development/MVP-RSL-2-SKILL-LIFECYCLE-END-TO-END-DEVELOPMENT-PLAN.md)：
+直接关闭两条真实技能业务链——Desktop 用户通过既有 Task + WFW 创建、测试并提交技能，Admin 审核后发布、安装并供
+新 Task exact 使用；Admin 也可上传 ZIP/RAR/TAR.GZ/TGZ，经安全解析、测试后发布到同一 Skill release。方案复用
+现有 Agent Loop、Runtime Selection、Entitlement、Workbench、WFW 和 RSL-1 生命周期模式，不建设第二套 Runtime、
+通用包管理器或文件平台。当前为 `REVISION 1 / DOCUMENT REVIEW PENDING / CODING GATED`，尚未修改生产代码、Contract、
+migration、依赖、版本或 lockfile；必须先完成独立文档复核并获得用户单独编码授权。
+
+Root/Core/Desktop `0.0.0-mvp.safe-progress.1` 已把既有 Desktop `progress_delta` 接到真实 Agent Loop：客户端现在可见
+“整理上下文 / 等待模型 / 模型开始处理 / 生成回复 / 准备调用工具”等安全阶段，并在终态自动清理。该投影只包含
+content-free `progressKey + safeSummary`，不展示或持久化模型隐藏 reasoning、Prompt、Token 或 Tool 参数；公共 Contract、
+IPC、migration、依赖和 lockfile 均未扩张。当前状态为
+`IMPLEMENTED / FOCUSED GATES PASS / USER ACCEPTANCE PENDING / INDEPENDENT QA PENDING`。
+
+同一版本下的 Desktop Workbench 已同步收敛输入体验：用户消息先进入当前会话，再等待 Core 返回；输入框在任务执行中
+仍可继续编辑下一条内容。未选择工作区时仅显示可操作的“选择工作空间”，授权模式使用真实任务偏好；重复标题、快捷
+任务、默认工作区/通用机器人说明、完成占位和内部 Action 成功文案均已移除。执行中只展示 Core 投影的安全进度，任务
+终止后不再显示累计处理时间；模型隐藏推理正文不属于客户端可见数据。
+
+Root/Core/Central `0.0.0-mvp.task-timeout.1` 已修复真实 PPTX 任务长时间无终态：Central SSE 现在同时受 idle timeout
+和绝对 provider deadline 约束：90 秒内没有建立响应或流建立后 30 秒没有有效 SSE 数据会判定停滞；持续有效流式输出允许单次模型调用运行至 15 分钟；
+多轮模型与 Tool 共用一个 30 分钟 Task hard deadline。这样大型 PPT 不会被固定 5 分钟误杀，同时异常流也不能无限
+续命。Core 到期会持久化既有 `timed_out` 终态，Desktop 显示“任务执行超时，可重试”。交互试运行也必须同时验证
+Task completed 与新 PPTX 文件，关闭 Electron 不再被误判为成功。当前状态为
+`IMPLEMENTED / FOCUSED GATES PASS / USER ACCEPTANCE PENDING`；未使用真实公网 Provider 凭据执行本批冒烟。
+
+Desktop `0.0.0-dfe.9-repair.11` 将消息提交反馈与任务执行反馈分离：发送按钮和输入框不再显示模型执行加载态，提交后
+直接在会话流展示 Core 已投影的安全执行过程，包括任务分析、已授权 Tool 活动、等待确认、失败与完成状态。页面不展示
+模型隐藏推理、内部 action/tool 标识或技术摘要；没有真实 Step/Tool Activity 时只显示诚实的概括状态。当前状态为
+`IMPLEMENTED / FOCUSED GATES PASS / PRODUCT ACCEPTANCE PENDING / INDEPENDENT QA PENDING`。
 
 Central `0.0.0-mvp.multiturn.1` 已修复真实多轮会话停止回复：SSE 在 durable 完成事件前排空同批已到达的流式文本，
 Prompt Cache 则把 request-scoped context 与 task-scoped instruction bundle 排除在跨 Task 静态前缀之外，不再把正常的

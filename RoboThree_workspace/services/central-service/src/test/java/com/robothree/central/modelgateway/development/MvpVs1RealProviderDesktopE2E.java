@@ -442,6 +442,7 @@ final class MvpVs1RealProviderDesktopE2E {
             throws Exception {
         Path root = Path.of("../..").toAbsolutePath().normalize();
         Path userData = Files.createTempDirectory("robothree-deepseek-trial-");
+        long startedAt = System.currentTimeMillis();
         ProcessBuilder builder = new ProcessBuilder(
                 root.resolve("apps/desktop/node_modules/.bin/electron").toString(),
                 "--user-data-dir=" + userData,
@@ -467,9 +468,40 @@ final class MvpVs1RealProviderDesktopE2E {
                 lifecycleToken);
         try {
             Process process = builder.start();
-            return process.waitFor();
+            int exitCode = process.waitFor();
+            if (exitCode == 0) {
+                verifyInteractivePptxTrial(root, userData, startedAt);
+            }
+            return exitCode;
         } finally {
             deleteRecursively(userData);
+        }
+    }
+
+    private static void verifyInteractivePptxTrial(
+            Path root,
+            Path userData,
+            long startedAt) throws Exception {
+        ProcessBuilder verifier = new ProcessBuilder(
+                "node",
+                root.resolve("scripts/verify-interactive-pptx-trial.mjs").toString(),
+                userData.resolve("robothree.sqlite").toString(),
+                Path.of(System.getProperty("user.home"), ".robothree").toString(),
+                Long.toString(startedAt));
+        verifier.directory(root.toFile());
+        verifier.redirectErrorStream(true);
+        Process process = verifier.start();
+        String output = new String(
+                process.getInputStream().readNBytes(16_384),
+                StandardCharsets.UTF_8);
+        if (!process.waitFor(30, TimeUnit.SECONDS)) {
+            process.destroyForcibly();
+            throw new IllegalStateException("interactive_trial_verification_timeout");
+        }
+        if (process.exitValue() != 0) {
+            throw new IllegalStateException(
+                    "interactive_trial_did_not_complete_task_and_pptx: "
+                            + boundedSafeOutput(output));
         }
     }
 

@@ -70,6 +70,13 @@ export type AgentLoopRecoverySeed = Readonly<{
   priorToolResults: readonly Extract<ProviderNeutralMessage, { role: "tool" }>[];
 }>;
 
+export type AgentLoopModelProgressPhase =
+  | "core_context_preparing"
+  | "model_request_dispatched"
+  | "model_stream_started"
+  | "model_response_streaming"
+  | "model_tool_call_preparing";
+
 export class AgentLoopCoordinator {
   readonly #model: ModelProvider;
   readonly #tools: AgentToolCallExecutor;
@@ -131,6 +138,10 @@ export class AgentLoopCoordinator {
       deltaSequence: number;
       delta: string;
     }>) => void;
+    onModelProgress?: (input: Readonly<{
+      round: number;
+      phase: AgentLoopModelProgressPhase;
+    }>) => void;
   }): Promise<AgentLoopResult> {
     const model = input.model ?? this.#model;
     const signal = input.signal ?? new AbortController().signal;
@@ -155,6 +166,10 @@ export class AgentLoopCoordinator {
         return finish({ status: "cancelled", rounds, timeline });
       }
       rounds += 1;
+      input.onModelProgress?.({
+        round: rounds,
+        phase: "core_context_preparing",
+      });
       const assistantMessageId = recoverySeed !== undefined
         && rounds === recoverySeed.activeRound
         ? recoverySeed.activeAssistantMessageId
@@ -173,7 +188,13 @@ export class AgentLoopCoordinator {
           rounds,
           assistantMessageId ?? missingAssistantMessageId(),
         );
+      input.onModelProgress?.({
+        round: rounds,
+        phase: "model_request_dispatched",
+      });
       let deltaSequence = 0;
+      let responseProgressPublished = false;
+      let toolCallProgressPublished = false;
       const calls: AssistantToolCall[] = [];
       let terminal: "completed" | "failed" | undefined;
       let finishReason = "";
@@ -185,7 +206,19 @@ export class AgentLoopCoordinator {
           signal,
         )) {
           if (signal.aborted) break;
-          if (event.type === "text_delta") {
+          if (event.type === "started") {
+            input.onModelProgress?.({
+              round: rounds,
+              phase: "model_stream_started",
+            });
+          } else if (event.type === "text_delta") {
+            if (!responseProgressPublished) {
+              responseProgressPublished = true;
+              input.onModelProgress?.({
+                round: rounds,
+                phase: "model_response_streaming",
+              });
+            }
             roundText += event.delta;
             input.onTextDelta?.({
               round: rounds,
@@ -195,6 +228,13 @@ export class AgentLoopCoordinator {
             });
             deltaSequence += 1;
           } else if (event.type === "tool_call") {
+            if (!toolCallProgressPublished) {
+              toolCallProgressPublished = true;
+              input.onModelProgress?.({
+                round: rounds,
+                phase: "model_tool_call_preparing",
+              });
+            }
             calls.push(event.call);
           } else if (event.type === "completed") {
             terminal = "completed";

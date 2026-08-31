@@ -2,7 +2,7 @@
 
 > Owner: Codex 5.6  
 > Date: 2026-08-31  
-> Status: `PLAN DOCUMENT REVIEW PASS / USER ACCEPTANCE PENDING / CODING GATED`  
+> Status: `PASS/CLOSED / INDEPENDENT QA PASS / USER ACCEPTED`
 > Upstream: `WFW-0 Revision 1.1 PASS/CLOSED`、`WFW-1 PASS/CLOSED`  
 > Canonical capability: `tool.workspace.file.write_text`
 
@@ -21,7 +21,7 @@ WFW-2 只把 WFW-1 已完成的私有 UTF-8 Text Writer 接入现有 Tool Runtim
 
 ```text
 WFW-1: PASS/CLOSED — private writer only
-WFW-2: PLAN DOCUMENT REVIEW PASS / USER ACCEPTANCE PENDING / CODING GATED
+WFW-2: PASS/CLOSED / INDEPENDENT QA PASS / USER ACCEPTED
 WFW-3 / WFW-H1: GATED
 ```
 

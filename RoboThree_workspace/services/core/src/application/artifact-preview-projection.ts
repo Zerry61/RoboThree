@@ -14,6 +14,7 @@ import {
   isDocumentToolCapabilityId,
 } from "./document-tool-context.js";
 import type { DocumentToolCapabilityId } from "../registry/document-tool-registry.js";
+import { TEXT_FILE_WRITE_CAPABILITY_ID } from "@robothree/document-worker";
 import type { PersistedTask } from "../ports/task-persistence.js";
 import { sha256CanonicalJson } from "../persistence/digest.js";
 
@@ -107,20 +108,84 @@ export function projectArtifactIndexForTask(
   const entries: ArtifactIndexEntry[] = [];
   for (const step of input.task.checkpoint.state.runs.flatMap((run) => run.steps)) {
     if (step.observation?.outcome !== "succeeded") continue;
-    if (!isDocumentToolCapabilityId(step.action.kind)) continue;
-    const entry = projectDocumentToolObservation({
-      taskState: input.task.checkpoint.state,
-      desktopSessionId: input.desktopSessionId,
-      capabilityId: step.action.kind,
-      actionPayload: step.action.payload,
-      observation: step.observation,
-      maxMetadataBytes: input.maxMetadataBytes ?? DEFAULT_METADATA_BYTES,
-    });
+    const entry = isDocumentToolCapabilityId(step.action.kind)
+      ? projectDocumentToolObservation({
+        taskState: input.task.checkpoint.state,
+        desktopSessionId: input.desktopSessionId,
+        capabilityId: step.action.kind,
+        actionPayload: step.action.payload,
+        observation: step.observation,
+        maxMetadataBytes: input.maxMetadataBytes ?? DEFAULT_METADATA_BYTES,
+      })
+      : step.action.kind === TEXT_FILE_WRITE_CAPABILITY_ID
+        ? projectWorkspaceTextWriteObservation({
+          taskState: input.task.checkpoint.state,
+          desktopSessionId: input.desktopSessionId,
+          observation: step.observation,
+          maxMetadataBytes: input.maxMetadataBytes ?? DEFAULT_METADATA_BYTES,
+        })
+        : undefined;
     if (entry !== undefined) entries.push(entry);
   }
   return Object.freeze(entries.sort((left, right) =>
     left.createdAt.localeCompare(right.createdAt)
     || left.artifactId.localeCompare(right.artifactId)));
+}
+
+function projectWorkspaceTextWriteObservation(input: {
+  taskState: TaskRunState;
+  desktopSessionId: string;
+  observation: Extract<Observation, { outcome: "succeeded" }>;
+  maxMetadataBytes: number;
+}): ArtifactIndexEntry | undefined {
+  const envelope = objectRecord(input.observation.output);
+  const result = objectRecord(envelope.result);
+  const relativePath = typeof result.relativePath === "string"
+    ? result.relativePath.normalize("NFC")
+    : undefined;
+  if (relativePath === undefined) return undefined;
+  const pathAllowed = isSafeWorkspaceRelativePath(relativePath);
+  const sourceDigest = sha256CanonicalJson(JsonValueSchema.parse(input.observation));
+  const mediaType = typeof result.mediaType === "string" && result.mediaType.length > 0
+    ? boundedDisplayName(result.mediaType)
+    : "text/plain";
+  const mode = result.mode === "replace_existing" ? "replace_existing" : "create_new";
+  const kind: ArtifactIndexEntry["kind"] = /\.html?$/iu.test(relativePath)
+    ? "html"
+    : /\.(?:md|markdown)$/iu.test(relativePath)
+      ? "markdown"
+      : "text";
+  const metadata = JsonObjectSchema.parse({
+    capabilityId: TEXT_FILE_WRITE_CAPABILITY_ID,
+    status: stringOrDefault(envelope.status, "succeeded"),
+    resultDigest: stringOrDefault(objectRecord(envelope.metadata).resultDigest, "unavailable"),
+    pathAllowed,
+    fileSha256: stringOrDefault(result.sha256, "unavailable"),
+    writeMode: mode,
+    backupCreated: result.backupCreated === true,
+  });
+  return ArtifactIndexEntrySchema.parse({
+    schemaVersion: ARTIFACT_PREVIEW_SCHEMA_VERSION,
+    artifactId: artifactIdFor({
+      taskId: input.taskState.taskId,
+      sourceKind: "tool_observation",
+      sourceId: input.observation.observationId,
+      sourceDigest,
+    }),
+    taskId: toDesktopId("task", input.taskState.taskId),
+    sessionId: input.desktopSessionId,
+    sourceKind: "tool_observation",
+    sourceId: input.observation.observationId,
+    sourceDigest,
+    displayName: boundedDisplayName(basename(relativePath)),
+    kind,
+    mediaType,
+    ...(pathAllowed ? { relativePath } : {}),
+    ...(byteSizeFor(result) === undefined ? {} : { byteSize: byteSizeFor(result) }),
+    createdAt: input.observation.observedAt,
+    previewState: pathAllowed ? "available" : "blocked",
+    metadata: boundMetadata(metadata, input.maxMetadataBytes),
+  });
 }
 
 export function projectArtifactSurfaceRefs(

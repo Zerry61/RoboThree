@@ -39,10 +39,13 @@ describe("DFI-5.4.3 reasoning mode adapter", () => {
       selectedSkillIds: [],
       selectedKnowledgeIds: [],
       workspaceGrantId: "workspace:test",
+      authorizationMode: "smart_confirm",
       reasoning: { requestedMode: "default" },
     });
     expect(submit.mock.calls[0]?.[0].selectionRequest.reasoningPreference)
       .toEqual({ requestedMode: "default" });
+    expect(submit.mock.calls[0]?.[0].selectionRequest.authorizationPreference)
+      .toEqual({ schemaVersion: "v1alpha1", requestedMode: "smart_confirm" });
   });
 
   it("selects the exact Max feature instead of trusting feature order", async () => {
@@ -91,6 +94,7 @@ describe("DFI-5.4.3 reasoning mode adapter", () => {
       selectedSkillIds: [],
       selectedKnowledgeIds: [],
       workspaceGrantId: "workspace:test",
+      authorizationMode: "smart_confirm",
       reasoning: {
         requestedMode: "max",
         preview: {

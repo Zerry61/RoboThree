@@ -91,9 +91,9 @@ export const frontendCloseoutAreas = Object.freeze<readonly FrontendCloseoutArea
 export const remainingMockInventory = Object.freeze<readonly RemainingMockInventoryItem[]>([
   {
     area: "workbench.authorizationModes",
-    productionShape: "gated_copy",
-    removalGate: "DFI-2B requested/resolved authorization mode Contract and Core projection.",
-    mustRemainGated: true,
+    productionShape: "real",
+    removalGate: "Closed by existing requested/resolved authorization mode Contract and Core policy.",
+    mustRemainGated: false,
   },
   {
     area: "workbench.knowledgeSelection",

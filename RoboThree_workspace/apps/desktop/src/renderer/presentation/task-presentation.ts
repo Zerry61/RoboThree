@@ -78,13 +78,14 @@ export function taskStatusGuidance(
       return "Local Core 正从持久记录恢复任务，无需重复提交；恢复完成后状态会自动刷新。";
     case "manual_attention":
       return "外部结果无法安全确认。请检查已完成内容，再决定是否重试或人工处理。";
+    case "timed_out":
+      return "任务执行超时，可重试。";
     case "preparing":
     case "queued":
     case "running":
     case "completed":
     case "failed":
     case "cancelled":
-    case "timed_out":
       return undefined;
     default:
       return assertNever(status);

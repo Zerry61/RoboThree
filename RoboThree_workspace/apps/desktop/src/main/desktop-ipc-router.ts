@@ -647,7 +647,7 @@ export class DesktopIpcRouter {
       artifactId: query.artifactId,
     }).catch(() => undefined);
     if (source === undefined) return undefined;
-    if (!source.ok || source.value.taskId !== undefined) return undefined;
+    if (!source.ok) return undefined;
     const resolved = await resolvePreviewableContainedFile({
       rootRealPath: source.value.rootRealPath,
       relativePath: source.value.relativePath,

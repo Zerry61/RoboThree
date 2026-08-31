@@ -13,7 +13,7 @@
 
   <groupId>com.robothree</groupId>
   <artifactId>central-service</artifactId>
-  <version>0.0.0-mvp.multiturn.1-SNAPSHOT</version>
+  <version>0.0.0-mvp.task-timeout.1-SNAPSHOT</version>
   <name>RoboThree Central Service</name>
   <description>RoboThree Central Gateway foundation and canonical Contract conformance</description>
 

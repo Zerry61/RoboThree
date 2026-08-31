@@ -22,6 +22,72 @@ const at = "2026-08-05T09:00:00.000Z";
 const later = "2026-08-05T09:01:00.000Z";
 
 describe("APV-1.0 Artifact Preview projection foundation", () => {
+  it("projects a WFW text write as one content-free Tool Artifact", () => {
+    const observation = succeededObservation({
+      observationId: entityId(19),
+      actionId: entityId(9),
+      output: {
+        status: "succeeded",
+        result: {
+          status: "created",
+          relativePath: "site/index.html",
+          mode: "create_new",
+          sha256: `sha256:${"a".repeat(64)}`,
+          byteSize: 25,
+          mediaType: "text/html",
+          backupCreated: false,
+          warnings: [],
+        },
+        metadata: {
+          originalCount: 1,
+          returnedCount: 1,
+          truncated: false,
+          resultDigest: "b".repeat(64),
+          timingMs: 1,
+        },
+      },
+    });
+    const task = persistedTask([step({
+      stepId: entityId(29),
+      action: {
+        actionId: entityId(9),
+        kind: "tool.workspace.file.write_text",
+        payload: {
+          workspaceGrantId: "grant-private",
+          relativePath: "site/index.html",
+          content: "<main>do-not-project</main>",
+          ownedArtifactProofDigest: `sha256:${"c".repeat(64)}`,
+        },
+      },
+      observation,
+    })]);
+
+    const [entry] = projectArtifactIndexForTask({
+      task,
+      desktopSessionId: "session:desktop-wfw",
+    });
+    expect(entry).toMatchObject({
+      sourceKind: "tool_observation",
+      sourceId: observation.observationId,
+      displayName: "index.html",
+      kind: "html",
+      mediaType: "text/html",
+      relativePath: "site/index.html",
+      byteSize: 25,
+      previewState: "available",
+      metadata: {
+        capabilityId: "tool.workspace.file.write_text",
+        fileSha256: `sha256:${"a".repeat(64)}`,
+        writeMode: "create_new",
+        backupCreated: false,
+      },
+    });
+    const serialized = JSON.stringify(entry);
+    expect(serialized).not.toContain("do-not-project");
+    expect(serialized).not.toContain("grant-private");
+    expect(serialized).not.toContain("ownedArtifactProofDigest");
+  });
+
   it("projects XLSX write artifacts without leaking workbook payloads or absolute paths", () => {
     const observation = succeededObservation({
       observationId: entityId(20),

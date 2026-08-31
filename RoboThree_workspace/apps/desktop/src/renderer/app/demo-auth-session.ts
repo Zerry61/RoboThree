@@ -61,7 +61,6 @@ export function safeDemoReturnTarget(
 ): RouteLocationRaw {
   const name = typeof route.name === "string" ? route.name : "";
   const plainRoutes = new Set<string>([
-    "workbench",
     "intelligence",
     "knowledge",
     "settingsModels",
@@ -69,6 +68,11 @@ export function safeDemoReturnTarget(
     "settingsMemory",
     "settingsFeedback",
   ]);
+
+  if (name === "workbench") {
+    const query = selectSafeQuery(route.query, ["sessionId", "taskId"]);
+    return { name, ...(Object.keys(query).length > 0 ? { query } : {}) };
+  }
 
   if (plainRoutes.has(name)) return { name };
 

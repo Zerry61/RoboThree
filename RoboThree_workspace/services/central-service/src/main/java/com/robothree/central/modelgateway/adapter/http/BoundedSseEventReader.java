@@ -24,16 +24,21 @@ public final class BoundedSseEventReader {
     public static void read(
             InputStream input,
             Duration idleTimeout,
+            Duration overallTimeout,
             int maximumFrameBytes,
             long maximumTotalBytes,
             BooleanSupplier cancellationRequested,
             Consumer<SseFrame> consumer) {
         Objects.requireNonNull(input, "input");
         Objects.requireNonNull(idleTimeout, "idleTimeout");
+        Objects.requireNonNull(overallTimeout, "overallTimeout");
         Objects.requireNonNull(cancellationRequested, "cancellationRequested");
         Objects.requireNonNull(consumer, "consumer");
         if (idleTimeout.isZero() || idleTimeout.isNegative()) {
             throw new IllegalArgumentException("idleTimeout must be positive");
+        }
+        if (overallTimeout.isZero() || overallTimeout.isNegative()) {
+            throw new IllegalArgumentException("overallTimeout must be positive");
         }
         if (maximumFrameBytes < 1 || maximumTotalBytes < maximumFrameBytes) {
             throw new IllegalArgumentException("SSE limits are invalid");
@@ -44,6 +49,8 @@ public final class BoundedSseEventReader {
                 .name("robothree-model-sse-reader")
                 .start(() -> produce(input, maximumFrameBytes, maximumTotalBytes, queue));
         long idleNanos = idleTimeout.toNanos();
+        long overallNanos = overallTimeout.toNanos();
+        long startedAt = System.nanoTime();
         long lastItemAt = System.nanoTime();
         try {
             while (true) {
@@ -55,6 +62,14 @@ public final class BoundedSseEventReader {
                 }
                 long remainingNanos =
                         idleNanos - (System.nanoTime() - lastItemAt);
+                long remainingOverallNanos =
+                        overallNanos - (System.nanoTime() - startedAt);
+                if (remainingOverallNanos <= 0) {
+                    close(input);
+                    throw ModelGatewayException.unavailable(
+                            "model_gateway.provider_request_timeout",
+                            "The model provider request timed out.");
+                }
                 if (remainingNanos <= 0) {
                     close(input);
                     throw ModelGatewayException.unavailable(
@@ -62,7 +77,9 @@ public final class BoundedSseEventReader {
                             "The model provider stream became idle.");
                 }
                 Item item = queue.poll(
-                        Math.min(remainingNanos, TimeUnit.MILLISECONDS.toNanos(100)),
+                        Math.min(
+                                Math.min(remainingNanos, remainingOverallNanos),
+                                TimeUnit.MILLISECONDS.toNanos(100)),
                         TimeUnit.NANOSECONDS);
                 if (item == null) {
                     if (!producer.isAlive()) {

@@ -32,7 +32,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @RequiredArgsConstructor
 public final class ModelInvocationController {
 
-    private static final long SSE_TIMEOUT_MILLIS = 300_000;
+    private static final long SSE_TIMEOUT_MILLIS = 15 * 60_000L;
 
     @NonNull
     private final ModelInvocationGatewayService service;

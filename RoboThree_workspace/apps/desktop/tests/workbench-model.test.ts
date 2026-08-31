@@ -99,11 +99,10 @@ const catalog: WorkbenchCatalog = {
 describe("DFE-2A Workbench view model", () => {
   it("uses the frozen Workspace Authorization mode names and order as read-only metadata", () => {
     expect(authorizationModes.map((mode) => [mode.value, mode.label])).toEqual([
-      ["manual_review", "手动复核"],
-      ["smart_confirm", "智能确认"],
-      ["task_scoped", "任务内授权"],
+      ["smart_confirm", "智能授权"],
+      ["manual_review", "主动询问"],
+      ["task_scoped", "始终授权"],
     ]);
-    expect(authorizationModes.every((mode) => mode.status === "待接入")).toBe(true);
   });
 
   it("uses the generic robot with the first available model and no specialist resources", () => {

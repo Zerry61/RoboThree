@@ -609,6 +609,78 @@ describe("DesktopIpcRouter", () => {
     }
   });
 
+  it("renders Core-authorized task-generated workspace HTML without exposing private authority", async () => {
+    const root = await mkdtemp(join(tmpdir(), "robothree-wfw3-task-html-"));
+    try {
+      await mkdir(join(root, "pages"));
+      const html = "<!doctype html><html><body><h1>Task output</h1></body></html>";
+      await writeFile(join(root, "pages", "task-output.html"), html);
+      const artifactId = `artifact:${"5".repeat(64)}`;
+      const previewArtifact = vi.fn();
+      const resolveArtifactFileSource = vi.fn(async () => ({
+        ok: true as const,
+        value: {
+          artifactId,
+          taskId: "task:wfw3-private",
+          displayName: "task-output.html",
+          relativePath: "pages/task-output.html",
+          workspaceGrantId: "workspace.grant-private",
+          rootRealPath: root,
+        },
+      }));
+      const start = vi.fn(async () => ({
+        artifactId,
+        previewSessionId: "preview:00000000-0000-4000-8000-000000000851",
+        localOrigin: "http://127.0.0.1" as const,
+        previewUrl: "http://127.0.0.1:49152/preview:00000000-0000-4000-8000-000000000851/00000000-0000-4000-8000-000000000852/index.html",
+        csp: "default-src 'none'; script-src 'none'",
+        expiresAt: "2026-08-31T18:00:00.000Z",
+        warnings: [],
+      }));
+      const router = new DesktopIpcRouter({
+        core: {
+          client: fakeClient({ previewArtifact, resolveArtifactFileSource }),
+          htmlPreviewSandbox: { start, close: vi.fn() } as never,
+        },
+        chooseWorkspaceDirectory: async () => undefined,
+      });
+
+      const result = await router.dispatch(DESKTOP_IPC_CHANNELS.artifactHtmlPreview, {
+        contractVersion: "v1alpha1",
+        type: "artifact_html_preview",
+        queryId: id("85"),
+        correlationId: id("86"),
+        clientInstanceId: id("3"),
+        artifactId,
+        maxBytes: 4096,
+        ttlMs: 60_000,
+      });
+
+      expect(result).toMatchObject({
+        ok: true,
+        value: {
+          artifactId,
+          localOrigin: "http://127.0.0.1",
+          csp: "default-src 'none'; script-src 'none'",
+        },
+      });
+      expect(previewArtifact).not.toHaveBeenCalled();
+      expect(resolveArtifactFileSource).toHaveBeenCalledWith({ artifactId });
+      expect(start).toHaveBeenCalledWith({
+        artifactId,
+        html,
+        ttlMs: 60_000,
+      });
+      const serialized = JSON.stringify(result);
+      expect(serialized).not.toContain(root);
+      expect(serialized).not.toContain("workspace.grant-private");
+      expect(serialized).not.toContain("task:wfw3-private");
+      expect(serialized).not.toContain(html);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   it("renders task-scoped PPTX artifacts through a Main-owned sandbox visual preview", async () => {
     const root = await mkdtemp(join(tmpdir(), "robothree-ptx4-html-"));
     try {

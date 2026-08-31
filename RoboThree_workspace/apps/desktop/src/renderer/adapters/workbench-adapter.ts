@@ -5,6 +5,7 @@ import {
   type ModelProjection,
   type SessionSummary,
   type SubmitTurnReceipt,
+  type TaskAuthorizationMode,
   type TaskSummaryProjection,
   type WorkspaceGrantProjection,
 } from "@robothree/contracts";
@@ -51,6 +52,7 @@ export type WorkbenchSubmitRequest = {
   selectedKnowledgeIds: readonly string[];
   workspaceGrantId?: string;
   attachments: readonly ArtifactCatalogItemProjection[];
+  authorizationMode: TaskAuthorizationMode;
   reasoning?: ReasoningSubmitDraft;
 };
 
@@ -207,6 +209,7 @@ export const desktopWorkbenchAdapter: WorkbenchAdapter = {
               ? {}
               : { workspaceGrantId: request.workspaceGrantId }),
             reasoning: request.reasoning,
+            authorizationMode: request.authorizationMode,
           });
           return { session, receipt };
         } catch (error) {
@@ -251,7 +254,7 @@ export const desktopWorkbenchAdapter: WorkbenchAdapter = {
             : { workspaceGrantId: request.workspaceGrantId }),
           authorizationPreference: {
             schemaVersion: "v1alpha1",
-            requestedMode: "manual_review",
+            requestedMode: request.authorizationMode,
           },
           reasoningPreference: { requestedMode: "default" },
         },
@@ -266,6 +269,12 @@ export const desktopWorkbenchAdapter: WorkbenchAdapter = {
         );
       }
       return { session, receipt: result.value };
+    }
+
+    if (request.authorizationMode !== "manual_review") {
+      throw new DesktopWorkbenchAdapterError(
+        "当前运行时暂不支持所选智能授权模式，请刷新后重试。",
+      );
     }
 
     const receipt = await accept(api.submitTurn({

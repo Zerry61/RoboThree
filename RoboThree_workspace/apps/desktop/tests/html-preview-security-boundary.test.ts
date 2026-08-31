@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const renderer = resolve("apps/desktop/src/renderer/legacy/LegacyWorkbench.ts");
+const rendererDocument = resolve("apps/desktop/src/renderer/index.html");
 const main = resolve("apps/desktop/src/main/index.ts");
 const sandbox = resolve("apps/desktop/src/main/html-preview-sandbox.ts");
 
@@ -59,5 +60,30 @@ describe("APV-1C HTML preview static security boundary", () => {
     expect(source).toContain("Cross-Origin-Resource-Policy");
     expect(source).not.toContain("0.0.0.0");
     expect(source).not.toContain("localhost");
+  });
+
+  it("allows only the Main-owned IPv4 loopback frame from the packaged file Renderer", async () => {
+    const [rendererSource, sandboxSource] = await Promise.all([
+      readFile(rendererDocument, "utf8"),
+      readFile(sandbox, "utf8"),
+    ]);
+
+    expect(rendererSource).toContain("frame-src http://127.0.0.1:*");
+    const frameSource = /frame-src ([^;"]+)/u.exec(rendererSource)?.[1];
+    expect(frameSource).toBe("http://127.0.0.1:*");
+    for (const forbidden of [
+      "frame-src *",
+      "frame-src https:",
+      "frame-src file:",
+      "frame-src data:",
+      "frame-src blob:",
+      "frame-src http://localhost",
+    ]) {
+      expect(rendererSource).not.toContain(forbidden);
+    }
+    expect(sandboxSource).toContain('"frame-ancestors file:"');
+    expect(sandboxSource).not.toContain('"frame-ancestors *"');
+    expect(sandboxSource).not.toContain('"frame-ancestors http:"');
+    expect(sandboxSource).not.toContain('"frame-ancestors https:"');
   });
 });

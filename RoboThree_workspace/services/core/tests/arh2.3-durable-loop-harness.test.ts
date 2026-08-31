@@ -311,6 +311,7 @@ async function runDurableStarterSeed(reasoning = false) {
       }),
       loop,
       taskRuntime: runtime,
+      scheduler: new FakeScheduler(),
       modelProviderResolver: {
         async resolve(input) {
           modelPurposes.push(input.purpose);

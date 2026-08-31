@@ -3,11 +3,11 @@ import { join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const defaultWorkspaceRoot = fileURLToPath(new URL("../", import.meta.url));
-const rootVersion = "0.0.0-mvp.rsl.1-repair.1";
+const rootVersion = "0.0.0-mvp.safe-progress.1";
 const contractsVersion = "0.0.0-mvp.rsl.1";
-const coreVersion = "0.0.0-mvp.workspace.1";
-const desktopVersion = "0.0.0-mvp.rsl.1-repair.1";
-const documentWorkerVersion = "0.0.0-wfw.1";
+const coreVersion = "0.0.0-mvp.safe-progress.1";
+const desktopVersion = "0.0.0-mvp.safe-progress.1";
+const documentWorkerVersion = "0.0.0-wfw.2";
 const maxDocumentWorkerDistBytes = 2 * 1024 * 1024;
 const maxDocumentWorkerDistFiles = 200;
 const maxPdfjsBytes = 40 * 1024 * 1024;

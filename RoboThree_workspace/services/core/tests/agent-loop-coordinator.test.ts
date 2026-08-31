@@ -27,6 +27,41 @@ const call = {
 };
 
 describe("AgentLoopCoordinator", () => {
+  it("projects content-free model progress without exposing Provider reasoning", async () => {
+    const progress: Array<{ round: number; phase: string }> = [];
+    const result = await new AgentLoopCoordinator({
+      model: new ScriptedModelProvider([
+        [
+          { type: "started" },
+          { type: "tool_call", call },
+          { type: "completed", finishReason: "tool_calls" },
+        ],
+        [
+          { type: "started" },
+          { type: "text_delta", delta: "done" },
+          { type: "completed", finishReason: "stop" },
+        ],
+      ]),
+      tools: new FakeAgentToolCallExecutor(),
+    }).run({
+      buildRequest: (round, prior) => request(round, prior.length),
+      onModelProgress: (event) => progress.push(event),
+    });
+
+    expect(result.status).toBe("completed");
+    expect(progress).toEqual([
+      { round: 1, phase: "core_context_preparing" },
+      { round: 1, phase: "model_request_dispatched" },
+      { round: 1, phase: "model_stream_started" },
+      { round: 1, phase: "model_tool_call_preparing" },
+      { round: 2, phase: "core_context_preparing" },
+      { round: 2, phase: "model_request_dispatched" },
+      { round: 2, phase: "model_stream_started" },
+      { round: 2, phase: "model_response_streaming" },
+    ]);
+    expect(JSON.stringify(progress)).not.toContain("done");
+  });
+
   it("runs model to tool observation to next model and produces a stable timeline", async () => {
     const model = new ScriptedModelProvider([
       [

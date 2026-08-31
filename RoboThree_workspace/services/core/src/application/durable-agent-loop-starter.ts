@@ -22,8 +22,12 @@ import type { ConversationPersistence } from "../ports/conversation-persistence.
 import type { IdGenerator } from "../ports/id-generator.js";
 import type { SubmitTurnPersistence } from "../ports/submit-turn-persistence.js";
 import type { TaskPersistence } from "../ports/task-persistence.js";
+import type { ScheduledTask, Scheduler } from "../ports/scheduler.js";
 import { sha256CanonicalJson } from "../persistence/digest.js";
-import type { AgentLoopCoordinator } from "./agent-loop-coordinator.js";
+import type {
+  AgentLoopCoordinator,
+  AgentLoopModelProgressPhase,
+} from "./agent-loop-coordinator.js";
 import type { ContextPipeline } from "./context-pipeline.js";
 import type { DesktopEphemeralEventBus } from "./desktop-ephemeral-event-bus.js";
 import type { TurnSnapshotBuilder } from "./turn-snapshot-builder.js";
@@ -88,6 +92,7 @@ import {
   type DynamicRequestFactsV1,
 } from "./dynamic-request-facts.js";
 import type { ReadableAgentDefinitionRevision } from "./agent-definition-v1alpha2.js";
+import { clampEnterpriseInvocationDeadline } from "./agent-turn-timeout-policy.js";
 
 export interface ExecutionAgentRevisionRepository {
   loadAgentRevision(
@@ -135,6 +140,7 @@ export class DurableAgentLoopStarter implements AgentLoopStarter {
   readonly #instructionRuntime: TaskLockedInstructionRuntimeResolver | undefined;
   readonly #dynamicRequestFacts: DynamicRequestFactsRuntime | undefined;
   readonly #modelInvocationLinks: ModelInvocationLinkPersistence | undefined;
+  readonly #scheduler: Scheduler;
   readonly #compactionRecoveryFaultInjector:
     | ((point: CompactionRecoveryFaultPoint) => void)
     | undefined;
@@ -162,6 +168,7 @@ export class DurableAgentLoopStarter implements AgentLoopStarter {
     instructionRuntimeResolver?: TaskLockedInstructionRuntimeResolver;
     dynamicRequestFactsRuntime?: DynamicRequestFactsRuntime;
     modelInvocationLinks?: ModelInvocationLinkPersistence;
+    scheduler: Scheduler;
     compactionRecoveryFaultInjector?: (point: CompactionRecoveryFaultPoint) => void;
   }) {
     this.#clock = input.clock;
@@ -183,6 +190,7 @@ export class DurableAgentLoopStarter implements AgentLoopStarter {
     this.#instructionRuntime = input.instructionRuntimeResolver;
     this.#dynamicRequestFacts = input.dynamicRequestFactsRuntime;
     this.#modelInvocationLinks = input.modelInvocationLinks;
+    this.#scheduler = input.scheduler;
     this.#compactionRecoveryFaultInjector = input.compactionRecoveryFaultInjector;
     this.#contextPreparation = new ContextPreparationCoordinator({
       conversation: input.conversation,
@@ -433,6 +441,11 @@ export class DurableAgentLoopStarter implements AgentLoopStarter {
     }
     const abort = new AbortController();
     this.#activeRuns.set(input.taskId, abort);
+    const deadlineTask = this.#scheduleTaskDeadline(
+      input.taskId,
+      execution.deadlineAt,
+      abort,
+    );
 
     const roundContext = new Map<number, Readonly<{
       receipt: ReturnType<ContextPipeline["run"]>["receipt"];
@@ -515,6 +528,7 @@ export class DurableAgentLoopStarter implements AgentLoopStarter {
               invocation: async (request) => {
                 const timeout = this.#invocationTimeout(
                   exact?.authority ?? resolvedModel?.authority,
+                  execution.deadlineAt,
                 );
                 return {
                   purpose: "compaction_summary",
@@ -639,6 +653,15 @@ export class DurableAgentLoopStarter implements AgentLoopStarter {
             messageId: `message:${messageId}`,
             deltaSequence,
             delta,
+          });
+        },
+        onModelProgress: ({ round, phase }) => {
+          const presentation = presentModelProgress(phase, round);
+          this.#ephemeralEvents?.publish({
+            type: "progress_delta",
+            taskId: `task:${input.taskId}`,
+            progressKey: presentation.progressKey,
+            safeSummary: presentation.safeSummary,
           });
         },
         buildRequest: async (round) => {
@@ -805,7 +828,7 @@ export class DurableAgentLoopStarter implements AgentLoopStarter {
             const timeout = recoverySeed !== undefined
               && round === recoverySeed.activeRound
               ? { deadlineAt: recoverySeed.providerRequestDeadlineAt }
-              : this.#invocationTimeout(resolvedModel?.authority);
+              : this.#invocationTimeout(resolvedModel?.authority, execution.deadlineAt);
             return {
               sessionId: input.sessionId,
               taskId: input.taskId,
@@ -875,7 +898,7 @@ export class DurableAgentLoopStarter implements AgentLoopStarter {
           const timeout = recoverySeed !== undefined
             && round === recoverySeed.activeRound
             ? { deadlineAt: recoverySeed.providerRequestDeadlineAt }
-            : this.#invocationTimeout(resolvedModel?.authority);
+            : this.#invocationTimeout(resolvedModel?.authority, execution.deadlineAt);
           return {
             sessionId: input.sessionId,
             taskId: input.taskId,
@@ -916,6 +939,9 @@ export class DurableAgentLoopStarter implements AgentLoopStarter {
         },
       });
       if (result.status === "failed") {
+        if (result.error?.category === "timeout" && execution.deadlineAt !== undefined) {
+          await this.#expireTaskExecution(input.taskId, execution.deadlineAt);
+        }
         throw new Error(result.error?.message ?? "Agent Loop failed");
       }
       if (result.status === "waiting_user_confirmation") {
@@ -971,6 +997,7 @@ export class DurableAgentLoopStarter implements AgentLoopStarter {
       );
       throw error;
     } finally {
+      deadlineTask?.cancel();
       if (this.#activeRuns.get(input.taskId) === abort) {
         this.#activeRuns.delete(input.taskId);
       }
@@ -990,13 +1017,16 @@ export class DurableAgentLoopStarter implements AgentLoopStarter {
 
   #invocationTimeout(
     authority: "central_enterprise" | "local_personal" | undefined,
+    turnDeadlineAt: string | undefined,
   ): Readonly<{
     deadlineAt: string;
     timeout?: ReturnType<typeof createModelInvocationTimeoutMaterial>;
   }> {
     const now = this.#clock.now();
     if (authority !== "local_personal") {
-      return { deadlineAt: new Date(Date.parse(now) + 300_000).toISOString() };
+      return {
+        deadlineAt: clampEnterpriseInvocationDeadline(now, turnDeadlineAt),
+      };
     }
     if (this.#localPersonalTimeoutPolicy === undefined) {
       throw new Error("Local Personal timeout policy is unavailable in Core composition");
@@ -1004,6 +1034,7 @@ export class DurableAgentLoopStarter implements AgentLoopStarter {
     const timeout = createModelInvocationTimeoutMaterial({
       policy: this.#localPersonalTimeoutPolicy,
       invocationStartedAt: now,
+      ...(turnDeadlineAt === undefined ? {} : { outerDeadlineAt: turnDeadlineAt }),
     });
     return { deadlineAt: timeout.invocationDeadlineAt, timeout };
   }
@@ -1033,9 +1064,19 @@ export class DurableAgentLoopStarter implements AgentLoopStarter {
     runId: string;
     stepId: string;
     actionId: string;
+    deadlineAt?: string;
   }> {
     let state = await this.#taskRuntime.snapshot(taskId);
     if (state === undefined) throw new Error("Agent Loop Task is unavailable");
+    if (
+      state.deadlineAt !== undefined
+      && Date.parse(state.deadlineAt) <= Date.parse(this.#clock.now())
+      && ["created", "running", "waiting"].includes(state.status)
+    ) {
+      await this.#expireTaskExecution(taskId, state.deadlineAt);
+      state = await this.#taskRuntime.snapshot(taskId);
+      if (state === undefined) throw new Error("Agent Loop Task is unavailable");
+    }
     if (state.status === "created") {
       const started = await this.#taskRuntime.dispatch({
         commandId: this.#ids.next(),
@@ -1059,7 +1100,12 @@ export class DurableAgentLoopStarter implements AgentLoopStarter {
       if (step.action.kind !== "model.generate") {
         throw new Error(`Agent Loop expected an active model Step, found ${step.action.kind}`);
       }
-      return { runId: run.runId, stepId: step.stepId, actionId: step.action.actionId };
+      return {
+        runId: run.runId,
+        stepId: step.stepId,
+        actionId: step.action.actionId,
+        ...(state.deadlineAt === undefined ? {} : { deadlineAt: state.deadlineAt }),
+      };
     }
     const stepId = this.#ids.next();
     const actionId = this.#ids.next();
@@ -1082,7 +1128,39 @@ export class DurableAgentLoopStarter implements AgentLoopStarter {
       },
     });
     if (!started.accepted) throw new Error(started.error.message);
-    return { runId: run.runId, stepId, actionId };
+    return {
+      runId: run.runId,
+      stepId,
+      actionId,
+      ...(state.deadlineAt === undefined ? {} : { deadlineAt: state.deadlineAt }),
+    };
+  }
+
+  #scheduleTaskDeadline(
+    taskId: string,
+    deadlineAt: string | undefined,
+    abort: AbortController,
+  ): ScheduledTask | undefined {
+    if (deadlineAt === undefined) return undefined;
+    const delayMs = Math.max(0, Date.parse(deadlineAt) - Date.parse(this.#clock.now()));
+    return this.#scheduler.schedule(delayMs, () => {
+      void this.#expireTaskExecution(taskId, deadlineAt)
+        .then(() => abort.abort(), () => abort.abort());
+    });
+  }
+
+  async #expireTaskExecution(taskId: string, deadlineAt: string): Promise<void> {
+    const state = await this.#taskRuntime.snapshot(taskId);
+    if (state === undefined || !["created", "running", "waiting"].includes(state.status)) return;
+    await this.#taskRuntime.dispatch({
+      commandId: this.#ids.next(),
+      taskId,
+      type: "expire_deadline",
+      issuedAt: new Date(Math.max(
+        Date.parse(deadlineAt),
+        Date.parse(this.#clock.now()),
+      )).toISOString(),
+    });
   }
 
   async #completeTaskExecution(taskId: string): Promise<void> {
@@ -1237,6 +1315,45 @@ export class DurableAgentLoopStarter implements AgentLoopStarter {
       if (this.#mailboxes.get(key) === tail) this.#mailboxes.delete(key);
     }
   }
+}
+
+function presentModelProgress(
+  phase: AgentLoopModelProgressPhase,
+  round: number,
+): Readonly<{ progressKey: string; safeSummary: string }> {
+  switch (phase) {
+    case "core_context_preparing":
+      return {
+        progressKey: `core.context_preparing.round_${round}`,
+        safeSummary: "正在整理当前任务所需的上下文",
+      };
+    case "model_request_dispatched":
+      return {
+        progressKey: `model.request_dispatched.round_${round}`,
+        safeSummary: "已向模型发出请求，正在等待响应",
+      };
+    case "model_stream_started":
+      return {
+        progressKey: `model.stream_started.round_${round}`,
+        safeSummary: "模型已开始处理当前请求",
+      };
+    case "model_response_streaming":
+      return {
+        progressKey: `model.response_streaming.round_${round}`,
+        safeSummary: "模型正在生成回复",
+      };
+    case "model_tool_call_preparing":
+      return {
+        progressKey: `model.tool_call_preparing.round_${round}`,
+        safeSummary: "模型正在准备调用已授权工具",
+      };
+    default:
+      return assertNeverModelProgress(phase);
+  }
+}
+
+function assertNeverModelProgress(value: never): never {
+  throw new Error(`Unhandled model progress phase: ${String(value)}`);
 }
 
 function legacyInstructionRuntime(

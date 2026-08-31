@@ -3,15 +3,13 @@ import type {
   ArtifactCatalogItemProjection,
   ModelProjection,
   SessionSummary,
+  TaskAuthorizationMode,
   TaskDisplayStatus,
   TaskSummaryProjection,
   WorkspaceGrantProjection,
 } from "@robothree/contracts";
 
-export type WorkbenchAuthorizationMode =
-  | "manual_review"
-  | "smart_confirm"
-  | "task_scoped";
+export type WorkbenchAuthorizationMode = TaskAuthorizationMode;
 
 export type WorkbenchSelection = {
   workspaceGrantId: string;
@@ -60,25 +58,21 @@ export const authorizationModes: ReadonlyArray<{
   value: WorkbenchAuthorizationMode;
   label: string;
   description: string;
-  status: string;
 }> = Object.freeze([
   {
-    value: "manual_review",
-    label: "手动复核",
-    description: "创建、修改和风险动作逐次确认",
-    status: "待接入",
+    value: "smart_confirm",
+    label: "智能授权",
+    description: "普通操作自动执行，风险操作主动询问",
   },
   {
-    value: "smart_confirm",
-    label: "智能确认",
-    description: "普通创建和修改可直接执行，风险动作逐次确认",
-    status: "待接入",
+    value: "manual_review",
+    label: "主动询问",
+    description: "创建、修改和风险操作逐次询问",
   },
   {
     value: "task_scoped",
-    label: "任务内授权",
-    description: "精确范围内的可复用动作首次确认后在当前任务内复用",
-    status: "待接入",
+    label: "始终授权",
+    description: "仅在当前任务的相同范围内复用授权",
   },
 ]);
 

@@ -41,6 +41,7 @@ describe("DFE-2A Desktop workbench adapter", () => {
       selectedSkillIds: ["skill:docs"],
       selectedKnowledgeIds: ["knowledge:one"],
       workspaceGrantId: "workspace:one",
+      authorizationMode: "manual_review",
       attachments: [],
     });
 
@@ -96,6 +97,7 @@ describe("DFE-2A Desktop workbench adapter", () => {
       selectedSkillIds: [],
       selectedKnowledgeIds: [],
       workspaceGrantId: "workspace:one",
+      authorizationMode: "manual_review",
       attachments: [reactiveAttachment],
     });
 
@@ -139,6 +141,7 @@ describe("DFE-2A Desktop workbench adapter", () => {
       selectedSkillIds: [],
       selectedKnowledgeIds: [],
       workspaceGrantId: "workspace:one",
+      authorizationMode: "manual_review",
       attachments: [artifactFixture()],
     })).rejects.toThrow("所选资料在提交前已发生变化");
     expect(api.createSession).not.toHaveBeenCalled();
@@ -158,6 +161,7 @@ describe("DFE-2A Desktop workbench adapter", () => {
       selectedSkillIds: ["skill:docs"],
       selectedKnowledgeIds: ["knowledge:one"],
       workspaceGrantId: "workspace:one",
+      authorizationMode: "smart_confirm",
       attachments: [],
     });
 
@@ -169,6 +173,10 @@ describe("DFE-2A Desktop workbench adapter", () => {
         agentId: "agent:normal",
         requestedModelId: "model:gpt",
         reasoningPreference: { requestedMode: "default" },
+        authorizationPreference: {
+          schemaVersion: "v1alpha1",
+          requestedMode: "smart_confirm",
+        },
       }),
     }));
     expect(legacyApi.submitTurn).not.toHaveBeenCalled();
@@ -188,6 +196,7 @@ describe("DFE-2A Desktop workbench adapter", () => {
       selectedSkillIds: [],
       selectedKnowledgeIds: [],
       workspaceGrantId: "workspace:one",
+      authorizationMode: "smart_confirm",
       attachments: [],
     });
 
@@ -213,6 +222,7 @@ describe("DFE-2A Desktop workbench adapter", () => {
       requestedModelId: "model:gpt",
       selectedSkillIds: [],
       selectedKnowledgeIds: [],
+      authorizationMode: "smart_confirm",
       attachments: [],
     });
 

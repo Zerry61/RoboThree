@@ -30,6 +30,9 @@ describe("APV-1C HTML Preview Sandbox", () => {
     expect(preview.csp).toContain("default-src 'none'");
     expect(preview.csp).toContain("script-src 'none'");
     expect(preview.csp).toContain("connect-src 'none'");
+    expect(preview.csp).toContain("frame-ancestors file:");
+    expect(preview.csp).not.toContain("frame-ancestors http:");
+    expect(preview.csp).not.toContain("frame-ancestors *");
 
     const response = await fetch(preview.previewUrl);
     const body = await response.text();

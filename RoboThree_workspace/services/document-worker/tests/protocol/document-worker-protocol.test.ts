@@ -11,6 +11,8 @@ import {
   parseDocumentWorkerInvoke,
   parseDocumentWorkerResult,
   parseDocumentWorkerError,
+  parseDocumentWorkerTextWriteInspect,
+  parseDocumentWorkerTextWritePostcondition,
 } from "../../src/protocol/document-worker-protocol.js";
 
 // ── Helpers ─────────────────────────────────────────────────────
@@ -23,6 +25,55 @@ const SAMPLE_LIMITS = {
 };
 
 const SAMPLE_DEADLINE = new Date(Date.now() + 60_000).toISOString();
+
+describe("WFW-2 private recovery protocol", () => {
+  it("accepts the exact private inspection envelope and rejects extra fields", () => {
+    const message = {
+      type: "inspect_text_write_postcondition",
+      protocolVersion: DOCUMENT_WORKER_PRIVATE_PROTOCOL_VERSION,
+      requestId: "req-wfw",
+      actionId: "action-wfw",
+      effectAttemptId: "effect-wfw",
+      capabilityId: "tool.workspace.file.write_text",
+      workspaceRoot: "/tmp/workspace",
+      relativePath: "index.html",
+      options: {
+        content: "<main>ready</main>",
+        mode: "create_new",
+        workspaceGrantId: "grant-1",
+        limitsRevision: "workspace-text.v1",
+      },
+      limits: SAMPLE_LIMITS,
+      idempotencyKey: "workspace-text:task:call",
+      requestDigest: "a".repeat(64),
+    };
+    expect(parseDocumentWorkerTextWriteInspect(JSON.stringify(message)))
+      .toMatchObject({ capabilityId: "tool.workspace.file.write_text" });
+    expect(() => parseDocumentWorkerTextWriteInspect(JSON.stringify({
+      ...message,
+      workspaceRealPath: "/private/leak",
+    }))).toThrow(DocumentWorkerProtocolError);
+  });
+
+  it("requires output only for recovered_success", () => {
+    const base = {
+      type: "text_write_postcondition",
+      protocolVersion: DOCUMENT_WORKER_PRIVATE_PROTOCOL_VERSION,
+      requestId: "req-wfw",
+      actionId: "action-wfw",
+      effectAttemptId: "effect-wfw",
+    };
+    expect(parseDocumentWorkerTextWritePostcondition(JSON.stringify({
+      ...base,
+      decision: "safe_retry",
+    }))).toMatchObject({ decision: "safe_retry" });
+    expect(() => parseDocumentWorkerTextWritePostcondition(JSON.stringify({
+      ...base,
+      decision: "safe_retry",
+      output: { forbidden: true },
+    }))).toThrow(DocumentWorkerProtocolError);
+  });
+});
 
 const SAMPLE_INVOKE = {
   type: "invoke" as const,

@@ -22,6 +22,7 @@ import java.util.regex.Pattern;
 public final class JdkModelAuthorizedHttpTransport
         implements ModelAuthorizedHttpTransport {
 
+    private static final Duration RESPONSE_START_TIMEOUT = Duration.ofSeconds(90);
     private static final Set<String> SAFE_HEADER_NAMES = Set.of(
             "anthropic-version",
             "traceparent",
@@ -60,7 +61,7 @@ public final class JdkModelAuthorizedHttpTransport
         try {
             String credential = new String(material);
             HttpRequest.Builder builder = HttpRequest.newBuilder(target)
-                    .timeout(normalizeDeadline(request.deadline()))
+                    .timeout(responseStartTimeout(request.deadline()))
                     .header("Accept", "text/event-stream")
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofByteArray(request.body()));
@@ -119,14 +120,16 @@ public final class JdkModelAuthorizedHttpTransport
         return URI.create(base.endsWith("/") ? base : base + "/").resolve(relativePath);
     }
 
-    private static Duration normalizeDeadline(Duration deadline) {
+    static Duration responseStartTimeout(Duration deadline) {
         if (deadline == null
                 || deadline.isNegative()
                 || deadline.isZero()
-                || deadline.compareTo(Duration.ofMinutes(10)) > 0) {
+                || deadline.compareTo(Duration.ofMinutes(30)) > 0) {
             throw new IllegalArgumentException("provider deadline is invalid");
         }
-        return deadline;
+        return deadline.compareTo(RESPONSE_START_TIMEOUT) < 0
+                ? deadline
+                : RESPONSE_START_TIMEOUT;
     }
 
     private static void validateSafeHeaders(Map<String, String> headers) {

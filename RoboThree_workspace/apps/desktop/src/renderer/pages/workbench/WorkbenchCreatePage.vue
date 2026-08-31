@@ -9,35 +9,11 @@
   >
     <header v-if="!conversationActive" class="workbench-page__header">
       <div>
-        <p class="workbench-page__kicker">RoboThree · 新建任务</p>
         <h2 id="workbench-title">今天想完成什么？</h2>
         <p class="workbench-page__eyebrow">直接描述目标，RoboThree 会在你授权的范围内完成任务。</p>
       </div>
       <span class="workbench-page__sync">{{ loading ? "正在同步可用资源…" : "" }}</span>
     </header>
-
-    <section v-if="!conversationActive" class="workbench-page__capabilities" aria-label="任务类型">
-      <span v-for="category in taskCategories" :key="category.label">
-        <span aria-hidden="true">{{ category.mark }}</span>{{ category.label }}
-      </span>
-    </section>
-
-    <section v-if="!conversationActive" class="workbench-page__quick-actions" aria-label="快捷任务模板">
-      <button
-        v-for="action in quickActions"
-        :key="action.title"
-        type="button"
-        :disabled="busy"
-        @click="applyQuickAction(action.prompt)"
-      >
-        <span aria-hidden="true">{{ action.mark }}</span>
-        <span class="workbench-page__quick-copy">
-          <strong>{{ action.title }}</strong>
-          <small>{{ action.description }}</small>
-        </span>
-        <span aria-hidden="true">↑</span>
-      </button>
-    </section>
 
     <R3InlineNotice v-if="error" class="workbench-page__feedback" tone="danger" title="提交失败">
       {{ error }}
@@ -93,12 +69,7 @@
             aria-live="polite"
             data-workbench-conversation
           >
-            <R3EmptyState
-              v-if="conversationMessages.length === 0"
-              title="RoboThree 正在回复"
-              description="回复会在这里持续显示。"
-            />
-            <ul v-else class="workbench-page__messages">
+            <ul v-if="conversationMessages.length > 0" class="workbench-page__messages">
               <li
                 v-for="message in conversationMessages"
                 :key="message.id"
@@ -116,20 +87,34 @@
             </ul>
 
             <section
-              v-if="taskProgressVisible"
-              class="workbench-page__task-progress"
+              v-if="executionProcessVisible"
+              class="workbench-page__execution-process"
               role="status"
               aria-live="polite"
               data-task-progress
             >
-              <span class="workbench-page__task-progress-indicator" aria-hidden="true">
-                <i /><i /><i />
-              </span>
-              <div>
-                <strong>{{ taskProgressTitle }}</strong>
-                <span>{{ taskProgressDescription }}</span>
-              </div>
-              <time>{{ taskElapsedLabel }}</time>
+              <header>
+                <div>
+                  <strong>{{ taskProgressTitle }}</strong>
+                  <span>{{ taskProgressDescription }}</span>
+                </div>
+                <time>{{ taskElapsedLabel }}</time>
+              </header>
+              <ol>
+                <li
+                  v-for="item in executionProcessItems"
+                  :key="item.id"
+                  :data-state="item.state"
+                >
+                  <span class="workbench-page__execution-icon" aria-hidden="true">
+                    {{ item.state === "completed" ? "✓" : item.state === "failed" ? "×" : item.state === "attention" ? "!" : "·" }}
+                  </span>
+                  <div>
+                    <strong>{{ item.title }}</strong>
+                    <span>{{ item.detail }}</span>
+                  </div>
+                </li>
+              </ol>
             </section>
 
             <section
@@ -145,6 +130,7 @@
                 <span>当前任务已停止。你可以继续输入新的消息。</span>
               </div>
             </section>
+
           </section>
 
         <R3Card class="workbench-page__composer-card">
@@ -152,7 +138,6 @@
             <div class="workbench-page__card-header">
               <div>
                 <h3>任务内容</h3>
-                <p>{{ composerState.selectionSummary }}</p>
               </div>
               <div class="workbench-page__card-actions">
                 <R3Button variant="secondary" :disabled="busy" @click="void refresh()">刷新资源</R3Button>
@@ -167,7 +152,6 @@
               label="任务"
               :rows="4"
               :placeholder="composerPlaceholder"
-              :disabled="busy"
               @keydown="handleComposerKeydown"
             />
 
@@ -260,13 +244,43 @@
                   </section>
                 </div>
                 <button
+                  v-if="selection.workspaceGrantId === ''"
                   type="button"
                   class="workbench-page__workspace-trigger"
                   :disabled="busy"
                   @click="void chooseWorkspace()"
                 >
-                  <span aria-hidden="true">▱</span> {{ selectedWorkspaceLabel }}
+                  <span aria-hidden="true">▱</span> 选择工作空间
                 </button>
+                <div ref="authorizationMenuRoot" class="workbench-page__popover-anchor">
+                  <button
+                    type="button"
+                    class="workbench-page__authorization-trigger"
+                    aria-controls="workbench-authorization-menu"
+                    :aria-expanded="authorizationMenuOpen"
+                    :disabled="busy || conversationActive"
+                    :title="conversationActive ? '当前对话已锁定授权方式' : '选择智能授权方式'"
+                    @click="toggleAuthorizationMenu"
+                  ><span aria-hidden="true">◈</span> {{ selectedAuthorizationLabel }} <span aria-hidden="true">⌄</span></button>
+                  <section
+                    v-if="authorizationMenuOpen"
+                    id="workbench-authorization-menu"
+                    class="workbench-page__popover workbench-page__authorization-popover"
+                    aria-label="智能授权"
+                  >
+                    <button
+                      v-for="mode in authorizationModes"
+                      :key="mode.value"
+                      type="button"
+                      :data-authorization-mode="mode.value"
+                      :aria-current="authorizationMode === mode.value ? 'true' : undefined"
+                      @click.stop="authorizationMode = mode.value; authorizationMenuOpen = false"
+                    >
+                      <span><strong>{{ mode.label }}</strong><small>{{ mode.description }}</small></span>
+                      <span v-if="authorizationMode === mode.value" aria-hidden="true">✓</span>
+                    </button>
+                  </section>
+                </div>
               </div>
               <div class="workbench-page__composer-submit">
                 <div ref="modelMenuRoot" class="workbench-page__popover-anchor workbench-page__model-anchor">
@@ -327,19 +341,11 @@
                 <R3Button
                   v-else
                   variant="primary"
-                  :loading="busy"
                   :disabled="sendDisabled"
-                  :title="sendDisabledReason || (conversationActive ? '发送消息' : '提交任务')"
+                  :title="conversationActive ? '发送消息' : '提交任务'"
                   @click="void submitTask()"
                 ><span aria-hidden="true">↑</span><span class="sr-only">{{ conversationActive ? "发送消息" : "提交任务" }}</span></R3Button>
               </div>
-            </div>
-
-            <div class="workbench-page__composer-meta">
-              <button type="button" :disabled="busy" @click="void chooseWorkspace()">
-                <span aria-hidden="true">▱</span> {{ selectedWorkspaceLabel }}
-              </button>
-              <span>{{ selectedAgentLabel }}<template v-if="selectedResourceCount > 0"> · {{ selectedResourceCount }} 项资源</template></span>
             </div>
 
             <R3InlineNotice
@@ -397,8 +403,7 @@
               </ul>
               <small v-if="attachmentNotice" role="status">{{ attachmentNotice }}</small>
             </section>
-            <p v-if="composerState.disabledReason" class="workbench-page__composer-error" role="status">{{ composerState.disabledReason }}</p>
-            <span class="sr-only">{{ composerState.selectionSummary }}</span>
+            <p v-if="composerVisibleError" class="workbench-page__composer-error" role="status">{{ composerVisibleError }}</p>
           </div>
         </R3Card>
 
@@ -431,11 +436,48 @@
                 <strong>{{ artifact.displayName }}</strong>
                 <small>{{ artifactKindLabel(artifact.kind) }}</small>
               </div>
-              <R3Button variant="secondary" @click="void openArtifact(artifact.artifactId)">
+              <R3Button variant="secondary" @click="void openArtifact(artifact)">
                 打开
               </R3Button>
             </li>
           </ul>
+          <section
+            v-if="artifactPreview"
+            class="workbench-page__artifact-preview"
+            aria-label="成果预览"
+            data-workbench-artifact-preview
+          >
+            <header>
+              <strong>成果预览</strong>
+              <button type="button" aria-label="关闭成果预览" @click="void closeArtifactPreview()">×</button>
+            </header>
+            <template v-if="artifactPreview.status === 'loading'">
+              <p role="status">正在加载预览…</p>
+            </template>
+            <template v-else-if="artifactPreview.status === 'error'">
+              <p role="alert">{{ artifactPreview.message }}</p>
+            </template>
+            <iframe
+              v-else-if="artifactPreview.kind === 'html'"
+              :src="artifactPreview.preview.previewUrl"
+              sandbox=""
+              referrerpolicy="no-referrer"
+              title="HTML 成果预览"
+            />
+            <template v-else>
+              <p v-if="artifactPreview.preview.truncated" class="workbench-page__preview-warning">预览内容已安全截断。</p>
+              <div class="workbench-page__preview-blocks">
+                <template v-for="(block, index) in artifactPreview.preview.blocks" :key="`${block.kind}:${index}`">
+                  <h3 v-if="block.kind === 'heading' && block.level === 2">{{ block.text }}</h3>
+                  <h4 v-else-if="block.kind === 'heading'">{{ block.text }}</h4>
+                  <p v-else-if="block.kind === 'paragraph'">{{ block.text }}</p>
+                  <p v-else-if="block.kind === 'list_item'">• {{ block.text }}</p>
+                  <pre v-else-if="block.kind === 'code'"><code>{{ block.text }}</code></pre>
+                  <p v-else>{{ block.cells.join(" · ") }}</p>
+                </template>
+              </div>
+            </template>
+          </section>
         </aside>
       </section>
     </div>
@@ -485,6 +527,7 @@ import type { ReasoningModePreviewV1Alpha5 } from
   "@robothree/contracts/desktop-local/v1alpha5";
 import type {
   ArtifactCatalogItemProjection,
+  ArtifactHtmlPreviewProjection,
   ArtifactProjection,
   ConversationSnapshot,
   TaskDetailProjection,
@@ -500,11 +543,19 @@ import {
 import type { DesktopRendererEvent } from "../../../shared/foundation-api.js";
 import { presentDurableMessage, presentStreamingAssistant } from
   "../../presentation/message-presentation.js";
+import {
+  presentArtifactPreview,
+  type ArtifactPreviewPresentation,
+} from "../../presentation/artifact-preview-presentation.js";
 import { artifactKindLabel } from "../../presentation/artifact-presentation.js";
+import {
+  decideWorkbenchArtifactOpen,
+} from "../../presentation/workspace-text-write-presentation.js";
 import { presentTaskStatus } from "../../presentation/task-presentation.js";
 import type { StreamingAssistantState } from "../tasks/task-detail-model.js";
 import {
   canSubmitConversationTurn,
+  authorizationModes,
   findSelectedAgent,
   normalizeKnowledgeIds,
   normalizeSkillIds,
@@ -512,8 +563,10 @@ import {
   presentWorkbenchComposer,
   selectModelId,
   type WorkbenchCatalog,
+  type WorkbenchAuthorizationMode,
   type WorkbenchSelection,
 } from "./workbench-model.js";
+import { presentWorkbenchExecution } from "./workbench-execution-presentation.js";
 import {
   consumeFollowUpIntent,
   type WorkbenchFollowUpIntent,
@@ -546,40 +599,6 @@ const emptyCatalog: WorkbenchCatalog = {
   recentArtifacts: [],
 };
 
-const quickActions = [
-  {
-    mark: "表",
-    title: "分析表格",
-    description: "读取数据并整理结论",
-    prompt: "分析工作区中的表格数据，整理关键指标、异常项和可执行结论。",
-  },
-  {
-    mark: "文",
-    title: "整理文档",
-    description: "提取重点并形成摘要",
-    prompt: "阅读工作区中的文档，提取重点、风险和后续行动，并输出结构化摘要。",
-  },
-  {
-    mark: "报",
-    title: "生成报告",
-    description: "汇总材料并输出报告",
-    prompt: "根据工作区中的材料生成一份结构清晰的业务报告，包含结论和后续建议。",
-  },
-  {
-    mark: "演",
-    title: "制作演示",
-    description: "生成可编辑的 PPTX",
-    prompt: "根据工作区中的材料制作一份简洁专业的演示文稿，并输出可编辑的 PPTX。",
-  },
-] as const;
-
-const taskCategories = [
-  { mark: "演", label: "PPT" },
-  { mark: "文", label: "文档" },
-  { mark: "表", label: "数据分析" },
-  { mark: "研", label: "研究报告" },
-] as const;
-
 const catalog = reactive<WorkbenchCatalog>({ ...emptyCatalog });
 const selection = reactive<WorkbenchSelection>(
   normalizeWorkbenchSelection(emptyCatalog),
@@ -588,8 +607,10 @@ const composer = ref("");
 const resourceMenuOpen = ref(false);
 const resourceMenuView = ref<"root" | "agents" | "skills" | "knowledge">("root");
 const modelMenuOpen = ref(false);
+const authorizationMenuOpen = ref(false);
 const resourceMenuRoot = ref<HTMLElement>();
 const modelMenuRoot = ref<HTMLElement>();
+const authorizationMenuRoot = ref<HTMLElement>();
 const loading = ref(true);
 const busy = ref(false);
 const error = ref("");
@@ -597,6 +618,12 @@ const defaultWorkspaceUnavailable = ref(false);
 const notice = ref("");
 const attachmentNotice = ref("");
 const attachments = ref<ArtifactCatalogItemProjection[]>([]);
+const authorizationMode = ref<WorkbenchAuthorizationMode>("smart_confirm");
+const pendingUserMessage = ref<Readonly<{
+  localId: string;
+  durableMessageId?: string;
+  content: string;
+}>>();
 const reasoningCompatibility = ref<"loading" | "available" | "unavailable" | "error">("loading");
 const reasoningPreviewState = ref<"idle" | "loading" | "supported" | "unsupported" | "unknown" | "error">("idle");
 const reasoningDraftMode = ref<"default" | "max">("default");
@@ -617,22 +644,43 @@ const conversationTitle = ref("新对话");
 const conversationSnapshot = ref<ConversationSnapshot>();
 const activeTaskDetail = ref<TaskDetailProjection>();
 const streamingAssistant = ref<StreamingAssistantState>();
+const activeModelProgress = ref<Readonly<{
+  taskId: string;
+  runtimeInstanceId: string;
+  progressKey: string;
+  safeSummary: string;
+}>>();
 const conversationStream = ref<HTMLElement>();
 const resultsPanelOpen = ref(false);
+type WorkbenchArtifactPreview =
+  | Readonly<{ status: "loading"; artifactId: string }>
+  | Readonly<{ status: "error"; artifactId: string; message: string }>
+  | Readonly<{
+      status: "ready";
+      kind: "html";
+      artifactId: string;
+      preview: ArtifactHtmlPreviewProjection;
+    }>
+  | Readonly<{
+      status: "ready";
+      kind: "text";
+      artifactId: string;
+      preview: ArtifactPreviewPresentation;
+    }>;
+const artifactPreview = ref<WorkbenchArtifactPreview>();
 const taskControlBusy = ref(false);
 const cancellationRequestedTaskId = ref("");
 const elapsedNow = ref(Date.now());
 let previewSequence = 0;
+let artifactPreviewSequence = 0;
 let conversationRequestSequence = 0;
 let elapsedTimer: ReturnType<typeof setInterval> | undefined;
+let conversationRefreshInFlight = false;
+let lastConversationRefreshAt = 0;
 let unsubscribeTasks: (() => void) | undefined;
 let unsubscribeNewTaskRequested: (() => void) | undefined;
 let followUpSelectionApplied = false;
 let hasActivated = false;
-
-function applyQuickAction(prompt: string): void {
-  composer.value = prompt;
-}
 
 const composerPlaceholder = computed(() => followUpIntent.value === undefined
   ? "描述你想完成的任务…"
@@ -668,7 +716,8 @@ const composerState = computed(() => presentWorkbenchComposer({
   composerText: composer.value,
   busy: busy.value,
 }));
-const conversationActive = computed(() => activeSessionId.value !== "");
+const conversationActive = computed(() => activeSessionId.value !== ""
+  || pendingUserMessage.value !== undefined);
 const activeTaskAcceptsInput = computed(() => {
   if (activeTaskDetail.value?.summary.taskId !== activeTaskId.value) return false;
   return canSubmitConversationTurn(activeTaskDetail.value.summary.displayStatus);
@@ -689,6 +738,8 @@ const activeTaskCanCancel = computed(() => tasksAdapter !== undefined
 const cancellationPending = computed(() => cancellationRequestedTaskId.value !== ""
   && cancellationRequestedTaskId.value === activeTaskId.value);
 const taskProgressVisible = computed(() => taskStopControlVisible.value);
+const executionProcessItems = computed(() => presentWorkbenchExecution(activeTaskDetail.value));
+const executionProcessVisible = computed(() => taskProgressVisible.value);
 const taskTerminationVisible = computed(() => (
   conversationActive.value
   && activeTaskSummary.value?.displayStatus === "cancelled"
@@ -711,7 +762,13 @@ const taskProgressDescription = computed(() => {
     case "waiting_confirmation": return "请检查待确认操作，或终止当前任务。";
     case "recovering": return "正在从持久记录恢复，请勿重复提交。";
     case "manual_attention": return "请检查当前结果，或终止当前任务。";
-    default: return "执行状态和回复会在这里实时更新。";
+    default: {
+      const progress = activeModelProgress.value;
+      if (progress?.taskId === activeTaskId.value) return progress.safeSummary;
+      return executionProcessItems.value.length === 0
+        ? "正在等待 Core 返回可展示的执行进展。"
+        : "执行进展会在这里实时更新。";
+    }
   }
 });
 const taskElapsedLabel = computed(() => {
@@ -726,6 +783,7 @@ const sendDisabledReason = computed(() => {
 const sendDisabled = computed(() => (
   sendDisabledReason.value !== "" || composerState.value.sendDisabled
 ));
+const composerVisibleError = computed(() => busy.value ? "" : composerState.value.disabledReason);
 const conversationMessages = computed(() => {
   const items = (conversationSnapshot.value?.messages ?? [])
     .slice()
@@ -734,6 +792,21 @@ const conversationMessages = computed(() => {
       id: message.messageId,
       presentation: presentDurableMessage(message),
     }));
+  const pending = pendingUserMessage.value;
+  if (pending !== undefined
+    && !items.some((item) => item.id === pending.durableMessageId)) {
+    items.push({
+      id: pending.localId,
+      presentation: {
+        roleClass: "message-user",
+        avatar: "你",
+        authorName: "你",
+        statusLabel: "发送中",
+        content: pending.content,
+        isStreaming: false,
+      },
+    });
+  }
   if (streamingAssistant.value !== undefined) {
     items.push({
       id: streamingAssistant.value.messageId,
@@ -774,19 +847,10 @@ const modelOptions = computed<SelectOption[]>(() => {
     }));
 });
 
-const selectedWorkspaceLabel = computed(() => catalog.workspaces.find((workspace) =>
-  workspace.workspaceGrantId === selection.workspaceGrantId)?.displayName ?? "RoboThree 默认工作区");
-const selectedAgentLabel = computed(() => {
-  if (needsGenericRecovery.value) return "请选择机器人";
-  return selectedAgent.value?.name ?? "通用机器人";
-});
+const selectedAuthorizationLabel = computed(() => authorizationModes.find((mode) =>
+  mode.value === authorizationMode.value)?.label ?? "智能授权");
 const selectedModelLabel = computed(() => catalog.models.find((model) =>
   model.modelId === selection.requestedModelId)?.name ?? "选择模型");
-const selectedResourceCount = computed(() => (
-  selection.selectedSkillIds.length
-  + selection.selectedKnowledgeIds.length
-  + attachments.value.length
-));
 const resourceMenuTitle = computed(() => ({
   agents: "选择机器人",
   skills: "选择技能",
@@ -797,17 +861,33 @@ const resourceMenuTitle = computed(() => ({
 function toggleResourceMenu(): void {
   resourceMenuOpen.value = !resourceMenuOpen.value;
   resourceMenuView.value = "root";
-  if (resourceMenuOpen.value) modelMenuOpen.value = false;
+  if (resourceMenuOpen.value) {
+    modelMenuOpen.value = false;
+    authorizationMenuOpen.value = false;
+  }
 }
 
 function toggleModelMenu(): void {
   modelMenuOpen.value = !modelMenuOpen.value;
-  if (modelMenuOpen.value) resourceMenuOpen.value = false;
+  if (modelMenuOpen.value) {
+    resourceMenuOpen.value = false;
+    authorizationMenuOpen.value = false;
+  }
+}
+
+function toggleAuthorizationMenu(): void {
+  if (conversationActive.value) return;
+  authorizationMenuOpen.value = !authorizationMenuOpen.value;
+  if (authorizationMenuOpen.value) {
+    resourceMenuOpen.value = false;
+    modelMenuOpen.value = false;
+  }
 }
 
 function closeComposerMenus(): void {
   resourceMenuOpen.value = false;
   modelMenuOpen.value = false;
+  authorizationMenuOpen.value = false;
   resourceMenuView.value = "root";
 }
 
@@ -820,6 +900,9 @@ function handleDocumentPointerDown(event: PointerEvent): void {
   }
   if (modelMenuOpen.value && !modelMenuRoot.value?.contains(target)) {
     modelMenuOpen.value = false;
+  }
+  if (authorizationMenuOpen.value && !authorizationMenuRoot.value?.contains(target)) {
+    authorizationMenuOpen.value = false;
   }
 }
 
@@ -900,6 +983,10 @@ watch(() => selection.workspaceGrantId, (next, previous) => {
   }
 });
 
+watch(resultsPanelOpen, (open) => {
+  if (!open) void closeArtifactPreview();
+});
+
 watch(
   () => [singleQueryValue(route?.query.sessionId), singleQueryValue(route?.query.taskId)] as const,
   ([sessionId, taskId], [previousSessionId, previousTaskId]) => {
@@ -922,6 +1009,15 @@ onMounted(() => {
   });
   elapsedTimer = setInterval(() => {
     elapsedNow.value = Date.now();
+    const summary = activeTaskSummary.value;
+    if (
+      conversationActive.value
+      && activeTaskId.value !== ""
+      && (summary === undefined || !presentTaskStatus(summary.displayStatus).isTerminal)
+      && elapsedNow.value - lastConversationRefreshAt >= 2_000
+    ) {
+      void refreshActiveConversation();
+    }
   }, 1_000);
 });
 
@@ -931,6 +1027,7 @@ onBeforeUnmount(() => {
   unsubscribeTasks?.();
   unsubscribeNewTaskRequested?.();
   if (elapsedTimer !== undefined) clearInterval(elapsedTimer);
+  void closeArtifactPreview();
 });
 
 onActivated(() => {
@@ -1058,12 +1155,20 @@ function removeAttachment(artifactId: string): void {
 
 async function submitTask(): Promise<void> {
   if (sendDisabled.value) return;
+  const text = composer.value.trim();
+  pendingUserMessage.value = {
+    localId: `pending:${crypto.randomUUID()}`,
+    content: text,
+  };
+  composer.value = "";
+  if (activeSessionId.value === "") conversationTitle.value = text.slice(0, 48) || "新对话";
   busy.value = true;
   notice.value = "";
   error.value = "";
   defaultWorkspaceUnavailable.value = false;
+  await nextTick();
+  await scrollConversationToBottom();
   try {
-    const text = composer.value.trim();
     const result = await adapter.submitTask({
       sessionId: selection.sessionId,
       sessionTitle: text.slice(0, 48) || "新任务",
@@ -1076,6 +1181,7 @@ async function submitTask(): Promise<void> {
         ? {}
         : { workspaceGrantId: selection.workspaceGrantId }),
       attachments: attachments.value,
+      authorizationMode: authorizationMode.value,
       reasoning: {
         requestedMode: reasoningDraftMode.value,
         ...(reasoningPreview.value === undefined
@@ -1083,12 +1189,21 @@ async function submitTask(): Promise<void> {
           : { preview: reasoningPreview.value }),
       },
     });
-    composer.value = "";
     attachments.value = [];
     notice.value = "";
     selection.sessionId = result.session.sessionId;
     activeSessionId.value = result.session.sessionId;
     activeTaskId.value = result.receipt.taskId;
+    pendingUserMessage.value = {
+      ...pendingUserMessage.value!,
+      durableMessageId: result.receipt.userMessageId,
+    };
+    const resolvedAuthorization = "runtimeSelectionSummary" in result.receipt
+      ? result.receipt.runtimeSelectionSummary?.resolvedAuthorization
+      : undefined;
+    if (resolvedAuthorization !== undefined) {
+      authorizationMode.value = resolvedAuthorization.resolvedMode;
+    }
     conversationTitle.value = result.session.title;
     followUpIntent.value = undefined;
     rememberConversationSelection(result.session.sessionId, currentConversationSelection());
@@ -1104,7 +1219,11 @@ async function submitTask(): Promise<void> {
     // The submit receipt is authoritative even if the list projection is one tick behind.
     selection.sessionId = result.session.sessionId;
     await refreshActiveConversation();
+    pendingUserMessage.value = undefined;
   } catch (caught) {
+    pendingUserMessage.value = undefined;
+    if (composer.value === "") composer.value = text;
+    if (activeSessionId.value === "") conversationTitle.value = "新对话";
     defaultWorkspaceUnavailable.value = isDefaultWorkspaceUnavailable(caught);
     error.value = explainError(caught);
   } finally {
@@ -1267,6 +1386,7 @@ function currentConversationSelection() {
     requestedModelId: selection.requestedModelId,
     selectedSkillIds: selection.selectedSkillIds,
     selectedKnowledgeIds: selection.selectedKnowledgeIds,
+    authorizationMode: authorizationMode.value,
     ...(selection.workspaceGrantId === ""
       ? {}
       : { workspaceGrantId: selection.workspaceGrantId }),
@@ -1288,6 +1408,8 @@ function resetForNewTask(): void {
   conversationTitle.value = "新对话";
   conversationSnapshot.value = undefined;
   activeTaskDetail.value = undefined;
+  pendingUserMessage.value = undefined;
+  authorizationMode.value = "smart_confirm";
   streamingAssistant.value = undefined;
   cancellationRequestedTaskId.value = "";
   resultsPanelOpen.value = false;
@@ -1326,6 +1448,7 @@ async function activateRouteConversation(): Promise<void> {
 
   const remembered = conversationSelection(ids.sessionId);
   if (remembered !== undefined) {
+    authorizationMode.value = remembered.authorizationMode;
     Object.assign(selection, normalizeWorkbenchSelection(catalog, {
       ...selection,
       sessionId: ids.sessionId,
@@ -1362,7 +1485,14 @@ async function activateRouteConversation(): Promise<void> {
 }
 
 async function refreshActiveConversation(): Promise<void> {
-  if (tasksAdapter === undefined || activeSessionId.value === "" || activeTaskId.value === "") return;
+  if (
+    tasksAdapter === undefined
+    || activeSessionId.value === ""
+    || activeTaskId.value === ""
+    || conversationRefreshInFlight
+  ) return;
+  conversationRefreshInFlight = true;
+  lastConversationRefreshAt = Date.now();
   const sessionId = activeSessionId.value;
   const taskId = activeTaskId.value;
   const sequence = ++conversationRequestSequence;
@@ -1383,6 +1513,8 @@ async function refreshActiveConversation(): Promise<void> {
   } catch {
     if (sequence !== conversationRequestSequence) return;
     // Submit errors remain separate. Event replay can still recover the durable view.
+  } finally {
+    conversationRefreshInFlight = false;
   }
 }
 
@@ -1390,7 +1522,19 @@ function handleDesktopEvent(event: DesktopRendererEvent): void {
   if (!conversationActive.value) return;
   if (!("deliveryKind" in event)) {
     streamingAssistant.value = undefined;
+    activeModelProgress.value = undefined;
     void refreshActiveConversation();
+    return;
+  }
+  if (event.deliveryKind === "ephemeral"
+    && event.payload.type === "progress_delta"
+    && event.payload.taskId === activeTaskId.value) {
+    activeModelProgress.value = {
+      taskId: event.payload.taskId,
+      runtimeInstanceId: event.runtimeInstanceId,
+      progressKey: event.payload.progressKey,
+      safeSummary: event.payload.safeSummary,
+    };
     return;
   }
   if (event.deliveryKind === "ephemeral"
@@ -1424,12 +1568,16 @@ function handleDesktopEvent(event: DesktopRendererEvent): void {
     if (streamingAssistant.value?.messageId === event.payload.messageId) {
       streamingAssistant.value = undefined;
     }
+    activeModelProgress.value = undefined;
     void refreshActiveConversation();
     return;
   }
   if (event.deliveryKind === "durable"
     && event.payload.type === "task_status_changed"
     && event.payload.taskId === activeTaskId.value) {
+    if (presentTaskStatus(event.payload.displayStatus).isTerminal) {
+      activeModelProgress.value = undefined;
+    }
     void refreshActiveConversation();
     notifyShellNavigationChanged();
     return;
@@ -1447,12 +1595,74 @@ async function scrollConversationToBottom(): Promise<void> {
   if (element !== undefined) element.scrollTop = element.scrollHeight;
 }
 
-async function openArtifact(artifactId: string): Promise<void> {
+async function openArtifact(artifact: ArtifactProjection): Promise<void> {
   if (tasksAdapter === undefined) return;
+  const decision = decideWorkbenchArtifactOpen(artifact);
+  if (decision.kind === "open_location") {
+    await closeArtifactPreview();
+    try {
+      await tasksAdapter.openArtifactLocation({ artifactId: artifact.artifactId });
+    } catch {
+      error.value = "成果暂时无法打开，请稍后重试。";
+    }
+    return;
+  }
+  await closeArtifactPreview();
+  const sequence = ++artifactPreviewSequence;
+  artifactPreview.value = { status: "loading", artifactId: artifact.artifactId };
   try {
-    await tasksAdapter.openArtifactLocation({ artifactId });
+    if (decision.kind === "html") {
+      const preview = await tasksAdapter.startArtifactHtmlPreview({
+        artifactId: artifact.artifactId,
+      });
+      if (sequence !== artifactPreviewSequence) {
+        await tasksAdapter.closeArtifactPreview({
+          previewSessionId: preview.previewSessionId,
+        });
+        return;
+      }
+      artifactPreview.value = {
+        status: "ready",
+        kind: "html",
+        artifactId: artifact.artifactId,
+        preview,
+      };
+      return;
+    }
+    const preview = await tasksAdapter.previewArtifact({
+      artifactId: artifact.artifactId,
+      mode: decision.mode,
+    });
+    if (sequence !== artifactPreviewSequence) return;
+    artifactPreview.value = {
+      status: "ready",
+      kind: "text",
+      artifactId: artifact.artifactId,
+      preview: presentArtifactPreview(preview),
+    };
   } catch {
-    error.value = "成果暂时无法打开，请稍后重试。";
+    if (sequence !== artifactPreviewSequence) return;
+    artifactPreview.value = {
+      status: "error",
+      artifactId: artifact.artifactId,
+      message: "成果预览暂时不可用，请稍后重试。",
+    };
+  }
+}
+
+async function closeArtifactPreview(): Promise<void> {
+  const current = artifactPreview.value;
+  artifactPreviewSequence += 1;
+  artifactPreview.value = undefined;
+  if (tasksAdapter === undefined
+    || current?.status !== "ready"
+    || current.kind !== "html") return;
+  try {
+    await tasksAdapter.closeArtifactPreview({
+      previewSessionId: current.preview.previewSessionId,
+    });
+  } catch {
+    // Preview cleanup is best effort and must not block navigation or teardown.
   }
 }
 
@@ -1560,13 +1770,6 @@ function formatElapsed(milliseconds: number): string {
   font-size: clamp(24px, 3vw, 30px);
   line-height: 1.25;
   letter-spacing: 0;
-}
-
-.workbench-page__kicker {
-  margin: 0;
-  color: var(--r3-color-primary);
-  font-size: var(--r3-font-size-xs);
-  font-weight: 700;
 }
 
 .workbench-page__sync {
@@ -1947,13 +2150,11 @@ function formatElapsed(milliseconds: number): string {
 .workbench-page__header { order: 1; display: grid; justify-items: center; text-align: center; }
 .workbench-page__header > div { display: grid; justify-items: center; }
 .workbench-page__header h2 { margin: 4px 0 0; font-size: 36px; line-height: 1.25; font-weight: 620; }
-.workbench-page__header .workbench-page__kicker { color: var(--r3-color-text-tertiary); font-weight: 600; }
 .workbench-page__header .workbench-page__eyebrow { max-width: 560px; margin-top: 8px; }
 .workbench-page__sync { min-height: 18px; min-width: 0; margin-top: 5px; text-align: center; }
 
 .workbench-page__feedback { order: 2; }
 .workbench-page__layout { order: 3; }
-.workbench-page__capabilities { order: 4; }
 .workbench-page__quick-actions { order: 5; }
 
 .workbench-page__layout :deep(.r3-card) {
@@ -2006,6 +2207,7 @@ function formatElapsed(milliseconds: number): string {
 
 .workbench-page__composer-toolbar :deep(.r3-button),
 .workbench-page__workspace-trigger,
+.workbench-page__authorization-trigger,
 .workbench-page__icon-trigger,
 .workbench-page__model-trigger {
   min-height: 32px;
@@ -2019,6 +2221,7 @@ function formatElapsed(milliseconds: number): string {
 
 .workbench-page__composer-toolbar :deep(.r3-button:hover:not(:disabled)),
 .workbench-page__workspace-trigger:hover:not(:disabled),
+.workbench-page__authorization-trigger:hover:not(:disabled),
 .workbench-page__icon-trigger:hover:not(:disabled),
 .workbench-page__model-trigger:hover:not(:disabled) { background: var(--r3-color-surface-hover); color: var(--r3-color-text); }
 
@@ -2064,7 +2267,39 @@ function formatElapsed(milliseconds: number): string {
 }
 
 .workbench-page__resource-popover { left: -4px; }
+.workbench-page__authorization-popover { left: 0; width: 300px; }
 .workbench-page__model-popover { right: 0; width: 330px; }
+
+.workbench-page__authorization-popover > button {
+  width: 100%;
+  min-height: 54px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: transparent;
+  color: var(--r3-color-text);
+  text-align: left;
+}
+
+.workbench-page__authorization-popover > button:hover,
+.workbench-page__authorization-popover > button[aria-current="true"] {
+  background: var(--r3-color-surface-hover);
+}
+
+.workbench-page__authorization-popover > button > span:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.workbench-page__authorization-popover small {
+  color: var(--r3-color-text-secondary);
+  font-size: 11px;
+  line-height: 1.4;
+}
 
 .workbench-page__menu-item,
 .workbench-page__option-list > button,
@@ -2128,35 +2363,6 @@ function formatElapsed(milliseconds: number): string {
 .workbench-page__max-option > div { min-width: 0; display: grid; gap: 5px; }
 .workbench-page__max-option small { color: var(--r3-color-text-secondary); font-size: 11px; line-height: 1.35; }
 
-.workbench-page__composer-meta {
-  min-height: 42px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  border-top: 1px solid #f0f1f3;
-  border-radius: 0 0 16px 16px;
-  padding: 6px 14px;
-  background: #f7f7f8;
-  color: var(--r3-color-text-secondary);
-  font-size: 12px;
-}
-
-.workbench-page__composer-meta button {
-  min-width: 0;
-  border: 0;
-  border-radius: 7px;
-  padding: 6px 8px;
-  background: transparent;
-  color: inherit;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.workbench-page__composer-meta button:hover:not(:disabled) { background: #eceef2; color: var(--r3-color-text); }
-.workbench-page__composer-meta > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
 .workbench-page__attachments {
   display: grid;
   margin: 9px 12px 0;
@@ -2195,31 +2401,6 @@ function formatElapsed(milliseconds: number): string {
 .workbench-page__composer-submit :deep(.r3-button--danger:hover:not(:disabled)) {
   background: #b42318;
 }
-
-.workbench-page__capabilities {
-  display: flex;
-  justify-content: center;
-  gap: 8px;
-  overflow-x: auto;
-  padding: 1px 0;
-  scrollbar-width: none;
-}
-
-.workbench-page__capabilities > span {
-  min-height: 34px;
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  border: 1px solid var(--r3-color-border);
-  border-radius: 999px;
-  padding: 0 13px;
-  background: #fff;
-  color: var(--r3-color-text-secondary);
-  font-size: 12px;
-}
-
-.workbench-page__capabilities > span > span { color: var(--r3-color-primary); font-weight: 700; }
 
 .workbench-page__quick-actions {
   display: grid;
@@ -2306,11 +2487,9 @@ function formatElapsed(milliseconds: number): string {
   .workbench-page__header h2 { font-size: 27px; }
   .workbench-page__header .workbench-page__eyebrow { font-size: 12px; }
   .workbench-page__composer-toolbar { align-items: center; }
-  .workbench-page__workspace-trigger { display: none; }
   .workbench-page__model-trigger { max-width: 170px; }
   .workbench-page__model-popover { right: -48px; }
-  .workbench-page__composer-meta > span { display: none; }
-  .workbench-page__capabilities { justify-content: flex-start; }
+  .workbench-page__authorization-popover { left: -36px; }
 }
 
 .workbench-page--conversation {
@@ -2479,16 +2658,111 @@ function formatElapsed(milliseconds: number): string {
   display: none;
 }
 
-.workbench-page__task-progress {
+.workbench-page__execution-process {
   width: min(820px, 100%);
   margin: 24px auto 0;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
+  gap: 14px;
   border-top: 1px solid var(--r3-color-border);
   padding: 18px 2px 0;
   color: var(--r3-color-text-secondary);
+}
+
+.workbench-page__execution-process > header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.workbench-page__execution-process > header > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.workbench-page__execution-process > header strong {
+  color: var(--r3-color-text);
+  font-size: var(--r3-font-size-sm);
+}
+
+.workbench-page__execution-process > header span,
+.workbench-page__execution-process > header time {
+  font-size: var(--r3-font-size-xs);
+}
+
+.workbench-page__execution-process > header time {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.workbench-page__execution-process ol {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.workbench-page__execution-process li {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+}
+
+.workbench-page__execution-process li > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.workbench-page__execution-process li strong {
+  color: var(--r3-color-text);
+  font-size: 13px;
+  font-weight: 560;
+}
+
+.workbench-page__execution-process li span {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.workbench-page__execution-icon {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--r3-color-surface-muted);
+  color: var(--r3-color-text-secondary);
+  font-weight: 700;
+}
+
+.workbench-page__execution-process li[data-state="active"] .workbench-page__execution-icon {
+  background: #edf2ff;
+  color: var(--r3-color-primary);
+  animation: workbench-process-pulse 1.4s ease-in-out infinite;
+}
+
+.workbench-page__execution-process li[data-state="completed"] .workbench-page__execution-icon {
+  background: #e8f7ee;
+  color: #177245;
+}
+
+.workbench-page__execution-process li[data-state="attention"] .workbench-page__execution-icon {
+  background: #fff5dc;
+  color: #8a5a00;
+}
+
+.workbench-page__execution-process li[data-state="failed"] .workbench-page__execution-icon {
+  background: #fff0f0;
+  color: #a32828;
+}
+
+@keyframes workbench-process-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
 }
 
 .workbench-page__task-outcome {
@@ -2529,53 +2803,6 @@ function formatElapsed(milliseconds: number): string {
   font-size: 8px;
 }
 
-.workbench-page__task-progress > div {
-  min-width: 0;
-  display: grid;
-  gap: 3px;
-}
-
-.workbench-page__task-progress strong {
-  color: var(--r3-color-text);
-  font-size: var(--r3-font-size-sm);
-}
-
-.workbench-page__task-progress span,
-.workbench-page__task-progress time {
-  font-size: var(--r3-font-size-xs);
-}
-
-.workbench-page__task-progress time {
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-
-.workbench-page__task-progress-indicator {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: #edf2ff;
-}
-
-.workbench-page__task-progress-indicator i {
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: var(--r3-color-primary);
-  animation: workbench-progress-pulse 1.2s ease-in-out infinite;
-}
-
-.workbench-page__task-progress-indicator i:nth-child(2) { animation-delay: 0.15s; }
-.workbench-page__task-progress-indicator i:nth-child(3) { animation-delay: 0.3s; }
-
-@keyframes workbench-progress-pulse {
-  0%, 70%, 100% { opacity: 0.35; transform: translateY(0); }
-  35% { opacity: 1; transform: translateY(-2px); }
-}
 
 .workbench-page--conversation .workbench-page__composer-card {
   flex: 0 0 auto;
@@ -2663,6 +2890,74 @@ function formatElapsed(milliseconds: number): string {
 
 .workbench-page__artifact-list strong { font-size: 13px; }
 .workbench-page__artifact-list small { color: var(--r3-color-text-tertiary); font-size: 11px; }
+
+.workbench-page__artifact-preview {
+  margin: 0 14px 14px;
+  overflow: hidden;
+  border: 1px solid var(--r3-color-border);
+  border-radius: 8px;
+  background: var(--r3-color-surface);
+}
+
+.workbench-page__artifact-preview > header {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--r3-color-border);
+  padding: 8px 10px 8px 12px;
+}
+
+.workbench-page__artifact-preview > header button {
+  border: 0;
+  background: transparent;
+  color: var(--r3-color-text-secondary);
+  cursor: pointer;
+}
+
+.workbench-page__artifact-preview > p {
+  margin: 0;
+  padding: 14px;
+  color: var(--r3-color-text-secondary);
+}
+
+.workbench-page__artifact-preview iframe {
+  width: 100%;
+  min-height: 360px;
+  display: block;
+  border: 0;
+  background: #fff;
+}
+
+.workbench-page__preview-warning {
+  color: #8a5a00 !important;
+  background: #fff9ea;
+}
+
+.workbench-page__preview-blocks {
+  max-height: 420px;
+  overflow: auto;
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+}
+
+.workbench-page__preview-blocks h3,
+.workbench-page__preview-blocks h4,
+.workbench-page__preview-blocks p,
+.workbench-page__preview-blocks pre {
+  margin: 0;
+}
+
+.workbench-page__preview-blocks pre {
+  overflow: auto;
+  border-radius: 6px;
+  padding: 10px;
+  background: var(--r3-color-surface-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 
 @media (max-width: 980px) {
   .workbench-page--results-open .workbench-page__conversation-workspace {

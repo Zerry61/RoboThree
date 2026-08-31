@@ -19,7 +19,7 @@ describe("DCF-1.2C Desktop event projection", () => {
   it("publishes bounded process-local deltas and stops after unsubscribe", () => {
     const bus = new DesktopEphemeralEventBus({
       clock: new FakeClock("2026-07-26T20:00:00.000Z"),
-      ids: new FakeIdGenerator([id("2"), id("3")]),
+      ids: new FakeIdGenerator([id("2"), id("3"), id("10")]),
       runtimeInstanceId,
     });
     const listener = vi.fn();
@@ -30,6 +30,12 @@ describe("DCF-1.2C Desktop event projection", () => {
       messageId: `message:${id("5")}`,
       deltaSequence: 0,
       delta: "RoboThree ",
+    });
+    const progress = bus.publish({
+      type: "progress_delta",
+      taskId: `task:${id("9")}`,
+      progressKey: "model.stream_started.round_1",
+      safeSummary: "模型已开始处理当前请求",
     });
     unsubscribe();
     bus.publish({
@@ -44,7 +50,13 @@ describe("DCF-1.2C Desktop event projection", () => {
       runtimeInstanceId,
       payload: { deltaSequence: 0, delta: "RoboThree " },
     });
-    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledTimes(2);
+    expect(progress.payload).toEqual({
+      type: "progress_delta",
+      taskId: `task:${id("9")}`,
+      progressKey: "model.stream_started.round_1",
+      safeSummary: "模型已开始处理当前请求",
+    });
   });
 
   it("maps committed Message delivery and fails closed to Snapshot reset", async () => {

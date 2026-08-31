@@ -79,6 +79,7 @@ public final class OpenAiCompatibleModelProviderAdapter
             BoundedSseEventReader.read(
                     response.body(),
                     request.streamIdleTimeout(),
+                    ProviderAdapterSupport.remaining(request.deadline()),
                     MAXIMUM_FRAME_BYTES,
                     MAXIMUM_STREAM_BYTES,
                     bounded::cancellationRequested,

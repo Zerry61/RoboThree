@@ -4,6 +4,7 @@ import type {
   ReasoningModePreviewV1Alpha5,
   SubmitTurnReceiptV1Alpha5,
 } from "@robothree/contracts/desktop-local/v1alpha5";
+import type { TaskAuthorizationMode } from "@robothree/contracts";
 import type { TaskReasoningModeProjectionV1Alpha1 } from
   "@robothree/contracts/desktop-local/task-reasoning/v1alpha1";
 import type { InjectionKey } from "vue";
@@ -143,6 +144,7 @@ export class ReasoningModeAdapter {
     selectedKnowledgeIds: readonly string[];
     workspaceGrantId?: string;
     reasoning: ReasoningSubmitDraft;
+    authorizationMode: TaskAuthorizationMode;
   }>): Promise<SubmitTurnReceiptV1Alpha5> {
     const reasoningPreference = input.reasoning.requestedMode === "default"
       ? { requestedMode: "default" as const }
@@ -168,7 +170,7 @@ export class ReasoningModeAdapter {
           : { workspaceGrantId: input.workspaceGrantId }),
         authorizationPreference: {
           schemaVersion: "v1alpha1",
-          requestedMode: "manual_review",
+          requestedMode: input.authorizationMode,
         },
         reasoningPreference,
       },

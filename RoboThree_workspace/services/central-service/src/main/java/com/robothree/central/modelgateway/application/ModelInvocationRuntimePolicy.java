@@ -62,7 +62,7 @@ public record ModelInvocationRuntimePolicy(
                 "2".repeat(64),
                 Duration.ofSeconds(30),
                 Duration.ofSeconds(10),
-                Duration.ofMinutes(5),
+                Duration.ofMinutes(15),
                 Duration.ofSeconds(30),
                 Duration.ofSeconds(30),
                 256,

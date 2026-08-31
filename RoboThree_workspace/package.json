@@ -1,6 +1,6 @@
 {
   "name": "robothree",
-  "version": "0.0.0-mvp.rsl.1-repair.1",
+  "version": "0.0.0-mvp.safe-progress.1",
   "private": true,
   "description": "RoboThree product monorepo",
   "packageManager": "pnpm@11.11.0",

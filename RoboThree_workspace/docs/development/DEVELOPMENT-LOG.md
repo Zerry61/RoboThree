@@ -4,6 +4,252 @@
 
 ---
 
+## MVP-RSL-2 Plan — Skill Lifecycle End-to-End
+
+- 日期：2026-09-01；
+- 状态：`REVISION 1 / DOCUMENT REVIEW PENDING / CODING GATED`；
+- 产品目标：关闭 Desktop 用户“创建技能 → 真实 Task/WFW 生成 → exact revision 测试 → 提交 → Admin 审核 → immutable
+  release → 安装 → 新 Task exact 使用”主链，并让 Admin 上传 ZIP/RAR/TAR.GZ/TGZ 后经同一测试与发布权威进入技能广场；
+- 复用边界：复用既有 SubmitTurn、Agent Loop、Runtime Selection、Entitlement、Capability Lock、Workbench、WFW、
+  Central PostgreSQL 与 RSL-1 expected-revision/review/release 模式；不建设第二套 Task/Runtime、通用包管理器、通用文件
+  平台、测试报告系统或 Catalog；
+- 安全边界：安装不执行脚本、不安装依赖；Archive 必须阻断 traversal、link、特殊节点、重复路径、加密/分卷、嵌套展开和
+  zip bomb。RAR 若无法以可审计、无 shell/native runtime 的 exact reader 安全满足，必须停手回评审，不得静默删除 P0；
+- 评审边界：48 项 focused QA、两条真实联合 E2E、20 项停手条件；本轮只新增方案与治理回链，未修改生产代码、Contract、
+  migration、依赖、版本或 lockfile；
+- 方案：[MVP-RSL-2 Skill Lifecycle End-to-End 详细实施方案](./MVP-RSL-2-SKILL-LIFECYCLE-END-TO-END-DEVELOPMENT-PLAN.md)。
+
+---
+
+## 0.0.0-mvp.safe-progress.1 — Desktop Workbench Composer UX Companion
+
+- 日期：2026-08-31；
+- 状态：`IMPLEMENTED / FOCUSED GATES PASS / PRODUCT ACCEPTANCE PENDING / INDEPENDENT QA PENDING`；
+- 版本协调：本批复用并行后端已经激活的 `0.0.0-mvp.safe-progress.1`，不覆盖或回退 Core、Root 与 Desktop 版本；
+- 输入区：删除首页重复标题、底部“默认工作区/通用机器人”说明和 PPT/文档/数据分析/研究报告快捷按钮。未选择工作区时
+  仅在 Composer 内显示“选择工作空间”并调用既有目录选择；选择成功后隐藏该入口；
+- 授权偏好：在 Workspace 入口旁提供真实 `智能授权 / 主动询问 / 始终授权`，分别提交既有
+  `smart_confirm / manual_review / task_scoped`；会话开始后锁定，旧 API 无法表达非手动模式时 fail-closed；
+- 消息反馈：用户消息在调用 `submitTask` 前立即进入当前会话，Composer 立即清空且可编辑下一条内容；等待提交 receipt
+  不再让发送按钮或输入框承担模型执行 loading。请求失败时只移除对应 optimistic 消息，不覆盖用户随后输入的草稿；
+- 执行呈现：只在非终态显示真实 Task/Tool 和 `progress_delta` 安全摘要；终态隐藏累计时间与执行区。删除
+  “已完成本轮处理 / 本轮执行过程已记录”“分析任务并组织回复 / Action succeeded”等无信息占位；不推断、不展示
+  Provider 隐藏 reasoning/thinking；
+- 验证：Workbench focused `6 files / 77 tests PASS`，Demo auth `1 file / 3 tests PASS`，Desktop full
+  `76 files / 396 tests PASS`；Desktop build、focused ESLint、Architecture boundary、DTP-4 audit 与 `git diff --check` PASS；
+  1180x760 与 900x600 视觉检查无横向溢出；
+- 边界：本批归属差异仅包含 Desktop Renderer/presentation/focused tests 与治理记录；未改 Main、Preload、公共 Contract、
+  Core、Central、migration、依赖或 lockfile。共享工作区同时存在获授权的 WFW、timeout 与 safe-progress 并行差异，本批
+  未回退或代收口；全仓 lint 仍被既有 Admin 生成 JavaScript 的 34 个 `no-undef` 阻断，不归因本批。
+
+---
+
+## 0.0.0-mvp.safe-progress.1 — Content-free Model Execution Progress
+
+- 日期：2026-08-31；
+- 状态：`IMPLEMENTED / FOCUSED GATES PASS / USER ACCEPTANCE PENDING / INDEPENDENT QA PENDING`；
+- 用户问题：客户端只能看到 Task/Tool 的粗粒度状态，无法区分 Core 是否仍在准备上下文、模型请求是否已经发出、模型是否
+  已经开始响应，长任务因此容易被误判为卡死；
+- 实现：`AgentLoopCoordinator` 新增 Core-internal progress callback，分别投影上下文准备、请求发出、stream started、
+  首个文本片段与首个 Tool Call；`DurableAgentLoopStarter` 把这些阶段映射为既有 Desktop `progress_delta` 的
+  `progressKey + safeSummary`，Workbench 仅对当前 Task 展示最新摘要并在 terminal/message committed/replay reset 清理；
+- 安全边界：不发送、记录或推断 Provider reasoning/thinking 正文，不投影 Prompt、Token、Tool arguments、Credential、
+  Workspace 路径或内部错误；事件为 process-local ephemeral，断线后继续以 durable Task Detail 收敛；
+- 验证：Core Agent Loop + Desktop event projection `2 files / 15 tests PASS`，完整 Workbench 页面
+  `1 file / 32 tests PASS`；Core/Desktop typecheck、focused ESLint 与 `git diff --check` PASS；
+- 版本与范围：Root/Core/Desktop 提升为 `0.0.0-mvp.safe-progress.1`；Contracts/Central/Admin 不变；未新增 Contract、
+  IPC、migration、依赖、lockfile、状态机或下游能力；
+- 独立 QA：`PENDING`。
+
+---
+
+## 0.0.0-dfe.9-repair.11 — Workbench Execution Process Presentation
+
+- 日期：2026-08-31
+- 状态：`IMPLEMENTED / FOCUSED GATES PASS / PRODUCT ACCEPTANCE PENDING / INDEPENDENT QA PENDING`；
+- 用户问题：消息提交后发送按钮和输入框持续显示加载，用户误以为消息仍未发出；会话区也没有可理解的真实执行反馈；
+- 修复：提交 loading 不再进入发送按钮或输入错误区；运行中继续使用既有真实终止按钮。会话流消费 Task Detail 的
+  durable Steps 与 Tool Activities，映射为任务分析、文档生成、工作区写入、等待确认、失败和完成等安全业务文案；
+- 诚实边界：不展示或推断模型隐藏 chain-of-thought；不显示内部 actionType、operationType、路径、grant、digest、proof
+  或原始异常。没有真实 Step/Tool Activity 时只显示概括状态，不用 Fixture 伪造过程；
+- 验证：Workbench 页面聚焦测试 `1 file / 29 tests PASS`，Desktop build、focused ESLint、Architecture boundary、
+  DTP-4 audit 与 `git diff --check` PASS；全仓 lint 仍被既有 Admin 生成 `.js` 的 34 个 `no-undef` 阻断，不归因本批；
+- 版本与边界：仅 Desktop 提升为 `0.0.0-dfe.9-repair.11`；Root/Core/Central 继续保持并行的
+  `0.0.0-mvp.task-timeout.1`。未改 Contract、IPC、Main、Preload、Core、Central、migration、依赖或 lockfile。
+
+---
+
+## 0.0.0-mvp.task-timeout.1 — Agent Turn Absolute Timeout / PPTX Hang Repair
+
+- 日期：2026-08-31
+- 状态：`IMPLEMENTED / FOCUSED GATES PASS / USER ACCEPTANCE PENDING`；
+- 用户问题：真实企业模型生成 PPTX 等待超过 11 分钟仍无结果，默认 Workspace 没有发布 PPTX；
+- 根因：JDK request timeout 只覆盖响应建立阶段，SSE reader 只有 idle timeout，持续片段可无限续命；企业模型每轮从
+  当前时刻重新取得独立预算；Task 虽已有 durable deadline，但 production Starter 没有调度 `expire_deadline`；
+- Central 修复：`BoundedSseEventReader` 新增独立 overall timeout，OpenAI/Anthropic adapters 在收到 response 后用
+  `request.deadline()` 的剩余时间约束整个 SSE 消费；绝对到期关闭 InputStream 并映射既有
+  `model_gateway.provider_request_timeout -> timed_out`；
+- Core/Central 修复：按用户产品复核采用进展感知的分层预算：90 秒内未建立响应或流建立后 30 秒无有效 SSE 数据判定
+  停滞，单次模型调用 hard limit 为 15 分钟，
+  整个企业 Agent Turn hard limit 为 30 分钟；所有 assistant/compaction invocation 都 clamp 到 Task 剩余预算。
+  `DurableAgentLoopStarter` 注入 production `SystemScheduler`，Task 到期派发既有 `expire_deadline` 并中断
+  active stream；启动恢复遇到已过期 Task 时先持久化 `timed_out`。Local Personal 继续使用既有 policy，但同样受 Task
+  outer deadline 约束；
+- Desktop 修复：既有 `timed_out` presentation 增加“任务执行超时，可重试。”，没有新增状态或 IPC；
+- 试运行修复：interactive Electron 关闭后调用只读 verifier，要求本轮 Task 已 completed、无 nonterminal Task 且默认
+  Workspace 存在本轮新 PPTX；不再以 Electron exit 0 单独判 PASS；
+- 聚焦验证：Core/Desktop `2 files / 7 tests PASS`，VS1.1 真实 loopback/PPTX `1 file / 4 tests PASS`，ARH durable
+  loop regression `1 file / 3 tests PASS`，Central response-start + absolute SSE `2/2 PASS`，Provider adapters `24/24 PASS`，
+  Core/Desktop typecheck、focused ESLint、Central compile/test-compile PASS；
+- 版本：Root/Core/Central 为 `0.0.0-mvp.task-timeout.1`；Desktop 的超时提示随后由并行前端批继续提升为当前
+  `0.0.0-dfe.9-repair.11`，不回退或覆盖该前端版本；
+- 边界：无 public Contract、migration、依赖、lockfile、Personal Model、Admin、TGM、Knowledge 或 Lifecycle 扩张；
+  真实公网 Provider 的用户凭据冒烟未在本批自动执行，避免重复消耗或泄露用户 Secret。
+
+---
+
+## WFW Development Complete — Windows Regression Deferred
+
+- 日期：2026-08-31
+- 状态：`IMPLEMENTATION COMPLETE / USER ACCEPTED / NEXT MVP TASK ALLOWED`；
+- 已完成：WFW-1 private writer、WFW-2 Core activation/recovery/Artifact、WFW-3 Renderer 产品消费、repair.1 Main preview
+  routing、repair.2 durable source authority/loopback CSP，以及 macOS 真实 Electron create/replace/`.prev`/Artifact/
+  preview/Core restart 全链路；
+- 用户决策：当前 WFW 开发任务结束，允许切换至其他产品任务；Windows 11 本地 NTFS 项转入后续 Windows 客户端定向
+  回归，不继续占用当前开发排期；
+- 诚实边界：Windows 回归尚未执行，故父 WFW-3 仍为 `WINDOWS REGRESSION DEFERRED / STAGE NOT CLOSED`，不得声明
+  Windows PASS 或 production ready；
+- 回归说明：[WFW Windows 11 / NTFS 定向回归说明](./wfw/WFW-WINDOWS-NTFS-TARGETED-REGRESSION-NOTE.md)。
+
+---
+
+## 0.0.0-wfw.3-repair.2 — Durable Replace Authority / Loopback APV CSP
+
+- 日期：2026-08-31
+- 状态：`PASS/CLOSED / INDEPENDENT QA PASS / USER ACCEPTED`；父 WFW-3 为
+  `MACOS E2E PASS / WINDOWS NTFS GATE PENDING / NOT CLOSED`；
+- 授权：用户接受 repair.2 独立文档复核、确认 §9 Q1～Q10，并单独授权严格两差异编码；
+- Step B1：packaged Electron/Chromium 实测 exact `frame-src http://127.0.0.1:*` 与 APV
+  `frame-ancestors file:` 可同时工作，iframe 使用 empty sandbox/no-referrer，真实 child document 完成加载；未扩大为
+  `http:`、`*`、移除 ancestor 或改造预览传输；
+- Authority：`deriveWorkspaceTextArtifactProof` 对 source Task 调用 durable
+  `loadReadableTaskRuntimeSelection(sourceTaskId)`，只允许 exact grant + relative path 进入既有 Artifact/lifecycle/
+  capability-lock/head/proof 检查；模型可见 Step 仍不含 `workspaceGrantId`，missing/different authority 继续 fail-closed；
+- Preview：Renderer 顶层只新增 IPv4 loopback frame source；APV response 只把 `frame-ancestors 'none'` 精确改为
+  `file:`，其余 resource CSP、tokenized route、TTL、sandbox 与 no-referrer 不变；E2E 通过 CDP child target 只记录
+  content-free real-load boolean，不输出 token、正文、路径、grant 或 proof；
+- 验证：repair.2 + WFW-2/Desktop 聚焦回归 `13 files / 176 tests PASS`；Document Worker full
+  `26 files / 222 tests PASS`；Core/Desktop typecheck、focused ESLint、Desktop preload/renderer build、DTP-4 audit/
+  self-test、Core smoke 与 `git diff --check` PASS；
+- macOS E2E：`WFW3_DESKTOP_TEXT_WRITE_E2E_CONFORMANT`，default/explicit Workspace create、owned replace、`.prev`、
+  唯一 Artifact head、HTML/Markdown preview、真实 iframe load、Core SIGKILL/reopen 与重启后 preview 全部 PASS；
+- 独立 QA/接受：authority `1 file / 4 tests`、focused trio `3 files / 11 tests`、combined 超集
+  `13 files / 179 tests`、Document Worker `26 files / 222 tests` 与其余门禁 PASS；Developer 176 与独立 179 的差异为
+  测试集合超集精度记录。P3 为不归因本批的外部 blocker，用户已正式接受并关闭 repair.2，不建立 repair；
+- 版本：Root/Core/Desktop `0.0.0-wfw.3-repair.2`；Document Worker `0.0.0-wfw.2`；Contracts/Admin
+  `0.0.0-mvp.rsl.1`；lockfile digest 保持 `5b15ae0197c6f7a1450a49551fbfb50a9e0edc32f0fbe75a9259a360ed874f31`，
+  Core migration 仍止 26；
+- 边界：无 public Contract、IPC、Preload API、migration、依赖、状态机、错误码或 Evidence schema；Windows 11 本地
+  NTFS create/replace/`.prev`/Artifact/Core restart 仍 PENDING，故父 WFW-3 不关闭；
+- Windows 后续回归：当前 macOS 主机不执行 Windows 门禁；已新增
+  [Windows 11 / NTFS 定向回归说明](./wfw/WFW-WINDOWS-NTFS-TARGETED-REGRESSION-NOTE.md)，固定合格环境、tests-only
+  PID/强制终止适配、WNTFS-01～07、content-free 证据与停手规则，待 Windows 客户端回归窗口恢复；
+- 报告：[repair.2 实施报告](./wfw/WFW-3-repair.2-IMPLEMENTATION-REPORT.md)、
+  [Claude Code 独立 QA](./qa/wfw-3-repair.2-code-claude-qa.md)。
+
+---
+
+## 0.0.0-wfw.3 — WFW-3 repair.1 + Resumed E2E Stop
+
+- 日期：2026-08-31
+- 状态：`REPAIR.1 PASS/CLOSED — INDEPENDENT QA PASS / USER ACCEPTED / PARENT WFW-3 PAUSED`；
+- 上游：用户正式接受 repair.1 文档复核，吸收 P2/P3 focused proof 约束并单独授权编码，然后授权恢复父真实 Electron E2E；
+- repair.1：Main `#startWorkspaceHtmlPreview` 不再以 Core source 含 `taskId` 为一票否决；仍要求
+  `resolveArtifactFileSource` 成功，并复用 contained-file、stable-read、HTML allowlist、size/identity 与 APV-1C；
+- focused：preview `4 files / 67 tests PASS`，Desktop typecheck、preload/renderer build、`git diff --check` PASS；
+  manual HTML、PPTX/non-HTML、source failure 与私有 authority 不泄露均覆盖；
+- 父 E2E：真实 default Workspace create、WFW Tool、文件落盘、Artifact 与 preview session 已通过；Replace 以
+  `workspace_text.artifact_head_mismatch` 停止。只读 SQLite 证明同 Session 两 Task、一个成功 create Observation，文件
+  SHA-256 与模型 exact prior digest 相同，但历史 durable Step 不含私有 `workspaceGrantId`，WFW-2 authority 因错误字段
+  来源排除了合法 head；修复必须进入 Core，触发 repair.1 停手条件；
+- preview 阻塞：Chromium 同时记录 `ERR_BLOCKED_BY_CSP`；Main route 已成功，但 Renderer document CSP 未授权 existing
+  loopback APV iframe。仅存在 iframe DOM 不算 preview ready，需后续聚焦 security-policy repair；
+- 版本：Root/Desktop `0.0.0-wfw.3`；Core/Document Worker `0.0.0-wfw.2`；Contracts/Admin
+  `0.0.0-mvp.rsl.1`；lockfile digest 保持 `5b15ae0197c6f7a1450a49551fbfb50a9e0edc32f0fbe75a9259a360ed874f31`，
+  Core migration 仍止 26；
+- 边界：不输出 WFW-3 closure；Windows NTFS 仍 pending；WFW-H1 与其他下游继续 GATED；
+- 独立 QA：Claude Code 聚焦复跑 `4 files / 67 tests PASS`，并独立确证 Replace durable grant authority 与 Renderer CSP
+  两条剩余阻塞链；结论 `CODE_QA_PASS`，P0/P1/P2/P3 均为 0。用户已正式接受并关闭 repair.1；
+- 报告：[repair.1 实施报告](./wfw/WFW-3-repair.1-IMPLEMENTATION-REPORT.md)、
+  [Claude Code 独立 QA](./qa/wfw-3-repair.1-code-claude-qa.md)、
+  [恢复 E2E 停手报告](./wfw/WFW-3-REPAIR.1-RESUMED-E2E-STOP-REPORT.md)；
+- 下一步：[WFW-3 repair.2 极小方案](./wfw/WFW-3-repair.2-DURABLE-REPLACE-AUTHORITY-AND-LOOPBACK-APV-CSP-DEVELOPMENT-PLAN.md)
+  仅进入独立文档复核，编码继续 GATED。
+
+---
+
+## WFW-3 Implementation Pause — Task-generated HTML Preview Authority
+
+- 日期：2026-08-31
+- 状态：`IMPLEMENTATION PAUSED / FOCUSED REPAIR REVIEW REQUIRED`；
+- 已完成：Renderer Workbench WFW activity pure projection、HTML/Markdown/Text 既有 preview 消费与 focused tests；
+  `2 files / 43 tests PASS`，Desktop typecheck、root build、focused ESLint 与 `git diff --check` 通过；
+- 真实 E2E：real Electron/Main/Preload/Core/Document Worker 已完成 default Workspace WFW `index.html` Task、真实落盘与
+  `kind=html` Artifact 投影；点击预览后安全失败为 `wfw3_html_preview_html_error_task_not_found`；
+- 根因：Main 既有 `#startWorkspaceHtmlPreview` 只接受 `taskId === undefined` 的 manual Workspace Artifact，合法
+  Task-generated WFW HTML 被排除；继续修复必须修改 Main production routing，触发已接受 WFW-3 §2.2 停手条件；
+- 边界：没有修改 Core/Main/Preload/Document Worker/Contract production，没有使用 Renderer 直读或 fixture 假成功；
+  WFW-3 不输出 conformant、不关闭，Windows NTFS gate 仍 pending；
+- 报告：[实施停手报告](./wfw/WFW-3-IMPLEMENTATION-STOP-REPORT.md)；
+- 下一步：[WFW-3 repair.1 聚焦方案](./wfw/WFW-3-repair.1-TASK-GENERATED-WORKSPACE-HTML-PREVIEW-AUTHORITY-DEVELOPMENT-PLAN.md)
+  先独立文档复核和用户单独授权，不自动编码。
+
+---
+
+## WFW-3 Plan — Desktop Product E2E / Stage Closure
+
+- 日期：2026-08-31
+- 状态：`PLAN REVIEW PASS/CLOSED / CODING AUTHORIZED / IMPLEMENTATION PAUSED`；
+- 上游：WFW-1/WFW-2 均已通过独立 QA、用户接受并正式 `PASS/CLOSED`；WFW-2 只完成 Core activation，普通客户端仍未关闭消费闭环；
+- 产品范围：Workbench 显示 WFW Tool activity，成果面板按 html/markdown/text 复用既有 TasksAdapter 与 APV-1C preview；
+  未选择工作区走既有隔离 `~/.robothree`，显式 Workspace 必须阻止 default fallback；
+- E2E：一个真实 macOS Electron driver 覆盖 create/replace/`.prev`/Artifact/preview/Core SIGKILL/reopen/uncertain/cleanup；
+  WFW v1 closure 前另需真实 Windows 11 本地 NTFS 最小 smoke，缺失时保持 `WINDOWS_NTFS_GATE_PENDING`；
+- 边界：Core/Main/Preload/Document Worker production 改动预期为 0；不新增 Contract、IPC、migration、依赖、lockfile、
+  状态机、Evidence schema 或文件平台，发现必须修改即停手回评审；WFW-H1 与其他下游继续 `GATED`；
+- QA：24 项连续 focused QA + WFW-2 regression + macOS Electron + Windows NTFS；最高只允许
+  `WFW3_DESKTOP_TEXT_WRITE_E2E_CONFORMANT`；
+- 方案：[WFW-3 详细实施方案](./wfw/WFW-3-DESKTOP-PRODUCT-E2E-STAGE-CLOSURE-DEVELOPMENT-PLAN.md)。
+
+---
+
+## 0.0.0-wfw.2 — WFW-2 Core Registry / Policy / Effect Recovery / Artifact Activation
+
+- 日期：2026-08-31
+- 状态：`PASS/CLOSED / INDEPENDENT QA PASS / USER ACCEPTED`；
+- 上游：WFW-2 独立文档复核已由用户接受，计划评审正式 `PASS/CLOSED`，§15 Q1～Q8 与 P2/P3 focused proof 约束均纳入实现；
+- Registry/Policy：新增 exact WFW definition/binding/`query_then_retry` descriptor，`agent.general` 获得 WFW ref，
+  `agent.presentation` 保持原四项 Document Tool；模型 schema 不暴露 root/grant/proof/idempotency/limits；
+- Worker/Recovery：existing Document handle 与 WFW handle 共享一个 child PID、decoder、pending request 与 single-flight；
+  private v1alpha2 additive inspect 复用 WFW-1 capability constant、request digest 与 fault point，`safe_retry → not_found`、
+  `recovered_success → stable Observation`、`unknown → uncertain`；
+- Replace authority：Core 从同 Session 成功 WFW Observation、deterministic Artifact 与 lifecycle 推导唯一 terminal head，
+  proof digest domain 固定为 `robothree.wfw-owned-artifact-proof.v1`；分叉、重复 SHA、删除、source mismatch、过期 head 均拒绝；
+- Artifact：成功 create/replace/recovered Observation 自动投影 html/markdown/text Artifact；不含 content、root、grant、proof、
+  effect identity、temp/lock/backup path，`.prev` 不形成第二 Artifact；
+- 验证：WFW focused `4 files / 85 tests PASS`；含 Document Worker/VS regression `7 files / 101 tests PASS`；Document Worker full
+  `26 files / 222 tests PASS`；Root typecheck、focused ESLint、DTP-4 audit/self-test、`git diff --check` PASS；lockfile digest
+  `5b15ae0197c6f7a1450a49551fbfb50a9e0edc32f0fbe75a9259a360ed874f31`，Core migration 仍止 26；
+- 独立 QA/接受：初次独立 QA 的 P2 仅为 VS1.1 旧四项 Tool 测试期望；用户授权 tests-only 同步后，原失败文件 `1/4 → 4/4`、
+  combined regression `7 files / 101 tests PASS`，聚焦 re-QA 升级为 `INDEPENDENT_QA_PASS`。用户已正式接受并关闭 WFW-2，
+  不建立 repair 批次；Desktop workspace 全量门禁 P3 继续作为不归因本批的外部历史欠账；
+- 已知外部边界：全仓 lint 仍被 `apps/admin-console/**` 既有生成 `.js` 的 34 个 `no-undef` 阻塞，与 WFW-2 零关联；
+- 边界：本批未修改 Desktop Main/Preload/Renderer、public Contract、Central、migration、依赖或 lockfile；WFW-3/WFW-H1
+  继续 `GATED`，不自动编码；最高只确认 `WFW2_CORE_TEXT_WRITE_ACTIVATION_CONFORMANT`；
+- 实施报告：[WFW-2 实施报告](./wfw/WFW-2-CORE-TEXT-WRITE-ACTIVATION-IMPLEMENTATION-REPORT.md)。
+
+---
+
 ## WFW-2 Plan — Core Registry / Policy / Effect Recovery / Artifact Activation
 
 - 日期：2026-08-31

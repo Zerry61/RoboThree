@@ -1,9 +1,12 @@
+import type { TaskAuthorizationMode } from "@robothree/contracts";
+
 export type ConversationSelection = Readonly<{
   agentId: string;
   requestedModelId: string;
   selectedSkillIds: readonly string[];
   selectedKnowledgeIds: readonly string[];
   workspaceGrantId?: string;
+  authorizationMode: TaskAuthorizationMode;
 }>;
 
 const selections = new Map<string, ConversationSelection>();
@@ -17,6 +20,7 @@ export function rememberConversationSelection(
     requestedModelId: selection.requestedModelId,
     selectedSkillIds: Object.freeze([...selection.selectedSkillIds]),
     selectedKnowledgeIds: Object.freeze([...selection.selectedKnowledgeIds]),
+    authorizationMode: selection.authorizationMode,
     ...(selection.workspaceGrantId === undefined
       ? {}
       : { workspaceGrantId: selection.workspaceGrantId }),

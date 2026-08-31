@@ -34,7 +34,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 public final class ModelInvocationV1Alpha2Controller {
 
     private static final String CONTRACT_VERSION = "v1alpha2";
-    private static final long SSE_TIMEOUT_MILLIS = 300_000;
+    private static final long SSE_TIMEOUT_MILLIS = 15 * 60_000L;
 
     @NonNull
     private final ModelInvocationV1Alpha2GatewayService service;

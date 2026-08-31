@@ -31,7 +31,7 @@ describe("DFE-8A local demo session", () => {
     expect(router.currentRoute.value.name).toBe("login");
     expect(store.signIn("admin", "123456")).toEqual({ ok: true });
     await router.replace(store.consumeTarget()!);
-    expect(router.currentRoute.value.name).toBe("tasks");
+    expect(router.currentRoute.value.name).toBe("workbench");
     expect(router.currentRoute.value.query).toEqual({ taskId: "task:one" });
   });
 
@@ -49,4 +49,3 @@ describe("DFE-8A local demo session", () => {
     expect(router.currentRoute.value.name).toBe("workbench");
   });
 });
-

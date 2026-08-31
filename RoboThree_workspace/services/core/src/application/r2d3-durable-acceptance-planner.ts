@@ -61,6 +61,7 @@ import type { ReasoningModeLockPlannerV1Alpha2 } from
 import { resolutionEvidenceRef } from
   "./reasoning-mode-lock-v1alpha2-domain.js";
 import { isPersonalModelLock } from "./personal-model-task-lock.js";
+import { enterpriseAgentTurnDeadlineAt } from "./agent-turn-timeout-policy.js";
 import { TaskAuthorizationSelectionService } from
   "./task-authorization-selection-service.js";
 import { platformPromptRevisionForNewTask } from
@@ -393,6 +394,9 @@ export class R2D3DurableAcceptancePlanner {
         policy: LOCAL_PERSONAL_MODEL_TIMEOUT_POLICY_V1,
         invocationStartedAt: common.acceptedAt,
       });
+      const taskDeadlineAt = isPersonalModelLock(common.modelLock)
+        ? timeout.invocationDeadlineAt
+        : enterpriseAgentTurnDeadlineAt(common.acceptedAt);
       const task = createInitialPersistedTask({
         taskId: common.taskId,
         sessionId: input.internalSessionId,
@@ -402,7 +406,7 @@ export class R2D3DurableAcceptancePlanner {
         },
         goal: command.userInput,
         createdAt: common.acceptedAt,
-        deadlineAt: timeout.invocationDeadlineAt,
+        deadlineAt: taskDeadlineAt,
       }, common.checkpointId);
       const bindingMaterial = {
         submitTurnCommandId: command.commandId,

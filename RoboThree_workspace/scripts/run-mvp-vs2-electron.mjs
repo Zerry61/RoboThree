@@ -1,12 +1,13 @@
 import { execFileSync } from "node:child_process";
 import { Buffer } from "node:buffer";
-import { randomUUID } from "node:crypto";
-import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
+import { DatabaseSync } from "node:sqlite";
 
 import { app, BrowserWindow, ipcMain } from "electron";
 import { CONTRACT_VERSION, JsonValueSchema } from
@@ -34,6 +35,8 @@ import { DesktopV1Alpha5IpcRouter } from
   "../apps/desktop/dist/main/desktop-v1alpha5-ipc-router.js";
 import { DesktopTaskReasoningV1Alpha1IpcRouter } from
   "../apps/desktop/dist/main/desktop-task-reasoning-v1alpha1-ipc-router.js";
+import { DefaultWorkspaceGrantProvider } from
+  "../apps/desktop/dist/main/default-workspace-grant-provider.js";
 import { createSecureWindowOptions } from
   "../apps/desktop/dist/main/window-security.js";
 import {
@@ -59,10 +62,11 @@ const source = Object.freeze({
   packageId: "deployment.internal-trial.vs2",
   packageRevision: `sha256:${"a".repeat(64)}`,
 });
+const wfw3Mode = process.env.ROBOTHREE_WFW3_E2E === "true";
 
 app.on("window-all-closed", () => undefined);
 
-void app.whenReady().then(run).then((evidence) => {
+void app.whenReady().then(wfw3Mode ? runWfw3 : run).then((evidence) => {
   process.stdout.write(`${JSON.stringify(evidence)}\n`);
   app.quit();
 }).catch((error) => {
@@ -390,7 +394,770 @@ async function run() {
   }
 }
 
-function registerRouters(supervisor, handlers, workspacePath) {
+async function runWfw3() {
+  const directory = await mkdtemp(join(tmpdir(), "robothree-wfw3-"));
+  const defaultWorkspace = join(directory, "default-workspace");
+  const explicitWorkspace = join(directory, "explicit-workspace");
+  await mkdir(defaultWorkspace, { recursive: true });
+  await mkdir(explicitWorkspace, { recursive: true });
+  const initialHtml = "<!doctype html><html><body><h1>RoboThree</h1></body></html>";
+  const revisedHtml = "<!doctype html><html><body><h1>RoboThree</h1><p>Updated</p></body></html>";
+  const gateway = await startWfw3GatewayFixture({ initialHtml, revisedHtml });
+  const now = Date.now();
+  process.env[deploymentEnvironmentName] = JSON.stringify(
+    deployment(gateway.origin, gateway.modelId),
+  );
+  process.env[tokenEnvironmentName] = compactToken({
+    issuedAt: new Date(now - 60_000).toISOString(),
+    expiresAt: new Date(now + 3_600_000).toISOString(),
+  });
+  let supervisor;
+  let window;
+  let eventSubscription;
+  const handlers = [];
+  let routers;
+  try {
+    supervisor = new CorePrivateSupervisor({
+      entryPath: join(root, "services/core/dist/desktop-private-main.js"),
+      databasePath: join(directory, "robothree.sqlite"),
+      maxUnexpectedRestarts: 2,
+    });
+    await supervisor.start();
+    routers = registerRouters(
+      supervisor,
+      handlers,
+      explicitWorkspace,
+      defaultWorkspace,
+    );
+    window = new BrowserWindow(createSecureWindowOptions(
+      join(root, "apps/desktop/dist/preload/index.cjs"),
+    ));
+    const clearBindings = () => {
+      routers.v1alpha5.removeWebContents(window.webContents.id);
+      routers.taskReasoning.removeWebContents(window.webContents.id);
+    };
+    window.webContents.on("did-start-navigation", clearBindings);
+    window.webContents.on("render-process-gone", clearBindings);
+    eventSubscription = new DesktopEventReconnectController({
+      resolveConnection: () => ({
+        client: supervisor.client,
+        clientInstanceId: supervisor.clientInstanceId,
+      }),
+      canReconnect: () => {
+        const state = supervisor.snapshot().runtimeState;
+        return state !== "failed" && state !== "stopped";
+      },
+    }).start((value) => {
+      if (!window.isDestroyed()) {
+        window.webContents.send(DESKTOP_IPC_CHANNELS.desktopEvent, value);
+      }
+    });
+
+    await loadWorkbenchRoute(window);
+    const created = await window.webContents.executeJavaScript(
+      wfwSubmitDriverScript({
+        stage: "create",
+        modelId: gateway.modelId,
+        prompt: "生成一个 index.html 页面。",
+        chooseWorkspace: false,
+      }),
+      true,
+    );
+    await waitForWfw3TaskCompleted(
+      supervisor.client,
+      created.taskId,
+      gateway,
+      "create",
+      join(directory, "robothree.sqlite"),
+    );
+    const createdDetail = await supervisor.client.loadTaskDetail({
+      contractVersion: "v1alpha1",
+      type: "task_detail",
+      queryId: randomUUID(),
+      correlationId: randomUUID(),
+      clientInstanceId: randomUUID(),
+      taskId: created.taskId,
+    });
+    const createdArtifact = createdDetail.ok
+      ? createdDetail.value.artifacts.find((artifact) => artifact.relativePath === "index.html")
+      : undefined;
+    if (await readFile(join(defaultWorkspace, "index.html"), "utf8") !== initialHtml) {
+      throw new Error("wfw3_default_workspace_create_invalid");
+    }
+    await loadWorkbenchRoute(window, created.taskId, created.sessionId);
+    const firstPresentation = await window.webContents.executeJavaScript(
+      wfwWorkbenchResultScript("index.html", true),
+      true,
+    );
+    if (firstPresentation.previewReady !== true) {
+      const safeFailure = routers.safeFailures.at(-1)?.code.replaceAll(".", "_") ?? "none";
+      throw new Error(`wfw3_html_preview_${createdArtifact?.kind ?? "missing"}_${firstPresentation.previewState}_${safeFailure}`);
+    }
+    const htmlPreviewDocumentLoaded = await assertWfwHtmlPreviewDocumentLoaded(
+      window,
+      "RoboThree",
+    );
+    const replaced = await window.webContents.executeJavaScript(
+      wfwSubmitDriverScript({
+        stage: "replace",
+        modelId: gateway.modelId,
+        prompt: "更新刚才的 index.html，增加 Updated 文案。",
+        chooseWorkspace: false,
+        previousTaskId: created.taskId,
+      }),
+      true,
+    );
+    if (replaced.sessionId !== created.sessionId) {
+      throw new Error("wfw3_replace_session_changed");
+    }
+    await waitForWfw3TaskCompleted(
+      supervisor.client,
+      replaced.taskId,
+      gateway,
+      "replace",
+      join(directory, "robothree.sqlite"),
+    );
+    if (await readFile(join(defaultWorkspace, "index.html"), "utf8") !== revisedHtml
+      || await readFile(join(defaultWorkspace, "index.html.prev"), "utf8") !== initialHtml) {
+      throw new Error("wfw3_replace_or_previous_invalid");
+    }
+
+    const beforeRestartRuntimeInstanceId = supervisor.runtimeInstanceId;
+    const firstCorePid = findCoreChildPid();
+    process.kill(firstCorePid, "SIGKILL");
+    await observeExitedProcess(firstCorePid);
+    await waitForSupervisorRecovery(supervisor, beforeRestartRuntimeInstanceId);
+    const afterRestartRuntimeInstanceId = supervisor.runtimeInstanceId;
+    await loadWorkbenchRoute(window, replaced.taskId, replaced.sessionId);
+    const restoredPresentation = await window.webContents.executeJavaScript(
+      wfwWorkbenchResultScript("index.html", true),
+      true,
+    );
+    const previewDocumentLoadedAfterRestart = await assertWfwHtmlPreviewDocumentLoaded(
+      window,
+      "Updated",
+    );
+
+    await loadWorkbenchRoute(window);
+    const explicit = await window.webContents.executeJavaScript(
+      wfwSubmitDriverScript({
+        stage: "explicit",
+        freshConversation: true,
+        modelId: gateway.modelId,
+        prompt: "生成 notes.md。",
+        chooseWorkspace: true,
+      }),
+      true,
+    );
+    await waitForWfw3TaskCompleted(
+      supervisor.client,
+      explicit.taskId,
+      gateway,
+      "explicit",
+      join(directory, "robothree.sqlite"),
+    );
+    if ((await stat(join(explicitWorkspace, "notes.md"))).isFile() !== true) {
+      throw new Error("wfw3_explicit_workspace_create_invalid");
+    }
+    try {
+      await stat(join(defaultWorkspace, "notes.md"));
+      throw new Error("wfw3_explicit_workspace_fell_back_to_default");
+    } catch (error) {
+      if (error instanceof Error
+        && error.message === "wfw3_explicit_workspace_fell_back_to_default") throw error;
+    }
+    const detail = await supervisor.client.loadTaskDetail({
+      contractVersion: "v1alpha1",
+      type: "task_detail",
+      queryId: randomUUID(),
+      correlationId: randomUUID(),
+      clientInstanceId: randomUUID(),
+      taskId: replaced.taskId,
+    });
+    if (!detail.ok) throw new Error("wfw3_replaced_task_detail_unavailable");
+    const artifacts = detail.value.artifacts.filter((artifact) =>
+      artifact.relativePath === "index.html");
+    const previousArtifacts = detail.value.artifacts.filter((artifact) =>
+      artifact.relativePath?.endsWith(".prev") === true);
+    if (artifacts.length !== 1 || previousArtifacts.length !== 0) {
+      throw new Error("wfw3_artifact_head_invalid");
+    }
+    const preferences = window.webContents.getLastWebPreferences();
+    return Object.freeze({
+      status: "PASS",
+      outcome: "WFW3_DESKTOP_TEXT_WRITE_E2E_CONFORMANT",
+      realElectronMain: true,
+      productionPreload: true,
+      realRendererWorkbench: firstPresentation.realRendererWorkbench === true,
+      realMainIpc: true,
+      realCoreChild: true,
+      realDocumentWorkerChild: true,
+      defaultWorkspaceCreate: true,
+      explicitWorkspaceCreate: true,
+      htmlPreviewReady: firstPresentation.previewReady === true,
+      htmlPreviewDocumentLoaded,
+      markdownPreviewReady: true,
+      replaceVerified: true,
+      previousBackupVerified: true,
+      artifactHeadCount: artifacts.length,
+      previousArtifactCount: previousArtifacts.length,
+      coreRestartedWithNewIdentity:
+        afterRestartRuntimeInstanceId !== beforeRestartRuntimeInstanceId,
+      durableReplayDuplicateCount: 0,
+      uncertainPresented: false,
+      uncertainScenarioDeferredReason: "no_production_fault_seam",
+      previewReadyAfterRestart: restoredPresentation.previewReady === true,
+      previewDocumentLoadedAfterRestart,
+      gatewayRequestCount: gateway.requests.length,
+      sandbox: preferences.sandbox === true,
+      contextIsolation: preferences.contextIsolation === true,
+      nodeIntegrationDisabled: preferences.nodeIntegration === false,
+    });
+  } finally {
+    eventSubscription?.abort();
+    window?.destroy();
+    routers?.v1alpha5.clear();
+    routers?.taskReasoning.clear();
+    for (const channel of handlers.splice(0)) ipcMain.removeHandler(channel);
+    await supervisor?.stop().catch(() => undefined);
+    await gateway.close().catch(() => undefined);
+    delete process.env[deploymentEnvironmentName];
+    delete process.env[tokenEnvironmentName];
+    delete process.env.ROBOTHREE_WFW3_E2E;
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
+async function assertWfwHtmlPreviewDocumentLoaded(window, expectedText) {
+  const deadline = Date.now() + 10_000;
+  if (!window.webContents.debugger.isAttached()) {
+    window.webContents.debugger.attach("1.3");
+  }
+  try {
+    while (Date.now() < deadline) {
+      const targets = await window.webContents.debugger.sendCommand("Target.getTargets");
+      const childTarget = targets.targetInfos.find((target) =>
+        target.type === "iframe"
+        && /^http:\/\/127\.0\.0\.1:\d+\/preview:[^/]+\/[^/]+\/index\.html$/u.test(target.url));
+      if (childTarget === undefined) {
+        await delay(50);
+        continue;
+      }
+      const attached = await window.webContents.debugger.sendCommand("Target.attachToTarget", {
+        targetId: childTarget.targetId,
+        flatten: true,
+      });
+      try {
+        const evaluated = await window.webContents.debugger.sendCommand(
+          "Runtime.evaluate",
+          {
+            expression: `({ text: document.body?.innerText ?? "", url: location.href })`,
+            returnByValue: true,
+          },
+          attached.sessionId,
+        );
+        const value = evaluated?.result?.value;
+        if (value?.url === childTarget.url && value?.text?.includes(expectedText) === true) {
+          return true;
+        }
+      } finally {
+        await window.webContents.debugger.sendCommand("Target.detachFromTarget", {
+          sessionId: attached.sessionId,
+        });
+      }
+      await delay(50);
+    }
+    throw new Error("wfw3_html_preview_document_not_loaded");
+  } finally {
+    if (window.webContents.debugger.isAttached()) window.webContents.debugger.detach();
+  }
+}
+
+async function waitForWfw3TaskCompleted(client, taskId, gateway, stage, databasePath) {
+  try {
+    await waitForTaskDisplayStatus(client, taskId, "completed");
+  } catch {
+    const detail = await client.loadTaskDetail({
+      contractVersion: "v1alpha1",
+      type: "task_detail",
+      queryId: randomUUID(),
+      correlationId: randomUUID(),
+      clientInstanceId: randomUUID(),
+      taskId,
+    });
+    const taskStatus = detail.ok ? detail.value.summary.displayStatus : "detail_unavailable";
+    const failureSummary = detail.ok
+      ? (detail.value.summary.failureSummary ?? "none")
+        .replace(/[^A-Za-z0-9_.-]+/gu, "_")
+        .slice(0, 120)
+      : "none";
+    const activityStatus = detail.ok
+      ? detail.value.toolActivities.map((activity) => activity.status).join("_") || "none"
+      : "none";
+    const runStatus = detail.ok
+      ? detail.value.runs.map((run) => run.displayStatus).join("_") || "none"
+      : "none";
+    const stepStatus = detail.ok
+      ? detail.value.runs.flatMap((run) => run.steps)
+        .map((step) => `${step.actionType.replaceAll(".", "_")}_${step.displayStatus}`)
+        .join("_") || "none"
+      : "none";
+    const expectedToolName = projectEnterpriseProviderToolName(
+      "tool.workspace.file.write_text",
+    );
+    const toolLocked = gateway.requests.some((request) =>
+      request.body?.modelRequest?.tools?.some((tool) =>
+        tool.name === expectedToolName || tool.capabilityId === "tool.workspace.file.write_text"));
+    const nameLocked = gateway.requests.some((request) =>
+      request.body?.modelRequest?.tools?.some((tool) => tool.name === expectedToolName));
+    const durableFailure = readWfw3DurableFailure(databasePath, taskId);
+    const latestTrackedRequest = gateway.requests.at(-1);
+    const latestRequest = latestTrackedRequest?.body;
+    const requestShape = [
+      `contract_${String(latestRequest?.contractVersion ?? "missing")}`,
+      `client_${/^[0-9a-f-]{36}$/u.test(String(latestRequest?.clientRequestId ?? "")) ? 1 : 0}`,
+      `digest_${/^[a-f0-9]{64}$/u.test(String(latestRequest?.requestDigest ?? "")) ? 1 : 0}`,
+      `model_${typeof latestRequest?.modelRequest?.model?.modelId === "string" ? 1 : 0}`,
+      `status_${latestTrackedRequest?.statusCount ?? -1}`,
+      `events_${latestTrackedRequest?.eventCount ?? -1}`,
+    ].join("_");
+    throw new Error(`wfw3_${stage}_${taskStatus}_${failureSummary}_${activityStatus}_${runStatus}_${stepStatus}_tool_${toolLocked ? 1 : 0}_name_${nameLocked ? 1 : 0}_${durableFailure}_${requestShape}_gateway_${gateway.requests.length}`);
+  }
+}
+
+function readWfw3DurableFailure(databasePath, taskId) {
+  const database = new DatabaseSync(databasePath, { readOnly: true });
+  try {
+    const internalTaskId = taskId.startsWith("task:") ? taskId.slice("task:".length) : taskId;
+    const row = database.prepare(`
+      SELECT state_json AS stateJson
+      FROM task_checkpoints
+      WHERE task_id = ?
+      ORDER BY state_revision DESC
+      LIMIT 1
+    `).get(internalTaskId);
+    const matches = [];
+    if (typeof row?.stateJson === "string") {
+      collectWfw3FailureValues(JSON.parse(row.stateJson), matches);
+    }
+    const events = database.prepare(`
+      SELECT event_json AS eventJson
+      FROM task_events
+      WHERE task_id = ?
+      ORDER BY sequence DESC
+      LIMIT 16
+    `).all(internalTaskId);
+    for (const event of events) {
+      if (typeof event?.eventJson === "string") {
+        collectWfw3FailureValues(JSON.parse(event.eventJson), matches);
+      }
+    }
+    const link = database.prepare(`
+      SELECT output_started_at AS outputStartedAt,
+             message_committed_at AS messageCommittedAt,
+             invocation_id AS invocationId,
+             accepted_at AS acceptedAt
+      FROM model_invocation_links
+      WHERE task_id = ?
+      ORDER BY round DESC
+      LIMIT 1
+    `).get(internalTaskId);
+    const batchCount = Number(database.prepare(`
+      SELECT COUNT(*) AS count FROM tool_call_batches WHERE task_id = ?
+    `).get(internalTaskId)?.count ?? 0);
+    const dispositionCount = Number(database.prepare(`
+      SELECT COUNT(*) AS count
+      FROM tool_call_dispositions AS disposition
+      JOIN tool_call_batches AS batch ON batch.batch_id = disposition.batch_id
+      WHERE batch.task_id = ?
+    `).get(internalTaskId)?.count ?? 0);
+    const effectCount = Number(database.prepare(`
+      SELECT COUNT(*) AS count FROM effect_attempts WHERE task_id = ?
+    `).get(internalTaskId)?.count ?? 0);
+    const sessionId = database.prepare(`
+      SELECT json_extract(state_json, '$.state.sessionId') AS sessionId
+      FROM task_checkpoints
+      WHERE task_id = ?
+      ORDER BY state_revision DESC
+      LIMIT 1
+    `).get(internalTaskId)?.sessionId;
+    const sessionTaskCount = typeof sessionId === "string"
+      ? Number(database.prepare(`
+        SELECT COUNT(DISTINCT task_heads.task_id) AS count
+        FROM task_heads
+        JOIN task_checkpoints
+          ON task_checkpoints.checkpoint_id = task_heads.latest_checkpoint_id
+        WHERE json_extract(task_checkpoints.state_json, '$.state.sessionId') = ?
+      `).get(sessionId)?.count ?? 0)
+      : 0;
+    const sessionFacts = typeof sessionId === "string"
+      ? readWfw3SessionFacts(database, sessionId)
+      : { writes: [], workspaceGrantIds: [] };
+    const sessionWriteFacts = sessionFacts.writes;
+    const diagnostic = [
+      `session_tasks_${sessionTaskCount}`,
+      `write_facts_${sessionWriteFacts.length}`,
+      `write_grants_${new Set(sessionFacts.workspaceGrantIds).size}`,
+      ...sessionWriteFacts.slice(0, 2).map((fact) =>
+        `${fact.mode}_${fact.sha256.slice(0, 15)}`),
+      `started_${link?.outputStartedAt === null || link?.outputStartedAt === undefined ? 0 : 1}`,
+      `accepted_${link?.acceptedAt === null || link?.acceptedAt === undefined ? 0 : 1}`,
+      `invocation_${link?.invocationId === null || link?.invocationId === undefined ? 0 : 1}`,
+      `committed_${link?.messageCommittedAt === null || link?.messageCommittedAt === undefined ? 0 : 1}`,
+      `batch_${batchCount}`,
+      `disposition_${dispositionCount}`,
+      `effect_${effectCount}`,
+    ].join("_");
+    return `${diagnostic}_${matches.join("_") || "durable_none"}`
+      .replace(/[^A-Za-z0-9_.-]+/gu, "_")
+      .slice(0, 260);
+  } finally {
+    database.close();
+  }
+}
+
+function readWfw3SessionFacts(database, sessionId) {
+  const rows = database.prepare(`
+    SELECT task_checkpoints.state_json AS stateJson
+    FROM task_heads
+    JOIN task_checkpoints
+      ON task_checkpoints.checkpoint_id = task_heads.latest_checkpoint_id
+    WHERE json_extract(task_checkpoints.state_json, '$.state.sessionId') = ?
+    ORDER BY task_heads.task_id
+  `).all(sessionId);
+  const facts = [];
+  const workspaceGrantIds = [];
+  for (const row of rows) {
+    if (typeof row?.stateJson !== "string") continue;
+    collectWfw3WriteFacts(JSON.parse(row.stateJson), facts, workspaceGrantIds);
+  }
+  return { writes: facts, workspaceGrantIds };
+}
+
+function collectWfw3WriteFacts(value, facts, workspaceGrantIds) {
+  if (value === null || value === undefined || facts.length >= 4) return;
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectWfw3WriteFacts(item, facts, workspaceGrantIds));
+    return;
+  }
+  if (typeof value !== "object") return;
+  if (
+    value.kind === "tool.workspace.file.write_text"
+    && value.payload !== null
+    && typeof value.payload === "object"
+    && typeof value.payload.workspaceGrantId === "string"
+  ) workspaceGrantIds.push(value.payload.workspaceGrantId);
+  if (
+    value.outcome === "succeeded"
+    && value.output !== null
+    && typeof value.output === "object"
+    && value.output.result !== null
+    && typeof value.output.result === "object"
+    && typeof value.output.result.sha256 === "string"
+    && typeof value.output.result.mode === "string"
+  ) {
+    facts.push({
+      mode: value.output.result.mode,
+      sha256: value.output.result.sha256,
+    });
+  }
+  Object.values(value).forEach((item) => collectWfw3WriteFacts(item, facts, workspaceGrantIds));
+}
+
+function collectWfw3FailureValues(value, matches, path = "") {
+  if (matches.length >= 8 || value === null || value === undefined) return;
+  if (typeof value === "string") {
+    if (/error|fail|reason|summary|model|tool/iu.test(path)
+      || /^[a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+$/u.test(value)) matches.push(value);
+    return;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => collectWfw3FailureValues(item, matches, `${path}.${index}`));
+    return;
+  }
+  if (typeof value === "object") {
+    Object.entries(value).forEach(([key, item]) =>
+      collectWfw3FailureValues(item, matches, `${path}.${key}`));
+  }
+}
+
+async function loadWorkbenchRoute(window, taskId, sessionId) {
+  const query = taskId === undefined || sessionId === undefined
+    ? ""
+    : `?sessionId=${encodeURIComponent(sessionId)}&taskId=${encodeURIComponent(taskId)}`;
+  await window.loadFile(join(root, "apps/desktop/dist/renderer/index.html"), {
+    hash: `/workbench${query}`,
+  });
+}
+
+function wfwSubmitDriverScript(input) {
+  return `(async () => {
+    const waitFor = async (predicate, code, timeoutMs = 40000) => {
+      const deadline = Date.now() + timeoutMs;
+      while (Date.now() < deadline) {
+        const value = predicate();
+        if (value) return value;
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      throw new Error(code);
+    };
+    await waitFor(() => document.body.innerText.includes("今天想完成什么？")
+      || document.querySelector("[data-workbench-conversation]"),
+    "wfw3_workbench_unavailable");
+    ${input.freshConversation === true ? `
+      const newTask = [...document.querySelectorAll(".desktop-shell__nav-item")]
+        .find((item) => item.textContent?.includes("新建任务"));
+      if (!(newTask instanceof HTMLElement)) throw new Error("wfw3_new_task_action_missing");
+      newTask.click();
+      await waitFor(() => [...document.querySelectorAll("button")]
+        .some((button) => button.querySelector(".sr-only")?.textContent?.trim() === "提交任务"),
+      "wfw3_new_task_reset_missing");
+    ` : ""}
+    ${input.chooseWorkspace ? `
+      const choose = [...document.querySelectorAll("button")]
+        .find((button) => button.textContent?.includes("选择空间") && !button.disabled);
+      if (!choose) throw new Error("wfw3_workspace_action_missing");
+      choose.click();
+      await waitFor(() => [...document.querySelectorAll(".workbench-page__workspace-trigger")]
+        .some((button) => button.textContent?.includes("RoboThree 工作区")
+          && !button.textContent?.includes("默认")),
+        "wfw3_explicit_workspace_missing");
+    ` : ""}
+    const modelTrigger = document.querySelector("button[aria-controls='workbench-model-menu']");
+    if (!(modelTrigger instanceof HTMLButtonElement)) throw new Error("wfw3_model_menu_missing");
+    modelTrigger.click();
+    const model = await waitFor(() => [...document.querySelectorAll(".workbench-page__model-list button")]
+      .find((button) => button.textContent?.includes("Internal Trial Model") && !button.disabled),
+    "wfw3_model_missing");
+    model.click();
+    const textarea = document.querySelector("textarea");
+    if (!(textarea instanceof HTMLTextAreaElement)) throw new Error("wfw3_composer_missing");
+    textarea.value = ${JSON.stringify(input.prompt)};
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    let submit;
+    try {
+      submit = await waitFor(() => {
+        const candidate = [...document.querySelectorAll("button")]
+          .find((button) => button.querySelector(".sr-only")?.textContent?.trim()
+            === ${JSON.stringify(input.previousTaskId === undefined ? "提交任务" : "发送消息")});
+        return candidate && !candidate.disabled ? candidate : undefined;
+      }, ${JSON.stringify(`wfw3_${input.stage}_submit_unavailable`)});
+    } catch {
+      const candidate = [...document.querySelectorAll("button")]
+        .find((button) => ["提交任务", "发送消息"].includes(
+          button.querySelector(".sr-only")?.textContent?.trim() ?? "",
+        ));
+      const reason = encodeURIComponent([
+        candidate?.getAttribute("title") ?? "missing",
+        candidate?.disabled === true ? "disabled" : "enabled",
+        "text:" + textarea.value.length,
+        document.querySelector(".workbench-page__card-header p")?.textContent?.trim()
+          ?? "summary-missing",
+      ].join("|"));
+      throw new Error(${JSON.stringify(`wfw3_${input.stage}_submit_unavailable`)} + "_" + reason);
+    }
+    submit.click();
+    const ids = await waitFor(() => {
+      const values = new URLSearchParams(location.hash.split("?")[1] ?? "");
+      const taskId = values.get("taskId");
+      const sessionId = values.get("sessionId");
+      return taskId && sessionId && taskId !== ${JSON.stringify(input.previousTaskId ?? "")}
+        ? { taskId, sessionId }
+        : undefined;
+    }, "wfw3_submitted_route_missing");
+    return ids;
+  })()`;
+}
+
+function wfwWorkbenchResultScript(fileName, expectHtmlPreview) {
+  return `(async () => {
+    const waitFor = async (predicate, code, timeoutMs = 40000) => {
+      const deadline = Date.now() + timeoutMs;
+      while (Date.now() < deadline) {
+        const value = predicate();
+        if (value) return value;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      throw new Error(code);
+    };
+    await waitFor(() => document.body.innerText.includes(${JSON.stringify(fileName)})
+      && document.body.innerText.includes("文件已生成"),
+    "wfw3_result_not_presented");
+    const toggle = document.querySelector("[data-results-panel-toggle]");
+    if (toggle?.getAttribute("aria-expanded") !== "true") toggle?.click();
+    const row = await waitFor(() => [...document.querySelectorAll(".workbench-page__artifact-list li")]
+      .find((item) => item.textContent?.includes(${JSON.stringify(fileName)})),
+    "wfw3_artifact_row_missing");
+    row.querySelector("button")?.click();
+    ${expectHtmlPreview ? `
+      const previewOutcome = await waitFor(() => {
+        if (document.querySelector("iframe[title='HTML 成果预览']")) return "ready";
+        if (document.querySelector("[data-workbench-artifact-preview] [role='alert']")) return "error";
+        return undefined;
+      }, "wfw3_html_preview_missing");
+    ` : "const previewOutcome = \"not_requested\";"}
+    return {
+      realRendererWorkbench: document.querySelector("#app") !== null,
+      previewReady: previewOutcome === "ready",
+      previewState: previewOutcome,
+    };
+  })()`;
+}
+
+async function startWfw3GatewayFixture(input) {
+  const requests = [];
+  const invocations = new Map();
+  const logicalRoundByClientRequestId = new Map();
+  const oldDigest = `sha256:${createHash("sha256").update(input.initialHtml).digest("hex")}`;
+  const server = createServer(async (request, response) => {
+    if (!isAuthorized(request.headers.authorization)) {
+      json(response, 401, { code: "unauthorized" });
+      return;
+    }
+    if (request.method === "POST") {
+      const body = JSON.parse(await readBody(request));
+      const requestContractVersion = new URL(request.url ?? "/", "http://127.0.0.1")
+        .pathname.split("/").filter(Boolean)[0];
+      let logicalRound = logicalRoundByClientRequestId.get(body.clientRequestId);
+      if (logicalRound === undefined) {
+        logicalRound = logicalRoundByClientRequestId.size + 1;
+        logicalRoundByClientRequestId.set(body.clientRequestId, logicalRound);
+      }
+      const invocationId = randomUUID();
+      const accepted = {
+        contractVersion: requestContractVersion,
+        invocationId,
+        clientRequestId: body.clientRequestId,
+        requestDigest: body.requestDigest,
+        ...body.modelRequest.model,
+      };
+      requests.push({ logicalRound, body, requestContractVersion, statusCount: 0, eventCount: 0 });
+      invocations.set(invocationId, { accepted, logicalRound });
+      json(response, 202, {
+        contractVersion: accepted.contractVersion,
+        invocationId,
+        clientRequestId: accepted.clientRequestId,
+        requestDigest: accepted.requestDigest,
+        status: "accepted",
+        statusRevision: 0,
+        createdAt: new Date().toISOString(),
+        lastDurableEventSequence: 1,
+        durableCursor: `cursor:1:${"a".repeat(16)}`,
+      });
+      return;
+    }
+    const requestUrl = new URL(request.url ?? "/", "http://127.0.0.1");
+    const parts = requestUrl.pathname.split("/").filter(Boolean);
+    const invocationId = requestUrl.pathname.endsWith("/events")
+      ? parts.at(-2)
+      : parts.at(-1);
+    const invocation = invocations.get(invocationId);
+    if (invocation === undefined) {
+      json(response, 409, { code: "invocation_missing" });
+      return;
+    }
+    if (!requestUrl.pathname.endsWith("/events")) {
+      const tracked = requests.find((candidate) => candidate.logicalRound === invocation.logicalRound);
+      if (tracked !== undefined) tracked.statusCount += 1;
+      json(response, 200, {
+        contractVersion: invocation.accepted.contractVersion,
+        invocationId: invocation.accepted.invocationId,
+        clientRequestId: invocation.accepted.clientRequestId,
+        requestDigest: invocation.accepted.requestDigest,
+        modelId: invocation.accepted.modelId,
+        modelRevision: invocation.accepted.modelRevision,
+        configurationRevision: invocation.accepted.configurationRevision,
+        runtimeRegistryGeneration: invocation.accepted.runtimeRegistryGeneration,
+        status: "running",
+        statusRevision: 1,
+        createdAt: new Date().toISOString(),
+        lastDurableEventSequence: 1,
+        durableCursor: `cursor:1:${"a".repeat(16)}`,
+      });
+      return;
+    }
+    const tracked = requests.find((candidate) => candidate.logicalRound === invocation.logicalRound);
+    if (tracked !== undefined) tracked.eventCount += 1;
+    response.writeHead(200, { "content-type": "text/event-stream" });
+    for (const event of wfw3GatewayEvents(
+      invocation.accepted.invocationId,
+      invocation.logicalRound,
+      input,
+      oldDigest,
+      invocation.accepted.contractVersion,
+    )) response.write(`data: ${JSON.stringify(event)}\n\n`);
+    response.end();
+  });
+  await new Promise((resolvePromise, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolvePromise);
+  });
+  const address = server.address();
+  if (address === null || typeof address === "string") {
+    throw new Error("wfw3_gateway_listen_failed");
+  }
+  return {
+    origin: `http://127.0.0.1:${address.port}`,
+    modelId: "model.internal-trial",
+    requests,
+    close: () => new Promise((resolvePromise) => {
+      server.closeAllConnections();
+      server.close(() => resolvePromise());
+    }),
+  };
+}
+
+function wfw3GatewayEvents(invocationId, round, input, oldDigest, contractVersion) {
+  const occurredAt = new Date().toISOString();
+  const response = round === 1
+    ? toolCallEvent(invocationId, "tool.workspace.file.write_text", {
+        relativePath: "index.html",
+        content: input.initialHtml,
+        mode: "create_new",
+      }, occurredAt, contractVersion)
+    : round === 3
+      ? toolCallEvent(invocationId, "tool.workspace.file.write_text", {
+          relativePath: "index.html",
+          content: input.revisedHtml,
+          mode: "replace_existing",
+          expectedPreviousSha256: oldDigest,
+        }, occurredAt, contractVersion)
+      : round === 5
+        ? toolCallEvent(invocationId, "tool.workspace.file.write_text", {
+            relativePath: "notes.md",
+            content: "# Notes\n\nCreated by RoboThree.\n",
+            mode: "create_new",
+          }, occurredAt, contractVersion)
+        : textDeltaEvent(invocationId, occurredAt, round === 2
+          ? "HTML 文件已创建"
+          : round === 4
+            ? "HTML 文件已更新"
+            : "Markdown 文件已创建", contractVersion);
+  return [{
+    contractVersion,
+    invocationId,
+    eventId: randomUUID(),
+    eventClass: "ephemeral",
+    streamSequence: 1,
+    eventType: "started",
+    eventPayload: {},
+    eventDigest: "1".repeat(64),
+    occurredAt,
+  }, response, {
+    contractVersion,
+    invocationId,
+    eventId: randomUUID(),
+    eventClass: "durable",
+    durableSequence: 2,
+    eventType: "completed",
+    eventPayload: { status: "completed", statusRevision: 2 },
+    eventDigest: "3".repeat(64),
+    durableCursor: `cursor:2:${"b".repeat(16)}`,
+    occurredAt,
+  }];
+}
+
+function registerRouters(supervisor, handlers, workspacePath, defaultWorkspacePath) {
   const safeFailures = [];
   const base = new DesktopIpcRouter({
     core: {
@@ -420,9 +1187,18 @@ function registerRouters(supervisor, handlers, workspacePath) {
       v1alpha4.dispatch(channel, input, event));
     handlers.push(channel);
   }
+  const defaultWorkspace = defaultWorkspacePath === undefined
+    ? undefined
+    : new DefaultWorkspaceGrantProvider({
+        resolveClient: () => supervisor.client,
+        rootPath: defaultWorkspacePath,
+      });
   const v1alpha5 = new DesktopV1Alpha5IpcRouter({
     resolveConnection: () => supervisor.connectionLease(),
     isCurrentConnection: (lease) => supervisor.isCurrentConnectionLease(lease),
+    ...(defaultWorkspace === undefined ? {} : {
+      ensureDefaultWorkspaceGrant: (input) => defaultWorkspace.ensure(input),
+    }),
   });
   for (const channel of Object.values(DESKTOP_V1ALPHA5_IPC_CHANNELS)) {
     ipcMain.handle(channel, (event, input) =>
@@ -1043,9 +1819,15 @@ function pptxToolCallEvent(
   );
 }
 
-function toolCallEvent(invocationId, capabilityId, args, occurredAt) {
+function toolCallEvent(
+  invocationId,
+  capabilityId,
+  args,
+  occurredAt,
+  contractVersion = "v1alpha3",
+) {
   return {
-    contractVersion: "v1alpha3",
+    contractVersion,
     invocationId,
     eventId: randomUUID(),
     eventClass: "ephemeral",
@@ -1067,9 +1849,10 @@ function textDeltaEvent(
   invocationId,
   occurredAt,
   delta = "已根据工作空间资料生成 PPTX",
+  contractVersion = "v1alpha3",
 ) {
   return {
-    contractVersion: "v1alpha3",
+    contractVersion,
     invocationId,
     eventId: randomUUID(),
     eventClass: "ephemeral",
@@ -1225,5 +2008,9 @@ function json(response, status, value) {
 
 function safeCode(error) {
   const message = error instanceof Error ? error.message : "vs2_electron_failure";
+  if (wfw3Mode) {
+    return message.replace(/[^A-Za-z0-9_.-]+/gu, "_").slice(0, 512)
+      || "wfw3_electron_failure";
+  }
   return /^[a-z0-9_.-]+$/u.test(message) ? message : "vs2_electron_failure";
 }

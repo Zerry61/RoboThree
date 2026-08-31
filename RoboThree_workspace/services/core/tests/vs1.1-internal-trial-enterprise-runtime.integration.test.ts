@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { CONTRACT_VERSION, JsonValueSchema } from "@robothree/contracts";
+import { TEXT_FILE_WRITE_CAPABILITY_ID } from "@robothree/document-worker";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
@@ -108,6 +109,7 @@ describe("VS1.1 internal-trial Enterprise runtime", () => {
               { id: "tool.document.pdf.extract_text" },
               { id: "tool.document.pptx.write" },
               { id: "tool.document.xlsx.read" },
+              { id: TEXT_FILE_WRITE_CAPABILITY_ID },
             ],
           },
         },

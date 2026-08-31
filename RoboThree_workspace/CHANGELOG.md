@@ -6,14 +6,80 @@ RoboThree 的重要工程变更记录。格式参考 [Keep a Changelog](https://
 
 ## [Unreleased]
 
-- WFW-1 独立聚焦代码 QA 已由用户正式接受，WFW-1 进入 `PASS/CLOSED`；非阻断 Desktop workspace 全量门禁外部 blocker 保留为历史欠账，不建立 WFW repair。新增 WFW-2 docs-only 详细实施方案：使用独立 `query_then_retry` descriptor 但与既有 Document Tools 共享同一个 Document Worker child，以 additive private inspect message 接入既有 EffectCoordinator；Replace authority 只从同一 durable Session 的唯一 terminal WFW Artifact revision 推导，缺失、分叉、重复摘要、删除或非 WFW 来源全部 fail-closed；成功结果继续由 Observation 自动投影既有 Artifact，不新增 Contract、migration、依赖、lockfile 或第二套状态机。WFW-2 当前仍 `PLAN DOCUMENT REVIEW PASS / USER ACCEPTANCE PENDING / CODING GATED`，WFW-3/WFW-H1 继续 GATED。
+- 新增 MVP-RSL-2 Skill Lifecycle End-to-End docs-only 详细方案：以 Desktop 用户创建、真实 Task/WFW 生成、exact revision
+  测试、提交、Admin 审核、immutable release、安装和新 Task exact 消费为主链，同时覆盖 Admin 直接上传
+  ZIP/RAR/TAR.GZ/TGZ、安全解析、测试和发布。方案复用既有 Agent Loop、Runtime Selection、Entitlement、Workbench、
+  WFW 与 RSL-1 生命周期模式，不建设第二套 Runtime、通用包管理器或文件平台；冻结 48 项 focused QA、两条真实联合
+  E2E 和 20 项停手条件。当前为 `REVISION 1 / DOCUMENT REVIEW PENDING / CODING GATED`，未修改生产代码、Contract、
+  migration、依赖、版本或 lockfile。
+
+- Root/Core/Desktop `0.0.0-mvp.safe-progress.1` 接通模型执行的安全实时进度：Agent Loop 在上下文准备、模型请求发出、
+  Provider stream 启动、首个回复片段和首个 Tool Call 五个阶段，复用既有 `progress_delta` 发布 content-free
+  `progressKey + safeSummary`；Workbench 在当前 Task 执行区展示最新安全摘要，并在消息提交、终态或 replay reset 后清理。
+  原始 reasoning/thinking、Token、Prompt、Tool 参数和内部路径均不进入 Desktop；未新增 Contract、IPC、migration、依赖
+  或持久化状态。
+
+- Desktop Workbench 在同一 `0.0.0-mvp.safe-progress.1` 基线上完成输入区体验收口：删除重复标题、底部默认工作区/通用
+  机器人说明和快捷任务按钮；未选择工作区时只在输入框内提供“选择工作空间”，选择后自动隐藏；授权方式改为真实
+  `智能授权 / 主动询问 / 始终授权` 任务偏好。用户消息在提交请求发出时立即进入会话，输入框可继续编辑；终态不再保留
+  已处理时长、成功占位步骤或 `Action succeeded` 噪声。页面仅消费真实安全进度，不推断模型隐藏思考过程。
+
+- Desktop `0.0.0-dfe.9-repair.11` 优化 Workbench 长任务交互：发送按钮和输入框不再承担模型执行 loading；会话流改为
+  消费真实 Task Step 与 Tool Activity，展示“分析任务”“生成演示文稿”“写入工作区文件”等安全过程、已处理时长和
+  终态。内部 action/tool 标识、原始异常和模型隐藏推理不进入用户界面；没有真实投影时不伪造详细过程。
+
+- Root/Core/Central `0.0.0-mvp.task-timeout.1` 修复真实 PPTX 任务可被持续 SSE 片段无限续命的问题；Desktop 的本批
+  presentation 修复已包含在当前并行版本 `0.0.0-dfe.9-repair.11`：
+  Central transport 使用 90 秒 response-start timeout，SSE reader 同时执行 30 秒 idle timeout 与绝对 provider
+  deadline；持续有有效数据的模型调用最多可运行 15 分钟。企业 Agent Turn 使用一个 30 分钟 durable hard deadline，后续模型轮次与 compaction 只能消费剩余时间，
+  不能各自重新获得完整任务预算。Core production scheduler 现在按任务 deadline 派发既有 `expire_deadline`，Core 重启遇到已过期任务也会先
+  落为 `timed_out`；Desktop 显示“任务执行超时，可重试”。真实交互试运行关闭后新增 Task 终态 + 新 PPTX 文件双重
+  后置验证，不再把用户关闭 Electron 当成任务成功。未新增 Contract、migration、依赖、状态机或公开 API。
+
+- 用户确认 WFW 当前产品开发工作完成，可进入下一项 MVP 任务。WFW-1、WFW-2、repair.1、repair.2 均已关闭，macOS
+  产品链已通过真实 Electron E2E；Windows 11 本地 NTFS 门禁转入定向回归 backlog，不再阻塞后续开发排期。该延期不
+  等同 Windows PASS，父 WFW-3 继续保持 `STAGE NOT CLOSED / NOT PRODUCTION READY`。
+
+- WFW-3 repair.2 已完成两项极小接缝修正：Core 从 source Task 的 durable readable Runtime Selection 恢复 exact
+  WorkspaceGrant authority，不再要求私有 grant 出现在模型可见 Step；Renderer 只允许 `http://127.0.0.1:*` iframe，
+  APV response 只允许 packaged `file:` ancestor，其余 APV-1C inert CSP 保持不变。packaged Electron/Chromium 的双向
+  CSP focused proof 与真实 iframe document load 均通过；macOS WFW-3 E2E 完整覆盖 default/explicit Workspace、
+  create/replace/`.prev`、Artifact、Core SIGKILL/reopen 和重启后预览。独立代码 QA P0/P1/P2=0，外部 P3 不归因；
+  用户已正式接受并关闭 repair.2，176/179 数量差作为超集精度记录。父 WFW-3 仍因 Windows 11 本地 NTFS 门禁未完成
+  而保持 `NOT CLOSED`。Windows 执行暂缓至后续 Windows 客户端回归窗口，已新增定向回归说明固定真实 Windows 11、
+  本地 NTFS、create/replace/`.prev`/Artifact/Core restart/SQLite reopen/cleanup 与 tests-only 驱动适配要求。
+
+- WFW-3 repair.1 已完成 Task-generated Workspace HTML preview authority 的最小 Main 修复：Core source authority
+  成功后不再因 `taskId` 一票否决，继续复用 contained-file、stable-read 与 APV-1C sandbox；focused preview
+  `4 files / 67 tests PASS`，私有 task/root/grant/path/content 不进入 Renderer-safe response。恢复父真实 Electron E2E
+  后确认 default `index.html` 已真实落盘、投影并创建 preview session，但又发现两个边界外阻塞：WFW-2 Replace authority
+  错从模型可见 durable Step 读取私有 `workspaceGrantId`，导致 exact digest 仍报 `artifact_head_mismatch`；Renderer 顶层
+  CSP 以 `ERR_BLOCKED_BY_CSP` 阻止 loopback APV iframe 实际加载。已再次停手，不弱化 proof、不伪造 iframe ready；
+  独立聚焦代码 QA P0～P3 全 0 后已获用户接受并正式 `PASS/CLOSED`。WFW-3 与 Windows NTFS gate 均未关闭；剩余
+  source Task durable WorkspaceGrant authority 与 loopback APV CSP/real-load proof 已形成 repair.2 极小方案，当前只进入
+  独立文档复核，不自动编码。
+
+- 新增 WFW-3 Desktop Product E2E / Stage Closure docs-only 详细方案：严格限定 Renderer Workbench pure presentation、
+  既有 TasksAdapter/APV preview 消费、一个真实 Electron driver 与一个 Windows 本地 NTFS 最小门禁；Core/Main/Preload/
+  Document Worker production 改动预期为 0，发现需要即停手回评审。方案覆盖默认 `~/.robothree` 与显式 Workspace、
+  create/owned replace/`.prev`、Artifact preview、Core SIGKILL/reopen、uncertain 安全呈现和 10 类资源归零；只保留
+  24 项 focused QA，不建 Evidence schema 或关闭账本。计划评审已通过并获编码授权；当前实现因 Task-generated HTML
+  preview authority 缺口按方案暂停，等待 repair.1 文档评审。WFW-H1 继续 GATED。
+
+- Root/Core/Document Worker `0.0.0-wfw.2` 完成 WFW-2 Core activation：新增独立 WFW Registry/binding/`query_then_retry`
+  descriptor，但与 existing Document handle 共享同一个 Worker PID 与 single-flight；private inspect 将 `safe_retry`
+  精确转换为 existing `not_found`，可证明发布成功时形成稳定 recovered Observation。Replace authority 只接受同一 durable
+  Session 的唯一 terminal WFW Artifact head，分叉、重复摘要、删除、过期或非 WFW 来源全部 fail-closed。成功结果自动投影
+  html/markdown/text Artifact，正文、root、grant、proof 与 `.prev` 不进入用户表面。未新增 Contract、migration、依赖或
+  lockfile 变化。独立 QA 的 VS1.1 旧四项 Tool 期望经用户授权做 tests-only 同步后，聚焦 re-QA 为 P0/P1/P2=0，用户已
+  正式接受并关闭 WFW-2；外部 P3 不归因、不建立 repair。WFW-3/WFW-H1 继续 GATED。
 
 - Document Worker `0.0.0-wfw.1` 完成 WFW-1 私有 UTF-8 文本 Writer：只在私有 v1alpha2 协议接受精确
   `tool.workspace.file.write_text`，支持既有父目录内的 `create_new`、带 exact prior digest 与 owned Artifact 私有证明的
   `replace_existing`、同目录临时文件 fsync、no-clobber/atomic publication 和一层 `.prev`。路径、symlink、hard-link、
   UTF-8 字节上限、request digest 与四个崩溃窗口均 fail-closed，发布后不确定状态由 postcondition inspector 区分
   `safe_retry / recovered_success / unknown`。本批没有激活 Core Registry、没有 Renderer 消费者，也未新增 Contract、
-  migration、依赖或 lockfile 变化；WFW-2/WFW-3 继续 GATED。
+  migration、依赖或 lockfile 变化；WFW-2 已在后续独立 QA 和用户接受后 `PASS/CLOSED`，WFW-3 继续 GATED。
 
 - WFW-0 docs-only 方案推进至精简 Revision 1.1：保留 `tool.workspace.file.write_text`、UTF-8 create、带摘要 CAS 的
   replace、一层 `.prev`、Workspace 路径安全、Policy/Approval、EffectCoordinator、Artifact、四个关键崩溃窗口和
@@ -21,7 +87,7 @@ RoboThree 的重要工程变更记录。格式参考 [Keep a Changelog](https://
   v1 replace 仅接受 Core 从 durable WFW Artifact 证明的 exact revision，按 `routine_file` 允许 Policy 自动放行，
   不通过确认覆盖任意既有用户文件；外部编辑器最终 digest-check/rename 竞争窗口明确为 best-effort residual risk。
   WFW-3 增加真实 Windows 本地 NTFS create/replace/`.prev`/restart 冒烟，完整平台矩阵继续后移。总工期保持
-  3～5 个集中工程日；WFW-1～WFW-3 仍 CODING GATED。
+  3～5 个集中工程日；WFW-1/WFW-2 已在后续实现、独立 QA 与用户接受后 `PASS/CLOSED`，WFW-3 仍 CODING GATED。
 
 - Desktop DFE-9 repair.10 修复客户端导航与 Max 接入：知识中心使用直接 RouterLink，用户菜单设置通过显式路由跳转，
   避免弹层关闭与导航处理竞争；通用机器人在 Max 预览边界解析为既有 `agent.general`，可真实调用 v1alpha5

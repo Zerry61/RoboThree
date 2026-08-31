@@ -56,7 +56,6 @@ describe("DFE-6B frontend foundation closeout model", () => {
       "legacy.workbench",
     ]);
     expect(gatedInventoryItems().map((item) => item.area)).toEqual([
-      "workbench.authorizationModes",
       "workbench.knowledgeSelection",
       "tasks.localPinning",
       "intelligence.skills",
