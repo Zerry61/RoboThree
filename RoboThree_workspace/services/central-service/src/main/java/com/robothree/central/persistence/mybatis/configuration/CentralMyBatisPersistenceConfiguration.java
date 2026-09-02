@@ -6,12 +6,14 @@ import com.robothree.central.persistence.mybatis.adapter.MyBatisAgentLifecycleSt
 import com.robothree.central.persistence.mybatis.adapter.MyBatisConfigurationPersistence;
 import com.robothree.central.persistence.mybatis.adapter.MyBatisEnterpriseSessionPersistence;
 import com.robothree.central.persistence.mybatis.adapter.MyBatisModelInvocationPersistence;
+import com.robothree.central.persistence.mybatis.adapter.MyBatisSkillLifecycleStore;
 import com.robothree.central.persistence.mybatis.mapper.AuthenticationPersistenceMapper;
 import com.robothree.central.persistence.mybatis.mapper.AdminModelPersistenceMapper;
 import com.robothree.central.persistence.mybatis.mapper.AgentLifecyclePersistenceMapper;
 import com.robothree.central.persistence.mybatis.mapper.ConfigurationPersistenceMapper;
 import com.robothree.central.persistence.mybatis.mapper.EnterpriseSessionPersistenceMapper;
 import com.robothree.central.persistence.mybatis.mapper.ModelInvocationPersistenceMapper;
+import com.robothree.central.persistence.mybatis.mapper.SkillLifecyclePersistenceMapper;
 import com.robothree.central.persistence.mybatis.schema.CentralSchemaPreflight;
 import com.robothree.central.persistence.mybatis.schema.SchemaInspectionMapper;
 import com.robothree.central.persistence.mybatis.schema.SchemaManifestLoader;
@@ -57,6 +59,12 @@ public class CentralMyBatisPersistenceConfiguration {
     MyBatisAgentLifecycleStore myBatisAgentLifecycleStore(
             AgentLifecyclePersistenceMapper mapper) {
         return new MyBatisAgentLifecycleStore(mapper);
+    }
+
+    @Bean
+    MyBatisSkillLifecycleStore myBatisSkillLifecycleStore(
+            SkillLifecyclePersistenceMapper mapper) {
+        return new MyBatisSkillLifecycleStore(mapper);
     }
 
     @Bean

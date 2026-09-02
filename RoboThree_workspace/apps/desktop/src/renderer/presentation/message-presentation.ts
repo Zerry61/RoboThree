@@ -30,6 +30,12 @@ export function presentDurableMessage(
   };
 }
 
+export function isProductConversationMessage(
+  message: MessageProjection,
+): boolean {
+  return message.role === "user" || message.role === "assistant";
+}
+
 export function presentStreamingAssistant(
   assistant: StreamingAssistantPresentationInput,
 ): MessagePresentation {

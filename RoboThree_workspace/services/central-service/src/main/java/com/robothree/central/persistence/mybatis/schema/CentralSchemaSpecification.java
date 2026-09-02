@@ -162,6 +162,45 @@ final class CentralSchemaSpecification {
             "admin_model_audit_pkey",
             "ck_admin_model_audit_revision",
             "ck_admin_model_audit_fields",
+            "skill_package_blobs_pkey",
+            "ck_skill_package_digests",
+            "ck_skill_package_name",
+            "ck_skill_package_bounds",
+            "skill_draft_revisions_pkey",
+            "fk_skill_draft_package",
+            "ck_skill_draft_id",
+            "ck_skill_draft_source",
+            "ck_skill_draft_revision",
+            "ck_skill_draft_document",
+            "skill_drafts_pkey",
+            "fk_skill_draft_head",
+            "skill_test_facts_pkey",
+            "fk_skill_test_draft",
+            "ck_skill_test_state",
+            "ck_skill_test_result",
+            "skill_test_operations_pkey",
+            "fk_skill_test_operation_draft",
+            "ck_skill_test_operation_source",
+            "ck_skill_test_operation_state",
+            "ck_skill_test_operation_result",
+            "skill_submissions_pkey",
+            "fk_skill_submission_draft",
+            "ck_skill_submission_revision",
+            "ck_skill_submission_semver",
+            "ck_skill_submission_state",
+            "ck_skill_submission_review",
+            "skill_releases_pkey",
+            "fk_skill_release_submission",
+            "fk_skill_release_draft",
+            "fk_skill_release_package",
+            "ck_skill_release_revision",
+            "ck_skill_release_source",
+            "ck_skill_release_document",
+            "skill_lifecycle_command_receipts_pkey",
+            "ck_skill_command_digest",
+            "ck_skill_command_result",
+            "skill_audit_events_pkey",
+            "ck_skill_audit_revision",
             "robothree_schema_version_pkey",
             "robothree_schema_version_script_name_key",
             "robothree_schema_version_version_check",
@@ -198,7 +237,10 @@ final class CentralSchemaSpecification {
             "ix_enterprise_session_lease_source_decision",
             "ix_admin_model_revision_display",
             "ix_admin_model_credential_model",
-            "ix_admin_model_audit_time");
+            "ix_admin_model_audit_time",
+            "uq_skill_submission_pending",
+            "ix_skill_submission_review",
+            "ix_skill_audit_time");
 
     private CentralSchemaSpecification() {}
 
@@ -546,6 +588,108 @@ final class CentralSchemaSpecification {
                         required("model_id", "varchar"),
                         required("model_revision", "varchar"),
                         required("changed_field_names", "_text"),
+                        required("occurred_at", "timestamptz"),
+                        required("result", "varchar"),
+                        required("correlation_id", "uuid")));
+        tables.put(
+                "skill_package_blobs",
+                List.of(
+                        required("package_digest", "varchar"),
+                        required("archive_digest", "varchar"),
+                        required("manifest_digest", "varchar"),
+                        required("skill_markdown_digest", "varchar"),
+                        required("technical_name", "varchar"),
+                        required("file_count", "int4"),
+                        required("expanded_byte_count", "int8"),
+                        required("canonical_zip_bytes", "bytea"),
+                        required("created_at", "timestamptz")));
+        tables.put(
+                "skill_draft_revisions",
+                List.of(
+                        required("skill_id", "varchar"),
+                        required("draft_revision", "varchar"),
+                        required("creator_subject", "varchar"),
+                        required("source_kind", "varchar"),
+                        required("package_digest", "varchar"),
+                        required("technical_name", "varchar"),
+                        required("display_title", "varchar"),
+                        required("metadata_json", "text"),
+                        required("record_digest", "bpchar"),
+                        required("created_at", "timestamptz")));
+        tables.put(
+                "skill_drafts",
+                List.of(
+                        required("skill_id", "varchar"),
+                        required("draft_revision", "varchar"),
+                        required("updated_at", "timestamptz")));
+        tables.put(
+                "skill_test_facts",
+                List.of(
+                        required("skill_id", "varchar"),
+                        required("draft_revision", "varchar"),
+                        required("state", "varchar"),
+                        required("task_id", "varchar"),
+                        required("started_at", "timestamptz"),
+                        nullable("completed_at", "timestamptz"),
+                        nullable("safe_summary", "varchar"),
+                        nullable("result_digest", "varchar")));
+        tables.put(
+                "skill_test_operations",
+                List.of(
+                        required("operation_id", "uuid"),
+                        required("correlation_id", "uuid"),
+                        required("skill_id", "varchar"),
+                        required("draft_revision", "varchar"),
+                        required("source_kind", "varchar"),
+                        required("state", "varchar"),
+                        nullable("task_id", "varchar"),
+                        nullable("safe_summary", "varchar"),
+                        nullable("result_digest", "varchar"),
+                        required("created_at", "timestamptz"),
+                        required("updated_at", "timestamptz")));
+        tables.put(
+                "skill_submissions",
+                List.of(
+                        required("submission_id", "uuid"),
+                        required("submission_revision", "varchar"),
+                        required("skill_id", "varchar"),
+                        required("draft_revision", "varchar"),
+                        required("creator_subject", "varchar"),
+                        required("semantic_version", "varchar"),
+                        required("change_summary", "varchar"),
+                        required("state", "varchar"),
+                        required("submitted_at", "timestamptz"),
+                        nullable("reviewed_at", "timestamptz"),
+                        nullable("reviewer_summary", "varchar"),
+                        nullable("rejection_reason", "varchar")));
+        tables.put(
+                "skill_releases",
+                List.of(
+                        required("skill_id", "varchar"),
+                        required("release_revision", "varchar"),
+                        nullable("submission_id", "uuid"),
+                        required("draft_revision", "varchar"),
+                        required("package_digest", "varchar"),
+                        required("semantic_version", "varchar"),
+                        required("source_kind", "varchar"),
+                        required("release_json", "text"),
+                        required("published_at", "timestamptz")));
+        tables.put(
+                "skill_lifecycle_command_receipts",
+                List.of(
+                        required("command_id", "uuid"),
+                        required("correlation_id", "uuid"),
+                        required("command_digest", "varchar"),
+                        required("result_json", "text"),
+                        required("occurred_at", "timestamptz")));
+        tables.put(
+                "skill_audit_events",
+                List.of(
+                        required("event_id", "uuid"),
+                        required("actor_summary", "varchar"),
+                        required("action", "varchar"),
+                        required("skill_id", "varchar"),
+                        required("object_revision", "varchar"),
                         required("occurred_at", "timestamptz"),
                         required("result", "varchar"),
                         required("correlation_id", "uuid")));

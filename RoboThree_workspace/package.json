@@ -1,6 +1,6 @@
 {
   "name": "robothree",
-  "version": "0.0.0-mvp.safe-progress.1",
+  "version": "0.0.0-mvp.wte.1",
   "private": true,
   "description": "RoboThree product monorepo",
   "packageManager": "pnpm@11.11.0",
@@ -46,6 +46,7 @@
     "e2e:mvp-vs1:real-provider": "node scripts/run-dr2-real-provider.mjs",
     "trial:desktop:deepseek": "node scripts/run-deepseek-desktop-trial.mjs",
     "e2e:mvp-vs2": "pnpm run build && env -u ELECTRON_RUN_AS_NODE apps/desktop/node_modules/.bin/electron scripts/run-mvp-vs2-electron.mjs",
+    "e2e:wte1": "pnpm run build && env -u ELECTRON_RUN_AS_NODE apps/desktop/node_modules/.bin/electron scripts/run-wte1-electron.mjs",
     "preflight:mvp-vs1:demo": "node scripts/run-mvp-vs1-demo-preflight.mjs",
     "check": "pnpm run lint && pnpm run test && pnpm --filter @robothree/core smoke && pnpm --filter @robothree/desktop smoke && pnpm --filter @robothree/desktop smoke:preload",
     "check:java": "node scripts/run-central-check.mjs --doctor",

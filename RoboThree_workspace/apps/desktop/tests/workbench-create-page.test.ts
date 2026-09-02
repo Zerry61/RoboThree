@@ -26,16 +26,23 @@ import { clearConversationSelections, rememberConversationSelection } from
 import { notifyWorkbenchNewTaskRequested } from
   "../src/renderer/app/shell-navigation-events.js";
 import {
+  consumeSkillCreatorWorkbenchIntent,
+  setSkillCreatorWorkbenchIntent,
+} from "../src/renderer/pages/workbench/skill-creator-intent.js";
+import {
   tasksAdapterKey,
   type TasksAdapter,
 } from "../src/renderer/adapters/tasks-adapter.js";
-import type { TaskDetailProjection } from "@robothree/contracts";
+import type { MessageProjection, TaskDetailProjection } from "@robothree/contracts";
 
 const digest = "a".repeat(64);
 const timestamp = "2026-08-16T00:00:00.000Z";
 
 describe("DFE-2A Workbench create page", () => {
-  beforeEach(() => clearConversationSelections());
+  beforeEach(() => {
+    clearConversationSelections();
+    consumeSkillCreatorWorkbenchIntent();
+  });
 
   it("keeps task actions inside one composer with separate resource and model popovers", async () => {
     const wrapper = mount(WorkbenchCreatePage, {
@@ -91,6 +98,47 @@ describe("DFE-2A Workbench create page", () => {
     expect(adapter.submitTask).not.toHaveBeenCalled();
   });
 
+  it("consumes the exact Skill Creator intent and sends one stable first request", async () => {
+    setSkillCreatorWorkbenchIntent({
+      skillId: "skill.weekly-report",
+      draftId: "draft.skill-weekly-report",
+      workspaceGrantId: "workspace.skill-weekly-report",
+      workspaceDisplayName: "周报整理",
+      agentId: "agent.skill-creator",
+      firstUserMessage: "请创建技能「周报整理」，并在草稿工作区生成所需文件。",
+    });
+    const creator = {
+      ...agentFixture(),
+      agentId: "agent.skill-creator",
+      name: "技能创建助手",
+    };
+    const adapter = createAdapter({
+      agents: [creator],
+      workspaces: [{
+        workspaceGrantId: "workspace.skill-weekly-report",
+        displayName: "周报整理",
+        rootDisplayPath: "周报整理",
+        accessMode: "read_write",
+        status: "active",
+        createdAt: timestamp,
+      }],
+    });
+    const wrapper = mount(WorkbenchCreatePage, {
+      global: { provide: { [workbenchAdapterKey as symbol]: adapter } },
+    });
+    await flushPromises();
+    await flushPromises();
+
+    expect(adapter.submitTask).toHaveBeenCalledTimes(1);
+    expect(adapter.submitTask).toHaveBeenCalledWith(expect.objectContaining({
+      agentId: "agent.skill-creator",
+      workspaceGrantId: "workspace.skill-weekly-report",
+      userInput: "请创建技能「周报整理」，并在草稿工作区生成所需文件。",
+    }));
+    expect(wrapper.text()).not.toContain("运行测试");
+    expect(wrapper.text()).not.toContain("提交发布");
+  });
+
   it("renders the user message immediately and keeps the composer editable while submit is pending", async () => {
     type SubmitResult = Awaited<ReturnType<WorkbenchAdapter["submitTask"]>>;
     let resolveSubmit!: (value: SubmitResult) => void;
@@ -128,6 +176,97 @@ describe("DFE-2A Workbench create page", () => {
     await flushPromises();
     expect((wrapper.find("textarea").element as HTMLTextAreaElement).value)
       .toBe("可以先输入下一条消息");
+  });
+
+  it("keeps safe Core progress that arrives before the submit receipt", async () => {
+    type SubmitResult = Awaited<ReturnType<WorkbenchAdapter["submitTask"]>>;
+    let resolveSubmit!: (value: SubmitResult) => void;
+    const adapter = createAdapter();
+    adapter.submitTask.mockImplementationOnce(() => new Promise<SubmitResult>((resolve) => {
+      resolveSubmit = resolve;
+    }));
+    const tasks = createConversationTasksAdapter("running");
+    const wrapper = mount(WorkbenchCreatePage, {
+      global: {
+        provide: {
+          [workbenchAdapterKey as symbol]: adapter,
+          [tasksAdapterKey as symbol]: tasks.adapter,
+        },
+      },
+    });
+    await flushPromises();
+
+    await wrapper.find("textarea").setValue("生成一份演示文稿");
+    await wrapper.find("button[title='提交任务']").trigger("click");
+    await flushPromises();
+    tasks.emit({
+      contractVersion: "v1alpha1",
+      eventId: "00000000-0000-4000-8000-000000000076",
+      deliveryKind: "ephemeral",
+      runtimeInstanceId: "runtime.instance-00000000-0000-4000-8000-000000000076",
+      emittedAt: timestamp,
+      payload: {
+        type: "progress_delta",
+        taskId: "task:one",
+        progressKey: "model.request_started.round_1",
+        safeSummary: "已向模型发出请求，正在等待响应",
+      },
+    });
+
+    resolveSubmit({
+      session: sessionFixture(),
+      receipt: {
+        submitTurnCommandId: "00000000-0000-4000-8000-000000000001",
+        clientTurnId: "turn:00000000-0000-4000-8000-000000000002",
+        userMessageId: "message:user",
+        taskId: "task:one",
+        runtimeSelectionId: "runtime:one",
+        status: "accepted",
+        acceptedAt: timestamp,
+      },
+    });
+    await flushPromises();
+
+    expect(wrapper.find("[data-task-progress]").text())
+      .toContain("已向模型发出请求，正在等待响应");
+    expect(wrapper.find("[data-task-progress]").text())
+      .not.toContain("正在等待 Core 返回可展示的执行进展");
+  });
+
+  it("maps context progress to business copy without exposing technical context details", async () => {
+    const adapter = createAdapter();
+    const tasks = createConversationTasksAdapter("running");
+    const wrapper = mount(WorkbenchCreatePage, {
+      global: {
+        provide: {
+          [workbenchAdapterKey as symbol]: adapter,
+          [tasksAdapterKey as symbol]: tasks.adapter,
+        },
+      },
+    });
+    await flushPromises();
+
+    await wrapper.find("textarea").setValue("继续处理长对话");
+    await wrapper.find("button[title='提交任务']").trigger("click");
+    await flushPromises();
+    tasks.emit({
+      contractVersion: "v1alpha1",
+      eventId: "00000000-0000-4000-8000-000000000096",
+      deliveryKind: "ephemeral",
+      runtimeInstanceId: "runtime.instance-00000000-0000-4000-8000-000000000096",
+      emittedAt: timestamp,
+      payload: {
+        type: "progress_delta",
+        taskId: "task:one",
+        progressKey: "context.preparing.round_2",
+        safeSummary: "Prompt Token Compaction ID contextRevision internal summary",
+      },
+    });
+    await flushPromises();
+
+    const progress = wrapper.find("[data-task-progress]").text();
+    expect(progress).toContain("正在整理对话内容");
+    expect(progress).not.toMatch(/Prompt|Token|Compaction|contextRevision|internal summary/iu);
   });
 
   it("submits the selected real authorization mode and defaults to smart authorization", async () => {
@@ -295,7 +434,7 @@ describe("DFE-2A Workbench create page", () => {
     expect(wrapper.text()).not.toContain("已选资源");
     expect(wrapper.text()).not.toContain("工作区授权");
     expect(wrapper.find("[aria-pressed]").exists()).toBe(false);
-    expect(wrapper.find(".workbench-page__workspace-trigger").exists()).toBe(false);
+    expect(wrapper.find(".workbench-page__workspace-trigger").exists()).toBe(true);
 
     await wrapper.find("textarea").setValue("Create an XLSX report");
     await wrapper.findAll("button")
@@ -310,9 +449,9 @@ describe("DFE-2A Workbench create page", () => {
       requestedModelId: "model:gpt",
       selectedSkillIds: [],
       selectedKnowledgeIds: [],
-      workspaceGrantId: "workspace:one",
       authorizationMode: "smart_confirm",
     }));
+    expect(adapter.submitTask.mock.calls[0]?.[0]).not.toHaveProperty("workspaceGrantId");
     expect(JSON.stringify(adapter.submitTask.mock.calls[0]?.[0])).not.toContain("workspaceRoot");
     expect(wrapper.text()).not.toContain("已进入本地运行队列");
     expect(wrapper.find("[data-workbench-conversation]").exists()).toBe(true);
@@ -488,6 +627,128 @@ describe("DFE-2A Workbench create page", () => {
     expect(wrapper.html()).not.toContain("v-html");
   });
 
+  it("offers safe new-attempt actions after a second workspace text conflict", async () => {
+    const adapter = createAdapter();
+    const artifactId = `artifact:${"4".repeat(64)}`;
+    const conflictActivity = (suffix: string) => ({
+      activityId: `activity:wte-conflict-${suffix}`,
+      taskId: "task:one",
+      toolName: "文件写入",
+      operationType: "tool.workspace.file.write_text",
+      status: "failed" as const,
+      targetSummary: "notes.md",
+      statusSummary: "文件已发生变化，本次写入未覆盖磁盘内容。",
+      startedAt: timestamp,
+      updatedAt: timestamp,
+      endedAt: timestamp,
+    });
+    const tasks = createConversationTasksAdapter("failed", {
+      failureSummary: "文件在处理期间再次发生变化，本次未覆盖文件。",
+      goalSummary: "给 notes.md 增加风险章节",
+      detail: {
+        toolActivities: [conflictActivity("one"), conflictActivity("two")],
+        artifacts: [{
+          ...artifactFixture(artifactId, "notes.md", "markdown", "text/markdown"),
+          relativePath: "notes.md",
+        }],
+      },
+    });
+    const wrapper = mount(WorkbenchCreatePage, {
+      global: {
+        provide: {
+          [workbenchAdapterKey as symbol]: adapter,
+          [tasksAdapterKey as symbol]: tasks.adapter,
+        },
+      },
+    });
+    await flushPromises();
+
+    await wrapper.find("textarea").setValue("给 notes.md 增加风险章节");
+    await wrapper.find("button[title='提交任务']").trigger("click");
+    await flushPromises();
+
+    const recovery = wrapper.find("[data-workspace-text-conflict-recovery]");
+    expect(recovery.text()).toContain("文件再次发生变化，本次未覆盖");
+    const buttons = recovery.findAll("button");
+    await buttons.find((button) => button.text().includes("打开文件"))?.trigger("click");
+    expect(tasks.adapter.openArtifactLocation).toHaveBeenCalledWith({ artifactId });
+
+    await buttons.find((button) => button.text().includes("基于最新版本重新处理"))?.trigger("click");
+    expect((wrapper.find("textarea").element as HTMLTextAreaElement).value)
+      .toContain("请基于磁盘最新版本重新处理 notes.md");
+    expect(wrapper.find("[data-workspace-text-conflict-recovery]").exists()).toBe(false);
+  });
+
+  it("shows the output-capacity failure beside the conversation with explicit new-attempt actions", async () => {
+    const adapter = createAdapter();
+    const tasks = createConversationTasksAdapter("failed", {
+      failureSummary: "当前模型无法完整生成修改后的文件，请缩小文件或选择输出能力更高的模型。",
+      goalSummary: "完整修改 notes.md",
+      detail: {
+        artifacts: [artifactFixture(`artifact:${"8".repeat(64)}`, "partial.md", "markdown", "text/markdown")],
+      },
+    });
+    const wrapper = mount(WorkbenchCreatePage, {
+      global: {
+        provide: {
+          [workbenchAdapterKey as symbol]: adapter,
+          [tasksAdapterKey as symbol]: tasks.adapter,
+        },
+      },
+    });
+    await flushPromises();
+
+    await wrapper.find("textarea").setValue("完整修改 notes.md");
+    await wrapper.find("button[title='提交任务']").trigger("click");
+    await flushPromises();
+
+    const failure = wrapper.find("[data-task-failure]");
+    expect(failure.attributes("role")).toBe("alert");
+    expect(failure.text()).toContain("文件无法完整生成");
+    expect(failure.text()).toContain("当前模型无法完整生成修改后的文件");
+    expect(failure.text()).toContain("选择其他模型并新建任务");
+    expect(failure.text()).toContain("缩小文件后重试");
+    await wrapper.find("[data-results-panel-toggle]").trigger("click");
+    expect(wrapper.find("[aria-label='成果面板']").text()).toContain("暂无成果");
+    expect(wrapper.find("[aria-label='成果面板']").text()).not.toContain("partial.md");
+
+    await failure.findAll("button")
+      .find((button) => button.text().includes("缩小文件后重试"))
+      ?.trigger("click");
+    expect((wrapper.find("textarea").element as HTMLTextAreaElement).value)
+      .toContain("文件已缩小，请重新完成：完整修改 notes.md");
+    expect(wrapper.find("[data-task-failure]").exists()).toBe(false);
+    expect(adapter.submitTask).toHaveBeenCalledTimes(1);
+  });
+
+  it("requires an explicit model choice before a capacity failure can start a new task", async () => {
+    const adapter = createAdapter();
+    const tasks = createConversationTasksAdapter("failed", {
+      failureSummary: "当前模型无法完整生成修改后的文件，请缩小文件或选择输出能力更高的模型。",
+    });
+    const wrapper = mount(WorkbenchCreatePage, {
+      global: {
+        provide: {
+          [workbenchAdapterKey as symbol]: adapter,
+          [tasksAdapterKey as symbol]: tasks.adapter,
+        },
+      },
+    });
+    await flushPromises();
+
+    await wrapper.find("textarea").setValue("完整修改 notes.md");
+    await wrapper.find("button[title='提交任务']").trigger("click");
+    await flushPromises();
+    await wrapper.find("[data-task-failure]").findAll("button")
+      .find((button) => button.text().includes("选择其他模型并新建任务"))
+      ?.trigger("click");
+    await flushPromises();
+
+    expect(wrapper.find("#workbench-model-menu").exists()).toBe(true);
+    expect(wrapper.find("button[title='提交任务']").attributes("disabled")).toBeDefined();
+    expect(adapter.submitTask).toHaveBeenCalledTimes(1);
+  });
+
   it("shows live task feedback and replaces send with the real cancel command while running", async () => {
     const adapter = createAdapter();
     const tasks = createConversationTasksAdapter("running", {
@@ -539,7 +800,7 @@ describe("DFE-2A Workbench create page", () => {
 
     const progress = wrapper.find("[data-task-progress]");
     expect(progress.exists()).toBe(true);
-    expect(progress.text()).toContain("RoboThree 正在处理");
+    expect(progress.text()).toContain("思考中");
     expect(progress.text()).toContain("已处理");
     expect(progress.text()).toContain("正在处理当前请求");
     expect(progress.text()).not.toContain("分析任务并组织回复");
@@ -566,6 +827,13 @@ describe("DFE-2A Workbench create page", () => {
     });
     await flushPromises();
     expect(wrapper.find("[data-task-progress]").text()).toContain("模型已开始处理当前请求");
+    expect(wrapper.find(".workbench-page__execution-summary").attributes("aria-expanded"))
+      .toBe("true");
+    await wrapper.find(".workbench-page__execution-summary").trigger("click");
+    expect(wrapper.find(".workbench-page__execution-summary").attributes("aria-expanded"))
+      .toBe("false");
+    expect(wrapper.find("#workbench-progress-details").attributes("style"))
+      .toContain("display: none");
 
     const stop = wrapper.find("[data-stop-task]");
     expect(stop.attributes("title")).toBe("终止任务");
@@ -578,6 +846,144 @@ describe("DFE-2A Workbench create page", () => {
       expectedTaskRevision: 2,
     });
     expect(wrapper.find("[data-task-progress]").text()).toContain("正在终止任务");
+  });
+
+  it("shows when the model has ended but Core has not finalized the task", async () => {
+    const adapter = createAdapter();
+    const tasks = createConversationTasksAdapter("running", {
+      detail: {
+        runs: [{
+          runId: "run:one",
+          attempt: 1,
+          displayStatus: "running",
+          steps: [{
+            stepId: "step:model",
+            sequence: 1,
+            displayStatus: "completed",
+            actionType: "model.generate",
+            actionSummary: "Action succeeded",
+            observationSummary: "Model response ended",
+            startedAt: timestamp,
+            updatedAt: timestamp,
+            endedAt: timestamp,
+          }],
+          startedAt: timestamp,
+          updatedAt: timestamp,
+        }],
+      },
+    });
+    const wrapper = mount(WorkbenchCreatePage, {
+      global: {
+        provide: {
+          [workbenchAdapterKey as symbol]: adapter,
+          [tasksAdapterKey as symbol]: tasks.adapter,
+        },
+      },
+    });
+    await flushPromises();
+
+    await wrapper.find("textarea").setValue("写一份方案");
+    await wrapper.find("button[title='提交任务']").trigger("click");
+    await flushPromises();
+
+    const progress = wrapper.find("[data-task-progress]");
+    expect(progress.text()).toContain("任务收尾时间较长");
+    expect(progress.text()).toContain("模型已结束本轮处理");
+    expect(progress.text()).toContain("Core 尚未返回任务终态");
+    expect(progress.text()).not.toContain("模型正在生成下一步内容");
+  });
+
+  it("keeps raw Tool messages out of the conversation while preserving assistant replies", async () => {
+    const adapter = createAdapter();
+    const tasks = createConversationTasksAdapter("waiting_input", {
+      messages: [
+        messageFixture("message:user", 1, "user", "创建一个简单网页"),
+        messageFixture("message:assistant", 2, "assistant", "我来创建一个简单网页。"),
+        messageFixture("message:tool", 3, "tool", JSON.stringify({
+          status: "succeeded",
+          relativePath: "index.html",
+          sha256: `sha256:${digest}`,
+          resultDigest: digest,
+        })),
+      ],
+    });
+    const wrapper = mount(WorkbenchCreatePage, {
+      global: {
+        provide: {
+          [workbenchAdapterKey as symbol]: adapter,
+          [tasksAdapterKey as symbol]: tasks.adapter,
+        },
+      },
+    });
+    await flushPromises();
+
+    await wrapper.find("textarea").setValue("创建一个简单网页");
+    await wrapper.find("button[title='提交任务']").trigger("click");
+    await flushPromises();
+
+    const conversation = wrapper.find("[data-workbench-conversation]").text();
+    expect(conversation).toContain("我来创建一个简单网页。");
+    expect(conversation).not.toContain("relativePath");
+    expect(conversation).not.toContain("sha256");
+    expect(conversation).not.toContain("resultDigest");
+    expect(wrapper.find(".message-tool").exists()).toBe(false);
+  });
+
+  it("clears an uncommitted streaming reply when the task reaches a terminal state", async () => {
+    const adapter = createAdapter();
+    const tasks = createConversationTasksAdapter("running");
+    const wrapper = mount(WorkbenchCreatePage, {
+      global: {
+        provide: {
+          [workbenchAdapterKey as symbol]: adapter,
+          [tasksAdapterKey as symbol]: tasks.adapter,
+        },
+      },
+    });
+    await flushPromises();
+
+    await wrapper.find("textarea").setValue("写一份方案");
+    await wrapper.find("button[title='提交任务']").trigger("click");
+    await flushPromises();
+    tasks.emit({
+      contractVersion: "v1alpha1",
+      eventId: "00000000-0000-4000-8000-000000000078",
+      deliveryKind: "ephemeral",
+      runtimeInstanceId: "runtime.instance-00000000-0000-4000-8000-000000000078",
+      emittedAt: timestamp,
+      payload: {
+        type: "assistant_token_delta",
+        sessionId: "session:one",
+        messageId: "message:uncommitted",
+        deltaSequence: 0,
+        delta: "这段未持久化内容不应在失败后残留",
+      },
+    });
+    await flushPromises();
+    expect(wrapper.find("[data-workbench-conversation]").text())
+      .toContain("这段未持久化内容不应在失败后残留");
+
+    tasks.setDisplayStatus("failed");
+    tasks.emit({
+      contractVersion: "v1alpha1",
+      eventId: "00000000-0000-4000-8000-000000000079",
+      deliveryKind: "durable",
+      durableCursor: "cursor:failed",
+      runtimeInstanceId: "runtime.instance-00000000-0000-4000-8000-000000000078",
+      emittedAt: timestamp,
+      payload: {
+        type: "task_status_changed",
+        sessionId: "session:one",
+        taskId: "task:one",
+        taskRevision: 3,
+        displayStatus: "failed",
+        queryRef: "task-detail:task:one",
+      },
+    });
+    await flushPromises();
+
+    expect(wrapper.find("[data-workbench-conversation]").text())
+      .not.toContain("这段未持久化内容不应在失败后残留");
   });
 
   it("polls the durable conversation while a task is active when Desktop events are missed", async () => {
@@ -707,6 +1113,41 @@ describe("DFE-2A Workbench create page", () => {
     expect(wrapper.find(".workbench-page__composer-card textarea").exists()).toBe(true);
     expect(wrapper.find(".tasks-page").exists()).toBe(false);
     expect(wrapper.find("button[title='发送消息']").exists()).toBe(true);
+  });
+
+  it("restores a recovering conversation without submitting the task again", async () => {
+    rememberConversationSelection("session:one", {
+      agentId: "agent:normal",
+      requestedModelId: "model:gpt",
+      selectedSkillIds: [],
+      selectedKnowledgeIds: [],
+    });
+    const adapter = createAdapter();
+    const tasks = createConversationTasksAdapter("recovering");
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: "/workbench", name: "workbench", component: WorkbenchCreatePage }],
+    });
+    await router.push({
+      name: "workbench",
+      query: { sessionId: "session:one", taskId: "task:one" },
+    });
+    await router.isReady();
+    const wrapper = mount(WorkbenchCreatePage, {
+      global: {
+        plugins: [router],
+        provide: {
+          [workbenchAdapterKey as symbol]: adapter,
+          [tasksAdapterKey as symbol]: tasks.adapter,
+        },
+      },
+    });
+    await flushPromises();
+
+    expect(wrapper.find("[data-workbench-conversation]").text()).toContain("第一条真实回复");
+    expect(wrapper.find("[data-task-progress]").text()).toContain("正在恢复任务");
+    expect(wrapper.find("[data-task-progress]").text()).toContain("正在恢复任务上下文");
+    expect(adapter.submitTask).not.toHaveBeenCalled();
   });
 
   it("submits a normal conversation from the default working directory", async () => {
@@ -893,6 +1334,14 @@ describe("DFE-2A Workbench create page", () => {
   it("adds and removes one exact workspace attachment and submits it without a real path", async () => {
     const adapter = createAdapter();
     const attachment = workspaceAttachmentFixture();
+    adapter.createWorkspaceGrant.mockResolvedValueOnce({
+      workspaceGrantId: "workspace:one",
+      displayName: "Workspace One",
+      rootDisplayPath: "Workspace One",
+      accessMode: "read_write",
+      status: "active",
+      createdAt: timestamp,
+    });
     adapter.pickWorkspaceAttachment.mockResolvedValueOnce(attachment);
     const wrapper = mount(WorkbenchCreatePage, {
       global: {
@@ -903,6 +1352,8 @@ describe("DFE-2A Workbench create page", () => {
     });
     await flushPromises();
 
+    await wrapper.find(".workbench-page__workspace-trigger").trigger("click");
+    await flushPromises();
     await addAttachment(wrapper);
     await flushPromises();
 
@@ -959,6 +1410,46 @@ describe("DFE-2A Workbench create page", () => {
     expect(adapter.submitTask).toHaveBeenCalledWith(expect.objectContaining({
       selectedSkillIds: [],
       selectedKnowledgeIds: [],
+    }));
+  });
+
+  it("fails closed when a selected Skill becomes unavailable until the user selects an available exact Skill", async () => {
+    const adapter = createAdapter();
+    const wrapper = mount(WorkbenchCreatePage, {
+      global: {
+        provide: {
+          [workbenchAdapterKey as symbol]: adapter,
+        },
+      },
+    });
+    await flushPromises();
+
+    await selectAgent(wrapper, "Normal Agent");
+    await selectSkill(wrapper, "Docs");
+    adapter.loadWorkbenchData.mockResolvedValueOnce(workbenchData({
+      agents: [{
+        ...agentFixture(),
+        skills: [
+          { id: "skill:docs", revision: digest, name: "Docs", available: false },
+          { id: "skill:review", revision: digest, name: "Review", available: true },
+        ],
+      }],
+    }));
+
+    await wrapper.findAll("button").find((button) => button.text().includes("刷新"))?.trigger("click");
+    await flushPromises();
+    await wrapper.find("textarea").setValue("继续使用技能处理任务");
+
+    expect(wrapper.find("[data-skill-selection-invalidated]").text()).toContain("已清除失效技能");
+    expect(wrapper.find("button[title='提交任务']").attributes("disabled")).toBeDefined();
+    expect(adapter.submitTask).not.toHaveBeenCalled();
+
+    await selectSkill(wrapper, "Review");
+    expect(wrapper.find("[data-skill-selection-invalidated]").exists()).toBe(false);
+    await wrapper.find("button[title='提交任务']").trigger("click");
+    await flushPromises();
+    expect(adapter.submitTask).toHaveBeenCalledWith(expect.objectContaining({
+      selectedSkillIds: ["skill:review"],
     }));
   });
 
@@ -1270,10 +1761,13 @@ function createAdapter(
 }
 
 function createConversationTasksAdapter(
-  displayStatus: "completed" | "waiting_input" | "running" | "cancelled" = "completed",
+  displayStatus: "completed" | "waiting_input" | "running" | "recovering" | "failed" | "cancelled" = "completed",
   options: Readonly<{
-    cancelTransitionsTo?: "completed" | "waiting_input" | "running" | "cancelled";
+    cancelTransitionsTo?: "completed" | "waiting_input" | "running" | "failed" | "cancelled";
+    failureSummary?: string;
+    goalSummary?: string;
     detail?: Partial<Pick<TaskDetailProjection, "runs" | "toolActivities" | "artifacts">>;
+    messages?: readonly MessageProjection[];
   }> = {},
 ) {
   let currentDisplayStatus = displayStatus;
@@ -1282,7 +1776,7 @@ function createConversationTasksAdapter(
     loadConversation: vi.fn(async () => ({
       sessionId: "session:one",
       sessionRevision: 2,
-      messages: [{
+      messages: options.messages ?? [{
         messageId: "message:user",
         sessionId: "session:one",
         sequence: 1,
@@ -1316,8 +1810,11 @@ function createConversationTasksAdapter(
         updatedAt: timestamp,
         resolvedAgentId: "agent:normal",
         resolvedModelId: "model:gpt",
+        ...(options.failureSummary === undefined
+          ? {}
+          : { failureSummary: options.failureSummary }),
       },
-      goalSummary: "第一条消息",
+      goalSummary: options.goalSummary ?? "第一条消息",
       runs: options.detail?.runs ?? [],
       toolActivities: options.detail?.toolActivities ?? [],
       userConfirmations: [],
@@ -1374,6 +1871,24 @@ function createConversationTasksAdapter(
     setDisplayStatus: (status: typeof currentDisplayStatus) => {
       currentDisplayStatus = status;
     },
+  };
+}
+
+function messageFixture(
+  messageId: string,
+  sequence: number,
+  role: MessageProjection["role"],
+  content: string,
+): MessageProjection {
+  return {
+    messageId,
+    sessionId: "session:one",
+    sequence,
+    role,
+    status: "completed",
+    content,
+    taskId: "task:one",
+    createdAt: timestamp,
   };
 }
 

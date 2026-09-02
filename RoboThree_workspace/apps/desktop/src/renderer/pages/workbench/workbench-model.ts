@@ -102,7 +102,7 @@ export function normalizeWorkbenchSelection(
     workspaceGrantId: activeWorkspaces.some((workspace) =>
       workspace.workspaceGrantId === previous.workspaceGrantId)
       ? String(previous.workspaceGrantId)
-      : activeWorkspaces[0]?.workspaceGrantId ?? "",
+      : "",
     sessionId: liveSessions.some((session) => session.sessionId === previous.sessionId)
       ? String(previous.sessionId)
       : "",

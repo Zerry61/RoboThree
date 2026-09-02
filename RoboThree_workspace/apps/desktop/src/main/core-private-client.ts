@@ -204,6 +204,26 @@ import {
   type UpdateRobotDraftCommand,
   type WithdrawRobotSubmissionCommand,
 } from "@robothree/contracts/agent-lifecycle/v1alpha1";
+import {
+  GetSkillLifecycleCompatibilityQuerySchema,
+  GetSkillQuerySchema,
+  ListSkillsQuerySchema,
+  SkillDetailSchema,
+  SkillLifecycleCompatibilitySchema,
+  SkillLifecycleMutationReceiptSchema,
+  SkillLifecycleSafeErrorSchema,
+  SkillPageSchema,
+  StartSkillDraftTestCommandSchema,
+  SubmitSkillDraftCommandSchema,
+  SubmitSkillDraftReceiptSchema,
+  WithdrawSkillSubmissionCommandSchema,
+  type GetSkillLifecycleCompatibilityQuery,
+  type GetSkillQuery,
+  type ListSkillsQuery,
+  type StartSkillDraftTestCommand,
+  type SubmitSkillDraftCommand,
+  type WithdrawSkillSubmissionCommand,
+} from "@robothree/contracts/skill-lifecycle/v1alpha1";
 
 const CORE_PRIVATE_ORIGIN = "robothree://desktop-main";
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
@@ -217,6 +237,19 @@ const ROUTES = Object.freeze({
   startRobotDraftTestV1Alpha1: "/agent-lifecycle/v1alpha1/drafts/test",
   submitRobotDraftV1Alpha1: "/agent-lifecycle/v1alpha1/drafts/submit",
   withdrawRobotSubmissionV1Alpha1: "/agent-lifecycle/v1alpha1/drafts/withdraw",
+  getSkillLifecycleCompatibilityV1Alpha1: "/skill-lifecycle/v1alpha1/compatibility",
+  listSkillsV1Alpha1: "/skill-lifecycle/v1alpha1/list",
+  getSkillV1Alpha1: "/skill-lifecycle/v1alpha1/detail",
+  syncSkillDraftV1Alpha1: "/skill-lifecycle/v1alpha1/internal/sync-draft",
+  stageSkillReleaseV1Alpha1: "/skill-lifecycle/v1alpha1/internal/stage-release",
+  pollAdminSkillDraftTestV1Alpha1: "/skill-lifecycle/v1alpha1/internal/admin-test/poll",
+  stageAdminSkillDraftTestV1Alpha1: "/skill-lifecycle/v1alpha1/internal/admin-test/stage",
+  startAdminSkillDraftTestV1Alpha1: "/skill-lifecycle/v1alpha1/internal/admin-test/start",
+  queryAdminSkillDraftTestV1Alpha1: "/skill-lifecycle/v1alpha1/internal/admin-test/query",
+  checkSkillInstallationUseV1Alpha1: "/skill-lifecycle/v1alpha1/internal/check-installation-use",
+  startSkillDraftTestV1Alpha1: "/skill-lifecycle/v1alpha1/drafts/test",
+  submitSkillDraftV1Alpha1: "/skill-lifecycle/v1alpha1/drafts/submit",
+  withdrawSkillSubmissionV1Alpha1: "/skill-lifecycle/v1alpha1/drafts/withdraw",
   personalModelManagementCompatibilityV1Alpha2: "/personal-model-management/v1alpha2/compatibility",
   listPersonalModelsV1Alpha2: "/personal-model-management/v1alpha2/list",
   getPersonalModelV1Alpha2: "/personal-model-management/v1alpha2/detail",
@@ -549,6 +582,183 @@ export class CorePrivateClient {
   withdrawRobotSubmissionV1Alpha1(input: WithdrawRobotSubmissionCommand) {
     return this.#postAgentLifecycle(ROUTES.withdrawRobotSubmissionV1Alpha1,
       WithdrawRobotSubmissionCommandSchema.parse(input), RobotLifecycleMutationReceiptSchema);
+  }
+
+  getSkillLifecycleCompatibilityV1Alpha1(input: GetSkillLifecycleCompatibilityQuery) {
+    return this.#postSkillLifecycle(
+      ROUTES.getSkillLifecycleCompatibilityV1Alpha1,
+      GetSkillLifecycleCompatibilityQuerySchema.parse(input),
+      SkillLifecycleCompatibilitySchema,
+    );
+  }
+
+  listSkillsV1Alpha1(input: ListSkillsQuery) {
+    return this.#postSkillLifecycle(
+      ROUTES.listSkillsV1Alpha1,
+      ListSkillsQuerySchema.parse(input),
+      SkillPageSchema,
+    );
+  }
+
+  getSkillV1Alpha1(input: GetSkillQuery) {
+    return this.#postSkillLifecycle(
+      ROUTES.getSkillV1Alpha1,
+      GetSkillQuerySchema.parse(input),
+      SkillDetailSchema,
+    );
+  }
+
+  syncSkillDraftV1Alpha1(input: Readonly<{
+    commandId: string;
+    correlationId: string;
+    workspaceGrantId: string;
+    skillId: string;
+    expectedDraftRevision?: string;
+    material: Readonly<{
+      skillId: string;
+      technicalName: string;
+      displayTitle: string;
+      displayDescription: string;
+      primaryFunction: string;
+    }>;
+  }>) {
+    return this.#postSkillLifecycle(
+      ROUTES.syncSkillDraftV1Alpha1,
+      input,
+      SkillLifecycleMutationReceiptSchema,
+    );
+  }
+
+  stageSkillReleaseV1Alpha1(input: Readonly<{
+    workspaceGrantId: string;
+    skillId: string;
+    releaseRevision: string;
+    packageDigest: string;
+  }>) {
+    return this.#postSkillLifecycle(ROUTES.stageSkillReleaseV1Alpha1, input, {
+      parse(value) {
+        if (!isRecord(value) || Object.keys(value).length !== 9
+          || typeof value.packageDigest !== "string"
+          || typeof value.manifestDigest !== "string"
+          || typeof value.byteLength !== "number" || !Number.isSafeInteger(value.byteLength)
+          || value.byteLength < 1 || value.byteLength > 200 * 1024 * 1024
+          || typeof value.technicalName !== "string" || typeof value.displayTitle !== "string"
+          || typeof value.displayDescription !== "string"
+          || typeof value.semanticVersion !== "string"
+          || (value.sourceKind !== "personal_creator" && value.sourceKind !== "admin_upload")
+          || typeof value.publishedAt !== "string") {
+          throw new Error("Core returned an invalid staged Skill package receipt");
+        }
+        return {
+          packageDigest: value.packageDigest,
+          manifestDigest: value.manifestDigest,
+          byteLength: value.byteLength,
+          technicalName: value.technicalName,
+          displayTitle: value.displayTitle,
+          displayDescription: value.displayDescription,
+          semanticVersion: value.semanticVersion,
+          sourceKind: value.sourceKind,
+          publishedAt: value.publishedAt,
+        };
+      },
+    });
+  }
+
+  pollAdminSkillDraftTestV1Alpha1() {
+    return this.#postSkillLifecycle(ROUTES.pollAdminSkillDraftTestV1Alpha1, {}, {
+      parse(value) {
+        if (!isRecord(value) || typeof value.pending !== "boolean") {
+          throw new Error("Core returned an invalid Admin Skill test poll result");
+        }
+        if (!value.pending) return { pending: false as const };
+        for (const field of ["operationId", "correlationId", "skillId", "draftRevision",
+          "packageDigest", "manifestDigest", "skillMarkdownDigest"] as const) {
+          if (typeof value[field] !== "string") {
+            throw new Error("Core returned an invalid Admin Skill test poll result");
+          }
+        }
+        return { pending: true as const, operationId: value.operationId as string,
+          correlationId: value.correlationId as string, skillId: value.skillId as string,
+          draftRevision: value.draftRevision as string, packageDigest: value.packageDigest as string,
+          manifestDigest: value.manifestDigest as string,
+          skillMarkdownDigest: value.skillMarkdownDigest as string };
+      },
+    });
+  }
+
+  stageAdminSkillDraftTestV1Alpha1(input: Readonly<{
+    workspaceGrantId: string; operationId: string; packageDigest: string; manifestDigest: string;
+  }>) {
+    return this.#postSkillLifecycle(ROUTES.stageAdminSkillDraftTestV1Alpha1, input, {
+      parse(value) {
+        if (!isRecord(value) || typeof value.packageDigest !== "string"
+          || typeof value.manifestDigest !== "string" || typeof value.byteLength !== "number") {
+          throw new Error("Core returned an invalid Admin Skill staged package receipt");
+        }
+        return { packageDigest: value.packageDigest, manifestDigest: value.manifestDigest,
+          byteLength: value.byteLength };
+      },
+    });
+  }
+
+  startAdminSkillDraftTestV1Alpha1(operationId: string) {
+    return this.#postSkillLifecycle(ROUTES.startAdminSkillDraftTestV1Alpha1,
+      { operationId }, { parse(value) {
+        if (!isRecord(value) || typeof value.taskId !== "string") {
+          throw new Error("Core returned an invalid Admin Skill test start receipt");
+        }
+        return { taskId: value.taskId };
+      } });
+  }
+
+  queryAdminSkillDraftTestV1Alpha1(operationId: string) {
+    return this.#postSkillLifecycle(ROUTES.queryAdminSkillDraftTestV1Alpha1,
+      { operationId }, { parse(value) {
+        if (!isRecord(value) || !["accepted", "running", "succeeded", "failed"]
+          .includes(value.state as string)) {
+          throw new Error("Core returned an invalid Admin Skill test operation");
+        }
+        return { state: value.state as "accepted" | "running" | "succeeded" | "failed" };
+      } });
+  }
+
+  checkSkillInstallationUseV1Alpha1(input: Readonly<{
+    skillId: string;
+    releaseRevision: string;
+  }>) {
+    return this.#postSkillLifecycle(ROUTES.checkSkillInstallationUseV1Alpha1, input, {
+      parse(value) {
+        if (!isRecord(value) || Object.keys(value).length !== 1
+          || typeof value.inUse !== "boolean") {
+          throw new Error("Core returned an invalid Skill installation-use result");
+        }
+        return { inUse: value.inUse };
+      },
+    });
+  }
+
+  startSkillDraftTestV1Alpha1(input: StartSkillDraftTestCommand) {
+    return this.#postSkillLifecycle(
+      ROUTES.startSkillDraftTestV1Alpha1,
+      StartSkillDraftTestCommandSchema.parse(input),
+      SkillLifecycleMutationReceiptSchema,
+    );
+  }
+
+  submitSkillDraftV1Alpha1(input: SubmitSkillDraftCommand) {
+    return this.#postSkillLifecycle(
+      ROUTES.submitSkillDraftV1Alpha1,
+      SubmitSkillDraftCommandSchema.parse(input),
+      SubmitSkillDraftReceiptSchema,
+    );
+  }
+
+  withdrawSkillSubmissionV1Alpha1(input: WithdrawSkillSubmissionCommand) {
+    return this.#postSkillLifecycle(
+      ROUTES.withdrawSkillSubmissionV1Alpha1,
+      WithdrawSkillSubmissionCommandSchema.parse(input),
+      SkillLifecycleMutationReceiptSchema,
+    );
   }
 
   compatibility(input: CompatibilityQuery) {
@@ -1160,6 +1370,29 @@ export class CorePrivateClient {
     }
     if (!value.ok) {
       return { ok: false as const, error: AgentLifecycleSafeErrorSchema.parse(value.error) };
+    }
+    return { ok: true as const, value: parser.parse(value.value) };
+  }
+
+  async #postSkillLifecycle<T>(route: string, input: unknown, parser: Parser<T>) {
+    const body = JSON.stringify(input);
+    if (Buffer.byteLength(body) > 256 * 1024) {
+      throw new Error("Core private Skill lifecycle request exceeds the byte limit");
+    }
+    const response = await fetch(new URL(route, this.#baseUrl), {
+      method: "POST",
+      redirect: "manual",
+      headers: { ...this.#headers(), "content-type": "application/json",
+        "content-length": String(Buffer.byteLength(body)) },
+      body,
+      signal: AbortSignal.timeout(30_000),
+    });
+    const value = await readBoundedJson(response);
+    if (!isRecord(value) || typeof value.ok !== "boolean") {
+      throw new Error("Core returned an invalid Skill lifecycle envelope");
+    }
+    if (!value.ok) {
+      return { ok: false as const, error: SkillLifecycleSafeErrorSchema.parse(value.error) };
     }
     return { ok: true as const, value: parser.parse(value.value) };
   }

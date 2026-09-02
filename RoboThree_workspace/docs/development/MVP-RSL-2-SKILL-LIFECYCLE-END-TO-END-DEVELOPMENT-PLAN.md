@@ -1,10 +1,10 @@
 # MVP-RSL-2 Skill Lifecycle End-to-End 详细实施方案
 
-> 日期：2026-09-01  
-> 状态：`REVISION 1 / DOCUMENT REVIEW PENDING / CODING GATED`  
-> 目标版本：`0.0.0-mvp.rsl.2`  
-> 性质：面向 PRD 的 Desktop + Core + Central + Admin 联合垂直产品批  
-> 编码授权：无；本方案完成独立文档复核并获得用户单独授权前，不得编码
+> 日期：2026-09-01
+> 状态：`REVISION 1.1 / PLAN REVIEW PASS-CLOSED / STEP 1 RE-FREEZE PASS / FRONTEND PARALLEL START AUTHORIZED`
+> 目标版本：`0.0.0-mvp.rsl.2`
+> 性质：面向 PRD 的 Desktop + Core + Central + Admin 联合垂直产品批
+> 编码授权：用户已授权 Step 1 共享 Contract/依赖冻结，并允许冻结后 Desktop 与 Admin 前端按 frozen interface 并行开工；Central/Core/Main/Preload 完整 lifecycle 实现仍按分步边界执行
 
 ---
 
@@ -73,6 +73,20 @@ Personal Model 或通用软件包平台 ready。
 RSL-1 已关闭个人机器人草稿、测试、提交、Admin 审核、企业发布和 Desktop 消费主链。RSL-2 只实现 Skill
 生命周期，并允许已发布机器人引用 exact published Skill revision；不得顺手加入 Admin 直接创建企业机器人、
 机器人已发布更新/下架或 Agent Lifecycle generic platform。
+
+### 0.4 Revision 1.1 聚焦修订
+
+本修订吸收独立文档复核的有效风险，但不接受与现有拓扑冲突的实现建议：
+
+- RAR reader 固定在 Central Java 边界，候选为 pure-JVM `com.github.junrar:junrar:8.1.0`；不得改为
+  Renderer/Node 解析，不得使用 native binding、外部 `unrar/7z` 或系统 shell；
+- Skill package 增加 MVP 内容白名单与依赖载荷拒绝规则，安装只产生 Skill 专用 filesystem installation manifest，
+  不写 Core 配置表，不触发依赖、MCP 或脚本安装；
+- Admin upload staging、Central canonical package store、Desktop installation 三个物理域严格隔离，不复用 Personal
+  Model Credential/helper/SQLite/Contract；
+- 发布同步沿用 RSL-1 已有方向：Core 通过 private authenticated Central client 主动 pull 可见 release 与 exact package，
+  Admin 不反向 push 到 Core，Desktop Renderer 不直连 Admin/Central；
+- 两条真实联合 E2E 串行执行，父 WFW-3 的 Windows NTFS deferred 状态只记录、不冒充通过，也不阻塞本批 macOS 产品链。
 
 ---
 
@@ -206,6 +220,17 @@ description: 检查演示文稿结构、事实和表达质量
 - `scripts/**`；
 - 与 Skill 直接相关的安全文本或资源文件。
 
+RSL-2 MVP 只把 `SKILL.md` 主正文作为可注入 instruction；`references/**` 与 `scripts/**` 作为 inert package bytes 保存，
+不会自动进入 Prompt、不会执行，也不会被注册为 Tool/MCP。以下依赖或运行时载荷即使位于允许目录中也必须拒绝整个包：
+
+- `node_modules/`、`.venv/`、`venv/`、`vendor/` 等依赖树；
+- `requirements*.txt`、`pyproject.toml`、`Pipfile*`、`package.json`、`package-lock.json`、`pnpm-lock.yaml`、
+  `yarn.lock` 等依赖安装入口；
+- MCP server/connection descriptor 或可被解释为自动注册 MCP 的 manifest；
+- Mach-O、PE、ELF、动态库、字节码、设备镜像、自解压程序等预编译/可执行二进制。
+
+未来若要允许依赖声明或执行 `scripts/`，必须进入独立 Tool/MCP/TGM 评审，不能由安装确认或提示安装绕过本批边界。
+
 必须拒绝：
 
 - 零个或多个可识别 `SKILL.md`；
@@ -213,6 +238,7 @@ description: 检查演示文稿结构、事实和表达质量
 - symlink、hard-link、device、FIFO 或其他特殊节点；
 - Unicode/case-fold 路径冲突、重复 entry、NUL、控制字符；
 - 加密包、多卷包、嵌套 archive 自动展开；
+- RAR SFX、自解压 stub 或任意 archive 内嵌可执行载荷；
 - 单 entry 超 32 MiB、文件数超 4096、展开总量超 512 MiB、压缩比超 100:1；
 - 上传原始包超过 200 MiB；
 - 无法严格 UTF-8 解码的 `SKILL.md`。
@@ -232,16 +258,29 @@ Central 对 ZIP/RAR/TAR.GZ/TGZ 输入完成安全解析后，生成统一的 imm
 
 ### 3.4 Archive dependency admission
 
-JDK 可原生覆盖 ZIP/GZIP，但 RAR 和完整 TAR 安全解析需要专用 reader。编码 Step 1 必须：
+JDK 可原生覆盖 ZIP/GZIP，但 RAR 和完整 TAR 安全解析需要专用 reader。RAR 的唯一候选先冻结为
+`com.github.junrar:junrar:8.1.0`（pure-JVM，UnRAR License）；该候选仍必须在编码 Step 1 完成源码、许可证、传递依赖、
+离线制品和 hostile-input focused proof，未通过则停手，不得自动换库。Central 不得直接调用其 filesystem extract facade，
+只能逐个读取 header，在 RoboThree 自有 validator 先通过路径/类型/配额检查后写入 bounded staging sink。
 
-1. 冻结最小 Java archive reader 依赖及 exact version/checksum/license；
-2. 证明只读解析，不执行 entry、不加载 native binary、不调用系统 shell；
-3. 把依赖加入 Central allowlist 和离线构建验证；
-4. Desktop 只消费 Central canonical ZIP，不分别实现四种格式解析；
-5. Desktop canonical ZIP 解包使用一个明确的、锁定版本的 JS reader，并在 private Main/worker 边界运行。
+编码 Step 1 必须：
+
+1. 固化 candidate POM/JAR/source JAR SHA-256、UnRAR License 文本、传递依赖清单与 Central allowlist；
+2. 必须通过 `Archive(InputStream, ...)` / `getInputStream(FileHeader)` 一类 InputStream/header API 逐项读取；不得调用
+   `Junrar.extract(...)` 或其他 filesystem extract facade。证明只读解析、不执行 entry、不加载 JNI/native binary、
+   不调用系统 shell，reader worker/thread 上限固定为 1；
+3. 对每个 RAR entry 校验 header、声明 size、实际流式 byte count、CRC32 和最终 SHA-256；CRC/size 不一致即拒绝；
+4. 在写入每个 chunk 前执行 per-entry、expanded-total、file-count、compression-ratio 与 wall-clock budget；不得先整包解压
+   到 heap 后再校验；
+5. 明确拒绝 encrypted、multi-volume、SFX、link/redirect、absolute/drive/UNC、traversal、duplicate/case-fold collision、
+   nested archive 与超限 dictionary/resource request；
+6. hostile fixture 必须包含 bomb、traversal、CRC mismatch、truncated header、重复 path 与资源上限，并记录 peak heap/RSS；
+7. 把依赖加入 Central allowlist 和 offline build；Desktop 只消费 Central canonical ZIP，不实现 RAR/TAR reader；
+8. Desktop canonical ZIP 解包使用一个明确的、锁定版本的 JS reader，并在 private Main/worker 边界运行。
 
 如果 RAR 只能通过外部 `unrar/7z`、native executable 或不可审计许可实现，立即停手回评审，不得静默删掉 PRD 的
-RAR 支持，也不得调用系统 shell 代替。
+RAR 支持，也不得调用系统 shell 代替。若 `junrar:8.1.0` 的许可证、内存模型、CRC 或 hostile-input 行为不能满足上述
+条件，也必须停手，不得用“格式不支持”把 RAR 从 P0 静默移除。
 
 ---
 
@@ -294,6 +333,11 @@ immutable draft revision；无效时保留会话与文件，并返回可继续�
 失败必须清理 staging，不能出现“已安装”。同一 exact release 重复安装返回幂等成功。不同 release 已存在时要求显式
 “安装新版本”，旧版本不被静默覆盖。
 
+安装成功只在 exact installation directory 内写入 Skill 专用、content-free installation manifest，字段限于
+`skillId/releaseRevision/packageDigest/manifestDigest/installedAt/sourceKind`。它由 Main/Core Skill Catalog 扫描读取，
+不得写入通用 Core 配置、Personal Model SQLite、Credential store、Helper 配置或 runtime adapter 配置；包内任何
+dependency/MCP/Tool 声明均不会触发提示安装、后台安装或注册动作。
+
 ### 4.4 卸载
 
 - 系统/code-owned Skill 不允许卸载并返回明确原因；
@@ -315,12 +359,31 @@ immutable draft revision；无效时保留会话与文件，并返回可继续�
 @robothree/contracts/skill-lifecycle/v1alpha1
 ```
 
-只承载本批真实消费者所需 strict schema，不修改 frozen：
+只承载本批真实消费者所需 strict schema。冻结口径分为两组，不再混用“五个文件”与“subpath 数量”：
 
-- `desktop-local/v1alpha1`、`v1alpha2`、`v1alpha4`、`v1alpha5`；
-- `admin-control/v1alpha1`、`v1alpha2`；
-- `runtime-selection/v1alpha4`；
-- `agent-lifecycle/v1alpha1`。
+历史 digest baseline 固定为以下 **5 个 exact file**，继续逐字节 SHA-256 不漂移：
+
+| Exact file | Frozen SHA-256 |
+| --- | --- |
+| `admin-control/v1alpha1/index.ts` | `79e2e127956651eee482bb49ff04a9c95f4c090cd1edaf4efd3cf6479bb2eb1e` |
+| `admin-control/v1alpha2/index.ts` | `50b757b94d20e90b4e689613a318f54fa7936392a084dda64b234488a325591a` |
+| `runtime-selection/agent-definition/v1alpha2/index.ts` | `fb0732e69801c26e439907694273551686c4cb267050f76cd059e011be649981` |
+| `desktop-local/personal-model-management/v1alpha1/index.ts` | `a306a07cfe7f19ee9346a7bce7b226bc969978e41e7952eed86d63efd5489c3a` |
+| `desktop-local/personal-model-management/v1alpha2/index.ts` | `f04b454eacadfebc194c7f71c988dd68815f801371bd339fbff6711c85e052e5` |
+
+RSL-2 另外冻结以下 **6 个 additional no-diff file**；独立 QA 逐文件计算当前 SHA-256 并要求零漂移，但它们不计入
+“historical five”这个固定术语：
+
+| Exact file | Revision 1.1 baseline SHA-256 |
+| --- | --- |
+| `desktop-local/v1alpha1/index.ts` | `37b51e3f49034a1c32eafbfc0dd2396e2fc30ff0c31efeb72c459dd730d6af1c` |
+| `desktop-local/v1alpha2/index.ts` | `0ed5633c1bf71e244697bb96b3929a665d877e20bdc7c9d7b0dc25eb949000e9` |
+| `desktop-local/v1alpha4/index.ts` | `92fcdb9ba765dc4eb344dc016a0fe74d63d2f9d80526444863c2739fec3ce742` |
+| `desktop-local/v1alpha5/index.ts` | `640f86516c3a48998e0f123e0226ce10dc87108a4faed17e7263203dacb53d62` |
+| `runtime-selection/v1alpha4/index.ts` | `700adb41c1fe8f966a660e75e09fe35299d2262350a374932b1ce5551ef76d0f` |
+| `agent-lifecycle/v1alpha1/index.ts` | `52f02b7c327a55fcb669b0b097779c8ce273c2833c6546547830a4c2d82e7eae` |
+
+因此 frozen boundary 是 “historical 5 + additional no-diff 6”，不是 5 个顶层 package，也不是含混的 8 个 subpath。
 
 ### 5.2 Desktop exact methods
 
@@ -340,6 +403,15 @@ Preload additive 方法固定为：
 
 不得提供通用 `dispatchSkillCommand(type,payload)`，不得返回 package bytes、SKILL.md 全文、绝对路径、Token、Endpoint、
 staging path 或内部异常。已安装/本地详情需要展示 Markdown 时，必须走受控、大小受限的 safe text projection。
+
+Desktop consumer identity 另冻结三项，不允许 Renderer 猜测或用 LocalStorage 补位：
+
+- `createSkillDraftWorkspace` 返回专用 receipt，必须包含 `draftId + workspaceGrantId + displayName`；
+- `submitSkillDraft` 返回 `submissionId + submissionRevision`，`SkillDetail.submission` 在重新进入详情后继续投影同一 durable identity；
+- 任一 `installed=true` 的 list/detail projection 必须携带 `installationRevision`；`installed=false` 时禁止携带该字段。
+
+`withdrawSkillSubmission` 只消费 `SkillDetail.submission` 的 exact identity；`uninstallSkillRelease` 只消费
+`installationRevision`，不得把混合用途的 Skill `revision`、release revision 或 draft revision 猜作对应 expected revision。
 
 ### 5.3 Admin exact methods
 
@@ -411,6 +483,24 @@ Core SQLite migration 继续止 26。本地 installation/draft root 状态由受
 - download 使用短期、单 release、只读授权；
 - Core normal graph 只接入 installed/local/code-owned Skill，不把仅存在于 marketplace 但未安装的 release伪装成可运行；
 - published release 更新不改变现有 Task lock。
+
+### 6.4 Upload、Store 与同步拓扑
+
+三个物理域不得混用：
+
+1. Admin Browser 只把 archive 发送到 Central Skill Lifecycle upload endpoint；Browser 不解析、不解压；
+2. Central 在服务私有、随机 operation staging 中流式校验，失败或请求结束后清理；不得使用 Personal Model Credential
+   storage、Helper namespace、Desktop Workspace 或 Core SQLite；
+3. 验证成功后只有 canonical Skill package 进入 `skill_package_blobs` 对应的 Skill 专用 content-addressed store；原始
+   upload archive 不作为 release payload 长期保存；
+4. Desktop Renderer 不直连 Admin/Central。Core 使用仅含 `skill.manage` 的 token，通过 exact read/catalog/download
+   endpoints 和 private authenticated Central client 主动 pull actor-visible release page 与 exact package；
+5. Main 只负责受控本地 staging、digest 校验和原子安装，Core 只登记/解析 safe Skill Catalog，不接收 Admin push；
+6. `skill-lifecycle/v1alpha1` 是唯一新增 consumer-driven Contract；不得复用
+   `desktop-local/personal-model-management/*` 或 `runtime-selection/agent-definition/*` 传输 Skill lifecycle。
+
+因此本批没有 “Admin → Core push” 通道，也没有 Desktop → Admin 直连。发布后的可见性由 Core 显式 refresh/pull 获得，
+与 RSL-1 `HttpAgentLifecycleClient.listPublished()` → in-memory source/catalog register 的既有方向一致。
 
 ---
 
@@ -530,6 +620,7 @@ Codex：
 - 证明现有 locked Skill injection 可支持 dynamic exact revision；
 - 证明 WFW draft root 可在不开放 mkdir Tool 的情况下写 `SKILL.md/references/scripts`；
 - 完成 archive reader dependency/license/离线构建评估；
+- 对 `junrar:8.1.0` 完成 exact checksum/license/transitive dependency/hostile-input/peak-memory focused admission；
 - 冻结 `skill-lifecycle/v1alpha1` strict schema、typed errors、method count 和 Token scope；
 - 固定 Central v13 与 Core migration 26 的物理隔离。
 
@@ -593,7 +684,7 @@ focused presentation tests。不得把各层 fixture PASS 替代联合闭环。
 1. `QA-001`：`skill-lifecycle/v1alpha1` subpath 可独立 import，全部 object `.strict()`；
 2. `QA-002`：Desktop 11 个 exact method，0 generic dispatcher；
 3. `QA-003`：Admin exact methods 与 expected revision 完整；
-4. `QA-004`：frozen Desktop/Admin/Agent Contract SHA256 不漂移；
+4. `QA-004`：historical five exact SHA-256 逐字一致，additional no-diff six exact SHA-256 逐字一致；
 5. `QA-005`：`skill.manage` 与 `model.use/agent.manage` 权限严格隔离；
 6. `QA-006`：Token 从 env 一次性消费、restart lease 可清零；
 7. `QA-007`：Token 在 Renderer/Preload payload/SQLite/log/Evidence/Artifact/package 0 命中；
@@ -601,14 +692,16 @@ focused presentation tests。不得把各层 fixture PASS 替代联合闭环。
 
 ### G2 Package validation（QA-009～016）
 
-9. `QA-009`：ZIP/RAR/TAR.GZ/TGZ 各一个合法 fixture 解析一致；
+9. `QA-009`：ZIP/RAR/TAR.GZ/TGZ 各一个合法 fixture 解析一致；RAR reader exact artifact/license/传递依赖审计通过；
 10. `QA-010`：零/多个 SKILL.md 分别 typed reject；
 11. `QA-011`：traversal/absolute/UNC/URL/symlink/hard-link/special entry reject；
 12. `QA-012`：duplicate/case-fold/Unicode collision reject；
-13. `QA-013`：size/file-count/ratio/encrypted/multivolume limits fail-closed；
+13. `QA-013`：size/file-count/ratio/encrypted/multivolume/SFX limits fail-closed；RAR bomb/path/CRC/truncation 与 peak
+    memory budget focused proof 通过；
 14. `QA-014`：canonical manifest/order/package digest deterministic；
 15. `QA-015`：invalid UTF-8/BOM/frontmatter/name reject；
-16. `QA-016`：archive parser 不执行脚本、不调用 shell、不安装依赖。
+16. `QA-016`：archive parser 不执行脚本、不调用 shell、不安装依赖；dependency manifest、MCP descriptor、dependency
+    tree 与预编译 binary 均 reject。
 
 ### G3 Lifecycle / Central（QA-017～024）
 
@@ -619,13 +712,15 @@ focused presentation tests。不得把各层 fixture PASS 替代联合闭环。
 21. `QA-021`：submit/publish 必须 current revision passed；
 22. `QA-022`：submission immutable，approve/reject exact revision；
 23. `QA-023`：user approve 与 admin direct publish 共用 release writer；
-24. `QA-024`：release/package/audit 不含测试正文、模型正文、路径或 Secret。
+24. `QA-024`：release/package/audit 不含测试正文、模型正文、路径或 Secret；Skill package/store 与 Personal Model
+    storage/Contract/Helper namespace 物理隔离。
 
 ### G4 Local discovery / install（QA-025～032）
 
 25. `QA-025`：只扫描 user root 与 active Workspace fixed root；
 26. `QA-026`：同名不同来源显示冲突且不静默覆盖；
-27. `QA-027`：install 下载/digest/entry/stable-read/atomic publish 顺序固定；
+27. `QA-027`：install 下载/digest/entry/stable-read/atomic publish 顺序固定；仅写 Skill installation manifest，Core
+    config/Personal Model SQLite/MCP/Tool registry 零写入；
 28. `QA-028`：任一失败 staging 归零且 UI 不显示 installed；
 29. `QA-029`：exact release 重装幂等，不同 release 需显式更新；
 30. `QA-030`：active Task lock 命中时 uninstall fail-closed；
@@ -651,7 +746,7 @@ focused presentation tests。不得把各层 fixture PASS 替代联合闭环。
 44. `QA-044`：selected Skill 消失/变更时 fail-closed，不静默替换；
 45. `QA-045`：Core restart 后 active Task exact Skill lock 不漂移；
 46. `QA-046`：用户创建链真实 E2E 全步骤 PASS；
-47. `QA-047`：Admin direct-upload → release → install → Task E2E PASS；
+47. `QA-047`：Admin direct-upload → Central private staging/canonical store → Core pull → install → Task E2E PASS；
 48. `QA-048`：Personal Model、TGM、Knowledge、generic Agent Lifecycle、SSO/RBAC 继续 GATED。
 
 不建立 96/120 项关闭账本，不新增 Evidence schema。实施报告记录测试命令、实际数量和 content-free E2E 结果即可。
@@ -659,6 +754,18 @@ focused presentation tests。不得把各层 fixture PASS 替代联合闭环。
 ---
 
 ## 12. 联合真实 E2E
+
+### 12.0 执行纪律
+
+- 执行前先确认 WFW-1/WFW-2、WFW-3 macOS product E2E、RSL-1 和 ADMIN-MVP-VS1 的已接受事实仍可引用；
+- WFW-3 Windows NTFS gate 当前为 deferred/not closed，只记录该状态，不将其冒充 PASS，也不作为 RSL-2 macOS 联合
+  E2E 的前置阻塞；
+- 两条 RSL-2 E2E 必须在同一机器串行执行：先用户创建链，完整 teardown/resource-zero 后再执行 Admin direct upload；
+- 单条 E2E 总上限 15 分钟，Central/PostgreSQL/Electron 启动阶段分别有独立 180/180/60 秒上限；业务步骤必须各有
+  typed deadline，禁止无限等待；
+- 不允许自动 retry。只有在第一个业务 mutation 发生前确认是端口/进程启动失败，才允许清空 test-only 资源后人工重跑
+  一次，并在实施报告同时保留首次失败与重跑原因；
+- 共享端口、IPC、数据库、staging、Skill directory 与 Token lease 在两条场景之间必须归零或使用不同 test identity。
 
 ### 12.1 主场景：用户创建
 
@@ -737,10 +844,11 @@ listening port 和 pending operation。
 3. 需要 Renderer 接触真实路径、package bytes 或 Token；
 4. 需要把 WorkspaceGrant 写进模型可见 Step/Prompt；
 5. 需要模型调用通用 mkdir/delete/archive shell Tool；
-6. RAR 只能依赖外部 executable、native binary 或不可接受许可；
+6. `junrar:8.1.0` 或替代 RAR reader 需要外部 executable、native binary、不可接受许可、无法 bounded streaming/CRC
+   校验或 hostile-input proof 不通过；
 7. archive reader 无法 fail-closed 处理 traversal/link/bomb/duplicate；
 8. 需要执行 `scripts/` 才能把 Skill 标记为 installed 或 test passed；
-9. 需要自动安装包内依赖；
+9. 需要自动/提示安装包内依赖、注册 MCP/Tool，或允许 dependency tree/预编译 binary 进入 installed registry；
 10. 需要修改 frozen Desktop/Admin/Agent Contract 而不是 additive subpath；
 11. 需要修改 Core SQLite migration；
 12. 需要 TGM、Knowledge Provider、Personal Model 或 SSO/RBAC 才能完成主链；
@@ -749,7 +857,7 @@ listening port 和 pending operation。
 15. uninstall 会破坏 active Task exact lock；
 16. submission 或 release 需要包含测试正文、模型输出或 Workspace 路径；
 17. Skill 文本能绕过 Tool/Workspace/Network authorization；
-18. 真实 E2E 必须用 Fake/LocalStorage/fixture success 才能通过；
+18. 真实 E2E 必须用 Fake/LocalStorage/fixture success、自动 retry 或并行抢占共享资源才能通过；
 19. 必须建立新 Evidence schema 或 96/120 项关闭账本；
 20. 编码范围扩张到 Admin 机器人、Tool/MCP、Knowledge、TGM 或 generic lifecycle platform。
 
@@ -835,5 +943,5 @@ generic Agent/Skill marketplace platform
 本方案当前保持：
 
 ```text
-DOCUMENT REVIEW PENDING / CODING GATED
+PLAN REVIEW PASS/CLOSED / STEP 1 CONTRACT_AND_DEPENDENCY_RE_FREEZE PASS / FRONTEND PARALLEL START AUTHORIZED
 ```

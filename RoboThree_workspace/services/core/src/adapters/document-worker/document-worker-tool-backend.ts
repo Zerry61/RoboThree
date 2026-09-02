@@ -21,6 +21,8 @@ import {
   DOCUMENT_WORKER_PROTOCOL_VERSION,
   DocumentCapabilityHandlerError,
   PPTX_WRITE_CAPABILITY_ID,
+  TEXT_FILE_READ_CAPABILITY_ID,
+  TEXT_FILE_READ_LIMITS_REVISION,
   TEXT_FILE_WRITE_CAPABILITY_ID,
   TEXT_FILE_WRITE_LIMITS_REVISION,
   XLSX_WRITE_CAPABILITY_ID,
@@ -113,6 +115,7 @@ type DocumentWorkerCoreCapabilityId =
   | DocumentCapabilityId
   | typeof XLSX_WRITE_CAPABILITY_ID
   | typeof PPTX_WRITE_CAPABILITY_ID
+  | typeof TEXT_FILE_READ_CAPABILITY_ID
   | typeof TEXT_FILE_WRITE_CAPABILITY_ID;
 
 type ParsedDocumentActionPayload = Readonly<{
@@ -156,6 +159,7 @@ const DOCUMENT_CAPABILITY_SET = new Set<string>([
   PPTX_WRITE_CAPABILITY_ID,
 ]);
 const TEXT_WRITE_CAPABILITY_SET = new Set<string>([TEXT_FILE_WRITE_CAPABILITY_ID]);
+const TEXT_READ_CAPABILITY_SET = new Set<string>([TEXT_FILE_READ_CAPABILITY_ID]);
 
 class SharedDocumentWorkerToolHandle implements ToolExecutionBackend {
   public readonly adapterKind = "tool_execution_backend" as const;
@@ -248,6 +252,18 @@ export class DocumentWorkerToolBackend implements ToolExecutionBackend, RuntimeC
       input.adapterDescriptorRevision,
       this,
       TEXT_WRITE_CAPABILITY_SET,
+    );
+  }
+
+  public createTextReadHandle(input: Readonly<{
+    adapterDescriptorId: string;
+    adapterDescriptorRevision: string;
+  }>): ToolExecutionBackend & Readonly<{ processIdentity(): number | undefined }> {
+    return new SharedDocumentWorkerToolHandle(
+      input.adapterDescriptorId,
+      input.adapterDescriptorRevision,
+      this,
+      TEXT_READ_CAPABILITY_SET,
     );
   }
 
@@ -803,6 +819,7 @@ function parseDocumentActionPayload(
   const isXlsxWrite = capabilityId === XLSX_WRITE_CAPABILITY_ID;
   const isPptxWrite = capabilityId === PPTX_WRITE_CAPABILITY_ID;
   const isTextWrite = capabilityId === TEXT_FILE_WRITE_CAPABILITY_ID;
+  const isTextRead = capabilityId === TEXT_FILE_READ_CAPABILITY_ID;
   requireOnlyKeys(
     parsed,
     isXlsxWrite
@@ -813,6 +830,7 @@ function parseDocumentActionPayload(
           ? [
             "content",
             "expectedPreviousSha256",
+            "editReadProofDigest",
             "limits",
             "limitsRevision",
             "mode",
@@ -821,18 +839,34 @@ function parseDocumentActionPayload(
             "workspaceGrantId",
             "workspaceRoot",
           ]
-          : ["limits", "options", "relativePath", "workspaceRoot"],
+          : isTextRead
+            ? ["limits", "limitsRevision", "relativePath", "workspaceGrantId", "workspaceRoot"]
+            : ["limits", "options", "relativePath", "workspaceRoot"],
     isXlsxWrite
       ? ["mode", "options", "overwrite"]
       : isPptxWrite
         ? ["mode", "options"]
         : isTextWrite
-          ? ["expectedPreviousSha256", "ownedArtifactProofDigest"]
-          : ["options"],
+          ? ["editReadProofDigest", "expectedPreviousSha256", "ownedArtifactProofDigest"]
+          : isTextRead
+            ? []
+            : ["options"],
   );
   const workspaceRoot = requireNonEmptyString(parsed.workspaceRoot, "workspaceRoot", 4096);
   const relativePath = requireNonEmptyString(parsed.relativePath, "relativePath", 4096);
   const limits = parseLimits(parsed.limits);
+  if (isTextRead) {
+    const limitsRevision = requireNonEmptyString(parsed.limitsRevision, "limitsRevision", 128);
+    if (limitsRevision !== TEXT_FILE_READ_LIMITS_REVISION) {
+      throw new DocumentWorkerBackendError(
+        "document_worker.invalid_request",
+        "Text read limits revision is unsupported",
+        false,
+      );
+    }
+    requireNonEmptyString(parsed.workspaceGrantId, "workspaceGrantId", 512);
+    return { kind: "read", workspaceRoot, relativePath, options: {}, limits };
+  }
   if (isTextWrite) {
     const mode = parseTextWriteMode(parsed.mode);
     const limitsRevision = requireNonEmptyString(parsed.limitsRevision, "limitsRevision", 128);
@@ -854,6 +888,9 @@ function parseDocumentActionPayload(
       ...(parsed.ownedArtifactProofDigest === undefined
         ? {}
         : { ownedArtifactProofDigest: requireSha256(parsed.ownedArtifactProofDigest, "ownedArtifactProofDigest") }),
+      ...(parsed.editReadProofDigest === undefined
+        ? {}
+        : { editReadProofDigest: requireSha256(parsed.editReadProofDigest, "editReadProofDigest") }),
     };
     return { kind: "text_write", workspaceRoot, relativePath, options, mode, limits };
   }
@@ -946,6 +983,9 @@ function documentWriteDigestMaterial(
           ...(normalized.options.ownedArtifactProofDigest === undefined
             ? {}
             : { ownedArtifactProofDigest: normalized.options.ownedArtifactProofDigest }),
+          ...(normalized.options.editReadProofDigest === undefined
+            ? {}
+            : { editReadProofDigest: normalized.options.editReadProofDigest }),
           limitsRevision: normalized.options.limitsRevision,
         }),
       };
@@ -1158,17 +1198,31 @@ function runtimeErrorFromWorkerError(
   digest: string | undefined,
   detailCode?: string,
 ): RuntimeError {
-  const details = digest === undefined && detailCode === undefined
+  const workspaceCode = detailCode === "previous_digest_mismatch"
+    ? "workspace.file.content_changed"
+    : detailCode === "recovery_uncertain"
+      ? "workspace.file.write_uncertain"
+      : detailCode?.startsWith("workspace.file.") === true
+        ? detailCode
+        : undefined;
+  const normalizedDetailCode = workspaceCode ?? detailCode;
+  const details = digest === undefined && normalizedDetailCode === undefined
     ? undefined
     : {
       ...(digest === undefined ? {} : { digest }),
-      ...(detailCode === undefined ? {} : { detailCode }),
+      ...(normalizedDetailCode === undefined ? {} : { detailCode: normalizedDetailCode }),
     };
   const base = {
-    code: `document_worker.${code}`,
+    code: workspaceCode ?? `document_worker.${code}`,
     message,
     ...(details === undefined ? {} : { details }),
   };
+  if (workspaceCode === "workspace.file.content_changed") {
+    return { ...base, category: "validation", retryable: true };
+  }
+  if (workspaceCode === "workspace.file.write_uncertain") {
+    return { ...base, category: "internal", retryable: false };
+  }
   switch (code) {
     case "cancelled":
       return { ...base, category: "cancelled", retryable: false };

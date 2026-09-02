@@ -67,6 +67,11 @@ final class SchemaTestInstaller {
     private static final String V0011_UPGRADE_DIGEST =
             "7ebb73e1d06171805457576882b9fc79218ae0dd6e6658d9fbf38beb37cd3bf5";
     private static final String V0011_RELEASE = "0.0.0-mvp.admin.vs1";
+    private static final String V0012_UPGRADE_NAME =
+            "U0012__agent_lifecycle_from_v0011.sql";
+    private static final String V0012_UPGRADE_DIGEST =
+            "c9c870aa3e35ebf08c3a7911b6e3fc542a7c3a45d9957cd42515a709f290851b";
+    private static final String V0012_RELEASE = "0.0.0-mvp.rsl.1";
     private final SchemaManifest manifest = new SchemaManifestLoader().load();
 
     InstallResult installFresh(DataSource dataSource) {
@@ -84,7 +89,10 @@ final class SchemaTestInstaller {
         if (!versionInstalled(dataSource, 11)) {
             installV0011(dataSource);
         }
-        return install(dataSource, "v0011_upgrade", FailurePoint.NONE, null);
+        if (!versionInstalled(dataSource, 12)) {
+            installV0012(dataSource);
+        }
+        return install(dataSource, "v0012_upgrade", FailurePoint.NONE, null);
     }
 
     InstallResult installFromV0006Fresh(DataSource dataSource) {
@@ -94,7 +102,8 @@ final class SchemaTestInstaller {
         installV0009(dataSource, V0009_UPGRADE_NAME, V0009_UPGRADE_DIGEST);
         installV0010(dataSource);
         installV0011(dataSource);
-        return install(dataSource, "v0011_upgrade", FailurePoint.NONE, null);
+        installV0012(dataSource);
+        return install(dataSource, "v0012_upgrade", FailurePoint.NONE, null);
     }
 
     InstallResult installFromV0007Fresh(DataSource dataSource) {
@@ -103,7 +112,8 @@ final class SchemaTestInstaller {
         installV0009(dataSource, V0009_UPGRADE_NAME, V0009_UPGRADE_DIGEST);
         installV0010(dataSource);
         installV0011(dataSource);
-        return install(dataSource, "v0011_upgrade", FailurePoint.NONE, null);
+        installV0012(dataSource);
+        return install(dataSource, "v0012_upgrade", FailurePoint.NONE, null);
     }
 
     InstallResult installFromV0008Fresh(DataSource dataSource) {
@@ -111,14 +121,16 @@ final class SchemaTestInstaller {
         installV0009(dataSource, V0009_UPGRADE_NAME, V0009_UPGRADE_DIGEST);
         installV0010(dataSource);
         installV0011(dataSource);
-        return install(dataSource, "v0011_upgrade", FailurePoint.NONE, null);
+        installV0012(dataSource);
+        return install(dataSource, "v0012_upgrade", FailurePoint.NONE, null);
     }
 
     InstallResult installFromV0009Fresh(DataSource dataSource) {
         installV0009(dataSource, V0009_FRESH_NAME, V0009_FRESH_DIGEST);
         installV0010(dataSource);
         installV0011(dataSource);
-        return install(dataSource, "v0011_upgrade", FailurePoint.NONE, null);
+        installV0012(dataSource);
+        return install(dataSource, "v0012_upgrade", FailurePoint.NONE, null);
     }
 
     InstallResult install(
@@ -243,7 +255,7 @@ final class SchemaTestInstaller {
     private static byte[] readScript(SchemaManifest.Script script) {
         Path directory = switch (script.entryPath()) {
             case "fresh" -> SQL_ROOT.resolve("baseline");
-            case "v0011_upgrade" -> SQL_ROOT.resolve("upgrade");
+            case "v0012_upgrade" -> SQL_ROOT.resolve("upgrade");
             default -> throw new IllegalArgumentException("unsupported schema entry path");
         };
         try {
@@ -432,6 +444,11 @@ final class SchemaTestInstaller {
     private static void installV0011(DataSource dataSource) {
         installHistoricalVersion(dataSource, 11, V0011_UPGRADE_NAME,
                 V0011_UPGRADE_DIGEST, V0011_RELEASE, "v0011");
+    }
+
+    private static void installV0012(DataSource dataSource) {
+        installHistoricalVersion(dataSource, 12, V0012_UPGRADE_NAME,
+                V0012_UPGRADE_DIGEST, V0012_RELEASE, "v0012");
     }
 
     private static void installHistoricalVersion(

@@ -142,6 +142,41 @@ class EnterpriseBearerTokenFilterTest {
     }
 
     @Test
+    void skillLifecycleRoutesReceiveThePrivateTokenAndUseTheirStrictErrorSurface()
+            throws Exception {
+        MockHttpServletRequest authorized =
+                request("POST", "/internal-trial/v1/skill-lifecycle/drafts/sync");
+        authorized.addHeader(HttpHeaders.AUTHORIZATION, "Bearer skill.token.value");
+        String[] observed = new String[1];
+        filter.doFilter(authorized, new MockHttpServletResponse(),
+                (servletRequest, servletResponse) -> observed[0] = (String)
+                        servletRequest.getAttribute(
+                                EnterpriseBearerTokenFilter.ACCESS_TOKEN_ATTRIBUTE));
+        assertThat(observed[0]).isEqualTo("skill.token.value");
+        assertThat(authorized.getAttribute(
+                EnterpriseBearerTokenFilter.ACCESS_TOKEN_ATTRIBUTE)).isNull();
+
+        MockHttpServletRequest missing =
+                request("GET", "/internal-trial/v1/skill-lifecycle/drafts");
+        missing.addHeader("X-RoboThree-Correlation-Id",
+                "00000000-0000-4000-8000-000000000323");
+        MockHttpServletResponse rejected = new MockHttpServletResponse();
+        filter.doFilter(missing, rejected, new MockFilterChain());
+
+        assertThat(rejected.getStatus()).isEqualTo(401);
+        assertThat(objectMapper.readTree(rejected.getContentAsByteArray()))
+                .isEqualTo(objectMapper.readTree("""
+                        {
+                          "contractVersion":"skill-lifecycle.v1alpha1",
+                          "errorCode":"skilllifecycle.unauthorized",
+                          "safeSummary":"当前身份不能执行此操作。",
+                          "correlationId":"00000000-0000-4000-8000-000000000323",
+                          "retryable":false
+                        }
+                        """));
+    }
+
+    @Test
     void filterOrderIsExecutableArchitectureAndNotDocumentation() {
         Order order = EnterpriseBearerTokenFilter.class.getAnnotation(Order.class);
 

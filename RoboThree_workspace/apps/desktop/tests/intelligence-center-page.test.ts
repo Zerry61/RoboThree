@@ -14,16 +14,28 @@ import {
   intelligenceAdapterKey,
   type IntelligenceCatalogAdapter,
 } from "../src/renderer/adapters/intelligence-adapter.js";
+import {
+  skillLifecycleAdapterKey,
+  SkillLifecycleAdapterError,
+  type SkillLifecycleAdapter,
+} from "../src/renderer/adapters/skill-lifecycle-adapter.js";
 import IntelligenceCenterPage from "../src/renderer/pages/intelligence/IntelligenceCenterPage.vue";
 import IntelligenceCreationPage from "../src/renderer/pages/intelligence/IntelligenceCreationPage.vue";
 import IntelligenceDetailPage from "../src/renderer/pages/intelligence/IntelligenceDetailPage.vue";
+import {
+  createSkillLifecycleTestAdapter,
+  marketplaceSkillFixture,
+  skillDetailFixture,
+  skillInstallationRevision,
+} from "./skill-lifecycle-test-fixtures.js";
 
 const digest = "a".repeat(64);
 
 describe("DFE-7A intelligence catalog page", () => {
   it("loads real Robot/Tool catalog data and removes old mock semantics", async () => {
     const adapter = createAdapter();
-    const wrapper = await mountPage("/intelligence", adapter);
+    const skills = createSkillLifecycleTestAdapter();
+    const wrapper = await mountPage("/intelligence", adapter, createLifecycleAdapter(), skills);
 
     expect(adapter.negotiateCatalog).toHaveBeenCalledOnce();
     expect(adapter.listRobots).toHaveBeenCalledWith({ limit: 50 });
@@ -38,9 +50,21 @@ describe("DFE-7A intelligence catalog page", () => {
 
     await wrapper.findAll("button").find((button) => button.text() === "技能")?.trigger("click");
     await flushPromises();
-    expect(wrapper.text()).toContain("技能目录待接入");
-    expect(wrapper.text()).toContain("当前版本尚未提供技能数据服务");
-    expect(wrapper.text()).not.toContain("我的报告助手");
+    expect(wrapper.text()).toContain("技能广场");
+    expect(wrapper.text()).toContain("已安装");
+    expect(wrapper.text()).toContain("本地目录");
+    expect(wrapper.text()).toContain("我创建的");
+    expect(wrapper.text()).toContain("企业演示文稿");
+    expect(skills.listSkills).toHaveBeenLastCalledWith({ scope: "marketplace", limit: 50 });
+
+    for (const scope of ["已安装", "本地目录", "我创建的"]) {
+      await wrapper.findAll("button").find((button) => button.text() === scope)?.trigger("click");
+      await flushPromises();
+    }
+    expect(skills.listSkills.mock.calls.map(([input]) => input.scope)).toEqual([
+      "marketplace", "installed", "local", "created",
+    ]);
+    expect(wrapper.text()).not.toContain("全部");
   });
 
   it("opens tool detail through getTool without leaking authority fields", async () => {
@@ -70,15 +94,112 @@ describe("DFE-7A intelligence catalog page", () => {
     expect(wrapper.text()).toContain("返回智能中心");
   });
 
-  it("keeps gated skill detail on its own child page without inventing fixture data", async () => {
+  it("loads real skill detail on its own child page", async () => {
     const adapter = createAdapter();
-    const wrapper = await mountPage("/intelligence/skills/skill.example", adapter);
+    const skills = createSkillLifecycleTestAdapter();
+    const wrapper = await mountPage(
+      "/intelligence/skills/skill.weekly-report?scope=created&sourceKind=personal_creator",
+      adapter,
+      createLifecycleAdapter(),
+      skills,
+    );
 
     expect(wrapper.text()).toContain("返回智能中心");
-    expect(wrapper.text()).toContain("技能详情待接入");
-    expect(wrapper.text()).toContain("暂不展示示例数据");
+    expect(wrapper.text()).toContain("周报整理");
+    expect(wrapper.text()).toContain("测试通过");
+    expect(wrapper.text()).toContain("提交发布");
+    expect(skills.getSkill).toHaveBeenCalledWith({
+      skillId: "skill.weekly-report",
+      sourceKind: "personal_creator",
+    });
     expect(adapter.listRobots).not.toHaveBeenCalled();
     expect(adapter.listTools).not.toHaveBeenCalled();
+  });
+
+  it("keeps the production skill path explicitly unavailable without a Preload adapter", async () => {
+    const wrapper = await mountPage("/intelligence", createAdapter());
+
+    await wrapper.findAll("button").find((button) => button.text() === "技能")?.trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).toContain("技能服务暂不可用");
+    expect(wrapper.text()).toContain("不会展示示例数据");
+  });
+
+  it("keeps test and submit actions on created Skill detail and reloads after a revision conflict", async () => {
+    const skills = createSkillLifecycleTestAdapter();
+    skills.refreshSkillDraft.mockRejectedValueOnce(new SkillLifecycleAdapterError({
+      contractVersion: "skill-lifecycle.v1alpha1",
+      errorCode: "skilllifecycle.revision_conflict",
+      safeSummary: "Revision conflict.",
+      correlationId: "correlation.skill-conflict",
+      retryable: true,
+    }));
+    skills.getSkill
+      .mockResolvedValueOnce(skillDetailFixture())
+      .mockResolvedValueOnce(skillDetailFixture({ displayTitle: "周报整理（最新）" }));
+    const wrapper = await mountPage(
+      "/intelligence/skills/skill.weekly-report?scope=created&sourceKind=personal_creator",
+      createAdapter(),
+      createLifecycleAdapter(),
+      skills,
+    );
+
+    expect(wrapper.findAll("button").some((button) => button.text() === "运行测试")).toBe(true);
+    expect(wrapper.findAll("button").some((button) => button.text() === "提交发布")).toBe(true);
+    await wrapper.findAll("button").find((button) => button.text() === "刷新草稿")?.trigger("click");
+    await flushPromises();
+
+    expect(skills.refreshSkillDraft).toHaveBeenCalledWith({
+      skillId: "skill.weekly-report",
+      expectedDraftRevision: expect.stringMatching(/^sha256:/u),
+    });
+    expect(skills.getSkill).toHaveBeenCalledTimes(2);
+    expect(wrapper.text()).toContain("周报整理（最新）");
+    expect(wrapper.text()).toContain("技能已被更新");
+  });
+
+  it("installs marketplace Skills, uninstalls exact installed revisions, and surfaces active Task locks", async () => {
+    const marketplace = createSkillLifecycleTestAdapter();
+    marketplace.getSkill.mockResolvedValue(marketplaceSkillFixture());
+    const installPage = await mountPage(
+      "/intelligence/skills/skill.enterprise-slides?scope=marketplace&sourceKind=admin_upload",
+      createAdapter(),
+      createLifecycleAdapter(),
+      marketplace,
+    );
+    await installPage.findAll("button").find((button) => button.text() === "安装技能")?.trigger("click");
+    await flushPromises();
+    expect(marketplace.installSkillRelease).toHaveBeenCalledWith(expect.objectContaining({
+      skillId: "skill.enterprise-slides",
+      mode: "install_exact",
+    }));
+    expect(installPage.text()).toContain("技能安装完成");
+
+    const installed = createSkillLifecycleTestAdapter();
+    installed.getSkill.mockResolvedValue(marketplaceSkillFixture({
+      installed: true,
+      installationRevision: skillInstallationRevision,
+    }));
+    installed.uninstallSkillRelease.mockRejectedValueOnce(new SkillLifecycleAdapterError({
+      contractVersion: "skill-lifecycle.v1alpha1",
+      errorCode: "skilllifecycle.active_task_lock",
+      safeSummary: "Active task lock.",
+      correlationId: "correlation.skill-active-task",
+      retryable: true,
+    }));
+    const uninstallPage = await mountPage(
+      "/intelligence/skills/skill.enterprise-slides?scope=installed&sourceKind=admin_upload",
+      createAdapter(),
+      createLifecycleAdapter(),
+      installed,
+    );
+    await uninstallPage.findAll("button").find((button) => button.text() === "卸载技能")?.trigger("click");
+    await flushPromises();
+    expect(installed.uninstallSkillRelease).toHaveBeenCalledWith(expect.objectContaining({
+      expectedInstallationRevision: skillInstallationRevision,
+    }));
+    expect(uninstallPage.text()).toContain("正在被运行中的任务使用");
+    expect(uninstallPage.html()).not.toMatch(/\/Users\/|workspaceRoot|packageDigest|installationRevision/u);
   });
 
   it("clears catalog state on runtime changed and waits for explicit refresh", async () => {
@@ -144,6 +265,7 @@ async function mountPage(
   path: string,
   adapter: IntelligenceCatalogAdapter,
   lifecycle = createLifecycleAdapter(),
+  skillLifecycle?: SkillLifecycleAdapter,
 ) {
   const router = createTestRouter();
   await router.push(path);
@@ -155,6 +277,9 @@ async function mountPage(
       provide: {
         [intelligenceAdapterKey as symbol]: adapter,
         [agentLifecycleAdapterKey as symbol]: lifecycle,
+        ...(skillLifecycle === undefined ? {} : {
+          [skillLifecycleAdapterKey as symbol]: skillLifecycle,
+        }),
       },
     },
   });

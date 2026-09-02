@@ -8,7 +8,12 @@ import {
 import { DOCUMENT_WORKER_PRIVATE_PROTOCOL_VERSION } from "../protocol/index.js";
 import { XLSX_WRITE_CAPABILITY_ID, writeXlsx } from "../xlsx/index.js";
 import { PPTX_WRITE_CAPABILITY_ID, writePptx } from "../pptx/index.js";
-import { TEXT_FILE_WRITE_CAPABILITY_ID, writeTextFile } from "../text/index.js";
+import {
+  TEXT_FILE_READ_CAPABILITY_ID,
+  TEXT_FILE_WRITE_CAPABILITY_ID,
+  readTextFile,
+  writeTextFile,
+} from "../text/index.js";
 
 import type {
   DocumentCapabilityHandler,
@@ -43,6 +48,23 @@ export class DocumentCapabilityRouter implements DocumentCapabilityHandler {
     }
 
     const { capabilityId, limits, relativePath, workspaceRoot } = request.invoke;
+    if (capabilityId === TEXT_FILE_READ_CAPABILITY_ID) {
+      if (request.invoke.protocolVersion !== DOCUMENT_WORKER_PRIVATE_PROTOCOL_VERSION) {
+        throw new DocumentCapabilityHandlerError(
+          "unsupported_feature",
+          "Workspace text read is available only through the Document Worker private protocol",
+          undefined,
+          "private_protocol_required",
+        );
+      }
+      return readTextFile({
+        workspaceRoot,
+        relativePath,
+        options: request.invoke.options,
+        limits,
+        signal: request.signal,
+      });
+    }
     if (capabilityId === TEXT_FILE_WRITE_CAPABILITY_ID) {
       if (request.invoke.protocolVersion !== DOCUMENT_WORKER_PRIVATE_PROTOCOL_VERSION) {
         throw new DocumentCapabilityHandlerError(

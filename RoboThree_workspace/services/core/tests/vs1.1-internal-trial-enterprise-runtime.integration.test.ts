@@ -1,5 +1,5 @@
-import { randomUUID } from "node:crypto";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import {
   type IncomingMessage,
   type Server,
@@ -10,7 +10,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { CONTRACT_VERSION, JsonValueSchema } from "@robothree/contracts";
-import { TEXT_FILE_WRITE_CAPABILITY_ID } from "@robothree/document-worker";
+import {
+  TEXT_FILE_READ_CAPABILITY_ID,
+  TEXT_FILE_WRITE_CAPABILITY_ID,
+} from "@robothree/document-worker";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
@@ -109,6 +112,7 @@ describe("VS1.1 internal-trial Enterprise runtime", () => {
               { id: "tool.document.pdf.extract_text" },
               { id: "tool.document.pptx.write" },
               { id: "tool.document.xlsx.read" },
+              { id: TEXT_FILE_READ_CAPABILITY_ID },
               { id: TEXT_FILE_WRITE_CAPABILITY_ID },
             ],
           },
@@ -189,7 +193,9 @@ describe("VS1.1 internal-trial Enterprise runtime", () => {
       });
       expect(agents).toMatchObject({
         ok: true,
-        value: [{
+      });
+      if (!agents.ok) throw new Error(agents.error.code);
+      expect(agents.value.find((agent) => agent.agentId === "agent.presentation")).toMatchObject({
           agentId: "agent.presentation",
           name: "演示文稿助手",
           runnable: true,
@@ -200,8 +206,16 @@ describe("VS1.1 internal-trial Enterprise runtime", () => {
             { id: "tool.document.pdf.extract_text", available: true },
             { id: "tool.document.pptx.write", available: true },
           ],
-        }],
-      });
+        });
+      expect(agents.value.find((agent) => agent.agentId === "agent.skill-creator"))
+        .toMatchObject({
+          agentId: "agent.skill-creator",
+          runnable: true,
+          tools: [
+            { id: TEXT_FILE_READ_CAPABILITY_ID, available: true },
+            { id: TEXT_FILE_WRITE_CAPABILITY_ID, available: true },
+          ],
+        });
 
       const created = await runtime.facade.createSession({
         contractVersion: "v1alpha1",
@@ -258,6 +272,48 @@ describe("VS1.1 internal-trial Enterprise runtime", () => {
       expect(serialized).toContain("tool.document.pptx.write");
       expect(serialized).not.toContain("materializedRef");
       expect(serialized).not.toContain("services/core/resources/skills");
+      const creatorSession = await runtime.facade.createSession({
+        contractVersion: "v1alpha1",
+        type: "create_session",
+        commandId: randomUUID(),
+        correlationId: randomUUID(),
+        clientInstanceId: "019f7447-a784-77b2-a716-000000002103",
+        title: "RSL-2 Skill Creator",
+      });
+      if (!creatorSession.ok) throw new Error(creatorSession.error.code);
+      const creatorTurn = await runtime.facade.submitTurnV1Alpha5({
+        contractVersion: "v1alpha5",
+        type: "submit_turn",
+        commandId: randomUUID(),
+        correlationId: randomUUID(),
+        clientInstanceId: "019f7447-a784-77b2-a716-000000002103",
+        clientTurnId: "rsl2-skill-creator-0001",
+        sessionId: creatorSession.value.sessionId,
+        userInput: "请创建技能文件。",
+        selectionRequest: {
+          agentId: "agent.skill-creator",
+          requestedModelId: "model.internal-trial",
+          selectedSkillIds: [],
+          selectedKnowledgeIds: [],
+          authorizationPreference: {
+            schemaVersion: "v1alpha1",
+            requestedMode: "task_scoped",
+          },
+          reasoningPreference: { requestedMode: "default" },
+        },
+      });
+      expect(creatorTurn).toMatchObject({
+        ok: true,
+        value: {
+          runtimeSelectionSummary: {
+            agent: { id: "agent.skill-creator" },
+            allowedTools: [
+              { id: TEXT_FILE_READ_CAPABILITY_ID },
+              { id: TEXT_FILE_WRITE_CAPABILITY_ID },
+            ],
+          },
+        },
+      });
     } finally {
       await runtime.stop();
     }
@@ -519,6 +575,252 @@ describe("VS1.1 internal-trial Enterprise runtime", () => {
       await runtime.stop();
     }
   }, 20_000);
+
+  it.each([
+    {
+      label: "small Markdown",
+      originalContent: "# 第一版\n\n保留这行。\n",
+      replacementContent: "# 第二版\n\n保留这行。\n\n新增结论。\n",
+    },
+    {
+      label: "128 KiB-class Markdown",
+      originalContent: `# Large source\n${Array.from(
+        { length: 9_200 },
+        (_, index) => `line-${String(index).padStart(5, "0")}-source\n`,
+      ).join("")}`,
+      replacementContent: `# Large revised\n${Array.from(
+        { length: 9_200 },
+        (_, index) => `line-${String(index).padStart(5, "0")}-source\n`,
+      ).join("")}final-conclusion\n`,
+    },
+  ])("reads and replaces $label without truncation while preserving the prior version", async ({
+    originalContent,
+    replacementContent,
+  }) => {
+    const relativePath = "notes.md";
+    const gateway = await startGatewayFixture({
+      textReadThenWrite: { relativePath, originalContent, replacementContent },
+    });
+    const directory = await mkdtemp(join(tmpdir(), "robothree-wte1-edit-"));
+    temporaryDirectories.push(directory);
+    await writeFile(join(directory, relativePath), originalContent, "utf8");
+    const databasePath = join(directory, "core.sqlite");
+    const runtime = createDesktopPrivateRuntime({
+      databasePath,
+      authorizationToken: "wte1-core-private-token-0000000001",
+      environment: environment(gateway.origin, { exactOutputCapability: true }),
+      vs1TestHarness: true,
+    });
+    await runtime.start();
+    try {
+      const clientInstanceId = "019f7447-a784-77b2-a716-000000002103";
+      const correlationId = randomUUID();
+      const selectionHandle = runtime.testOnlyIssueWorkspaceSelection?.({
+        selectedPath: directory,
+        clientInstanceId,
+        correlationId,
+      });
+      if (selectionHandle === undefined) throw new Error("missing WTE-1 test harness");
+      const workspace = await runtime.facade.createWorkspaceGrant({
+        contractVersion: "v1alpha1",
+        type: "create_workspace_grant",
+        commandId: randomUUID(),
+        correlationId,
+        clientInstanceId,
+        selectionHandle,
+        displayName: "WTE-1 Workspace",
+        accessMode: "read_write",
+      });
+      if (!workspace.ok) throw new Error(workspace.error.code);
+      const session = await runtime.facade.createSession({
+        contractVersion: "v1alpha1",
+        type: "create_session",
+        commandId: randomUUID(),
+        correlationId: randomUUID(),
+        clientInstanceId,
+        title: "WTE-1 text edit",
+      });
+      if (!session.ok) throw new Error(session.error.code);
+      const submitted = await runtime.facade.submitTurnV1Alpha5({
+        contractVersion: "v1alpha5",
+        type: "submit_turn",
+        commandId: randomUUID(),
+        correlationId: randomUUID(),
+        clientInstanceId,
+        clientTurnId: "wte1-read-replace-0001",
+        sessionId: session.value.sessionId,
+        userInput: `请读取并修改 ${relativePath}，保留原有内容并增加结论。`,
+        selectionRequest: {
+          agentId: "agent.general",
+          requestedModelId: "model.internal-trial",
+          selectedSkillIds: [],
+          selectedKnowledgeIds: [],
+          workspaceGrantId: workspace.value.workspaceGrantId,
+          authorizationPreference: {
+            schemaVersion: "v1alpha1",
+            requestedMode: "task_scoped",
+          },
+          reasoningPreference: { requestedMode: "default" },
+        },
+      });
+      if (!submitted.ok) throw new Error(JSON.stringify(submitted.error));
+      await waitForAssistantText(
+        runtime,
+        session.value.sessionId,
+        "已基于磁盘最新版本修改 notes.md",
+        submitted.value.taskId,
+        () => ({ requestCount: gateway.requests.length, paths: gateway.paths }),
+      );
+      expect(gateway.requests).toHaveLength(3);
+      const secondRequest = gateway.requests[1] as {
+        modelRequest: { messages: Array<{ content: Array<{ text: string }> }> };
+      };
+      const exactReadMessage = secondRequest.modelRequest.messages.find((message) =>
+        message.content[0]?.text.startsWith('{"status":"succeeded","result":'));
+      expect(exactReadMessage).toBeDefined();
+      const exactReadEnvelope = exactReadMessage!.content.map((part) => part.text).join("");
+      expect(JSON.parse(exactReadEnvelope).result.content).toBe(originalContent);
+      expect(JSON.stringify(gateway.requests[1])).toContain(TEXT_FILE_WRITE_CAPABILITY_ID);
+      expect(await readFile(join(directory, relativePath), "utf8")).toBe(replacementContent);
+      expect(await readFile(join(directory, `${relativePath}.prev`), "utf8")).toBe(originalContent);
+      const detail = await runtime.facade.loadTaskDetail({
+        contractVersion: "v1alpha1",
+        type: "task_detail",
+        queryId: randomUUID(),
+        correlationId: randomUUID(),
+        clientInstanceId,
+        taskId: submitted.value.taskId,
+      });
+      expect(detail).toMatchObject({
+        ok: true,
+        value: {
+          summary: { displayStatus: "completed" },
+          toolActivities: expect.arrayContaining([
+            expect.objectContaining({ operationType: TEXT_FILE_READ_CAPABILITY_ID, status: "completed" }),
+            expect.objectContaining({ operationType: TEXT_FILE_WRITE_CAPABILITY_ID, status: "completed" }),
+          ]),
+          artifacts: expect.arrayContaining([
+            expect.objectContaining({ displayName: relativePath, mediaType: "text/markdown" }),
+          ]),
+        },
+      });
+    } finally {
+      await runtime.stop();
+    }
+  }, 30_000);
+
+  it("automatically rereads once after a text replacement conflict", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "robothree-wte1-rebase-"));
+    temporaryDirectories.push(directory);
+    const relativePath = "notes.md";
+    const originalContent = "# Notes\n\nOriginal\n";
+    const externallyChangedContent = "# Notes\n\nExternal edit\n";
+    const replacementContent = "# Notes\n\nExternal edit\n\n## AI conclusion\nDone\n";
+    await writeFile(join(directory, relativePath), originalContent, "utf8");
+    const gateway = await startGatewayFixture({
+      textReadThenWrite: {
+        relativePath,
+        originalContent,
+        replacementContent: "# Notes\n\nFirst stale replacement\n",
+        rebaseFromContent: externallyChangedContent,
+        rebaseReplacementContent: replacementContent,
+      },
+      beforeRound: async (round) => {
+        if (round === 2) {
+          await writeFile(join(directory, relativePath), externallyChangedContent, "utf8");
+        }
+      },
+    });
+    const runtime = createDesktopPrivateRuntime({
+      databasePath: join(directory, "core.sqlite"),
+      authorizationToken: "wte1-rebase-core-private-token-0001",
+      environment: environment(gateway.origin, { exactOutputCapability: true }),
+      vs1TestHarness: true,
+    });
+    await runtime.start();
+    try {
+      const clientInstanceId = "019f7447-a784-77b2-a716-000000002103";
+      const correlationId = randomUUID();
+      const selectionHandle = runtime.testOnlyIssueWorkspaceSelection?.({
+        selectedPath: directory,
+        clientInstanceId,
+        correlationId,
+      });
+      if (selectionHandle === undefined) throw new Error("missing WTE-1 test harness");
+      const workspace = await runtime.facade.createWorkspaceGrant({
+        contractVersion: "v1alpha1",
+        type: "create_workspace_grant",
+        commandId: randomUUID(),
+        correlationId,
+        clientInstanceId,
+        selectionHandle,
+        displayName: "WTE-1 Rebase Workspace",
+        accessMode: "read_write",
+      });
+      if (!workspace.ok) throw new Error(workspace.error.code);
+      const session = await runtime.facade.createSession({
+        contractVersion: "v1alpha1",
+        type: "create_session",
+        commandId: randomUUID(),
+        correlationId: randomUUID(),
+        clientInstanceId,
+        title: "WTE-1 automatic rebase",
+      });
+      if (!session.ok) throw new Error(session.error.code);
+      const submitted = await runtime.facade.submitTurnV1Alpha5({
+        contractVersion: "v1alpha5",
+        type: "submit_turn",
+        commandId: randomUUID(),
+        correlationId: randomUUID(),
+        clientInstanceId,
+        clientTurnId: "wte1-rebase-0001",
+        sessionId: session.value.sessionId,
+        userInput: `请读取并修改 ${relativePath}。`,
+        selectionRequest: {
+          agentId: "agent.general",
+          requestedModelId: "model.internal-trial",
+          selectedSkillIds: [],
+          selectedKnowledgeIds: [],
+          workspaceGrantId: workspace.value.workspaceGrantId,
+          authorizationPreference: {
+            schemaVersion: "v1alpha1",
+            requestedMode: "task_scoped",
+          },
+          reasoningPreference: { requestedMode: "default" },
+        },
+      });
+      if (!submitted.ok) throw new Error(JSON.stringify(submitted.error));
+      await waitForAssistantText(
+        runtime,
+        session.value.sessionId,
+        `已基于磁盘最新版本修改 ${relativePath}`,
+        submitted.value.taskId,
+        () => ({ requestCount: gateway.requests.length, paths: gateway.paths }),
+      );
+
+      expect(gateway.requests).toHaveLength(5);
+      expect(await readFile(join(directory, relativePath), "utf8")).toBe(replacementContent);
+      expect(await readFile(join(directory, `${relativePath}.prev`), "utf8"))
+        .toBe(externallyChangedContent);
+      const detail = await runtime.facade.loadTaskDetail({
+        contractVersion: "v1alpha1",
+        type: "task_detail",
+        queryId: randomUUID(),
+        correlationId: randomUUID(),
+        clientInstanceId,
+        taskId: submitted.value.taskId,
+      });
+      if (!detail.ok) throw new Error(detail.error.code);
+      expect(detail.value.toolActivities.filter(
+        (activity) => activity.operationType === TEXT_FILE_READ_CAPABILITY_ID,
+      )).toHaveLength(2);
+      expect(detail.value.toolActivities.filter(
+        (activity) => activity.operationType === TEXT_FILE_WRITE_CAPABILITY_ID,
+      ).map((activity) => activity.status)).toEqual(["failed", "completed"]);
+    } finally {
+      await runtime.stop();
+    }
+  }, 30_000);
 });
 
 async function waitForAssistantText(
@@ -613,6 +915,14 @@ async function startGatewayFixture(options: Readonly<{
     sourceRelativePath: string;
     outputRelativePath: string;
   }>;
+  textReadThenWrite?: Readonly<{
+    relativePath: string;
+    originalContent: string;
+    replacementContent: string;
+    rebaseFromContent?: string;
+    rebaseReplacementContent?: string;
+  }>;
+  beforeRound?: (round: number) => Promise<void>;
 }> = {}) {
   const paths: string[] = [];
   const authorizationHeaders: string[] = [];
@@ -649,6 +959,7 @@ async function startGatewayFixture(options: Readonly<{
         ...body.modelRequest.model,
       });
       acceptedRound = requests.length;
+      await options.beforeRound?.(acceptedRound);
       json(response, 202, {
         contractVersion: "v1alpha3",
         invocationId: accepted.invocationId,
@@ -709,6 +1020,14 @@ function gatewayEvents(
       sourceRelativePath: string;
       outputRelativePath: string;
     }>;
+    textReadThenWrite?: Readonly<{
+      relativePath: string;
+      originalContent: string;
+      replacementContent: string;
+      rebaseFromContent?: string;
+      rebaseReplacementContent?: string;
+    }>;
+    beforeRound?: (round: number) => Promise<void>;
   }>,
 ) {
   const occurredAt = new Date().toISOString();
@@ -723,7 +1042,50 @@ function gatewayEvents(
     eventDigest: "1".repeat(64),
     occurredAt,
   }];
-  const response = options.docxReadThenPptx !== undefined
+  const response = options.textReadThenWrite !== undefined
+    ? options.textReadThenWrite.rebaseFromContent !== undefined
+      ? round === 1 || round === 3
+        ? [textReadToolCallEvent(
+          invocationId,
+          options.textReadThenWrite.relativePath,
+          occurredAt,
+        )]
+        : round === 2
+          ? [textWriteToolCallEvent(
+            invocationId,
+            options.textReadThenWrite,
+            occurredAt,
+          )]
+          : round === 4
+            ? [textWriteToolCallEvent(invocationId, {
+              relativePath: options.textReadThenWrite.relativePath,
+              originalContent: options.textReadThenWrite.rebaseFromContent,
+              replacementContent: options.textReadThenWrite.rebaseReplacementContent
+                ?? options.textReadThenWrite.replacementContent,
+            }, occurredAt)]
+            : [textDeltaEvent(
+              invocationId,
+              `已基于磁盘最新版本修改 ${options.textReadThenWrite.relativePath}`,
+              occurredAt,
+            )]
+      : round === 1
+      ? [textReadToolCallEvent(
+        invocationId,
+        options.textReadThenWrite.relativePath,
+        occurredAt,
+      )]
+      : round === 2
+        ? [textWriteToolCallEvent(
+          invocationId,
+          options.textReadThenWrite,
+          occurredAt,
+        )]
+        : [textDeltaEvent(
+          invocationId,
+          `已基于磁盘最新版本修改 ${options.textReadThenWrite.relativePath}`,
+          occurredAt,
+        )]
+    : options.docxReadThenPptx !== undefined
     ? round === 1
       ? [documentReadToolCallEvent(
         invocationId,
@@ -764,6 +1126,59 @@ function gatewayEvents(
     durableCursor: `cursor:2:${"b".repeat(16)}`,
     occurredAt,
   }];
+}
+
+function textReadToolCallEvent(
+  invocationId: string,
+  relativePath: string,
+  occurredAt: string,
+) {
+  const args = { relativePath };
+  return toolCallEvent(invocationId, TEXT_FILE_READ_CAPABILITY_ID, args, occurredAt);
+}
+
+function textWriteToolCallEvent(
+  invocationId: string,
+  input: Readonly<{
+    relativePath: string;
+    originalContent: string;
+    replacementContent: string;
+  }>,
+  occurredAt: string,
+) {
+  const args = {
+    relativePath: input.relativePath,
+    content: input.replacementContent,
+    mode: "replace_existing",
+    expectedPreviousSha256:
+      `sha256:${createHash("sha256").update(input.originalContent, "utf8").digest("hex")}`,
+  };
+  return toolCallEvent(invocationId, TEXT_FILE_WRITE_CAPABILITY_ID, args, occurredAt);
+}
+
+function toolCallEvent(
+  invocationId: string,
+  capabilityId: string,
+  args: Record<string, unknown>,
+  occurredAt: string,
+) {
+  return {
+    contractVersion: "v1alpha3",
+    invocationId,
+    eventId: randomUUID(),
+    eventClass: "ephemeral",
+    streamSequence: 2,
+    eventType: "tool_call",
+    eventPayload: { call: {
+      toolCallId: randomUUID(),
+      name: projectEnterpriseProviderToolName(capabilityId),
+      arguments: args,
+      argumentsDigest: sha256CanonicalJson(JsonValueSchema.parse(args))
+        .replace(/^sha256:/u, ""),
+    } },
+    eventDigest: "2".repeat(64),
+    occurredAt,
+  };
 }
 
 function textDeltaEvent(invocationId: string, delta: string, occurredAt: string) {
@@ -849,11 +1264,26 @@ function pptxToolCallEvent(
   };
 }
 
-function environment(origin: string) {
+function environment(
+  origin: string,
+  options: Readonly<{ exactOutputCapability?: boolean }> = {},
+) {
   const now = Date.now();
   return {
     [INTERNAL_TRIAL_ENTERPRISE_MODEL_DEPLOYMENT_ENV]: JSON.stringify(
-      deployment(origin),
+      options.exactOutputCapability === true
+        ? {
+          schemaVersion: "mvp-admin-vs1.internal-trial.v1",
+          centralBaseUrl: origin,
+          configurationRevision: `sha256:${"c".repeat(64)}`,
+          modelId: "model.internal-trial",
+          modelCreatedAt: "2026-08-29T00:00:00.000Z",
+          displayName: "Internal Trial Model",
+          supportsToolCalling: true,
+          contextWindowTokens: 400_000,
+          maxOutputTokens: 262_144,
+        }
+        : deployment(origin),
     ),
     [INTERNAL_TRIAL_ENTERPRISE_ACCESS_TOKEN_ENV]: compactToken({
       issuedAt: new Date(now - 60_000).toISOString(),

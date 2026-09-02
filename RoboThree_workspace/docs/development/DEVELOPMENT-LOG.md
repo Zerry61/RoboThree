@@ -4,10 +4,218 @@
 
 ---
 
+## 0.0.0-mvp.wte.1-repair.1 — CTX/WTE Workbench Terminal UX Closure
+
+- 日期：2026-09-02；
+- 状态：`IMPLEMENTED / FOCUSED GATES PASS / PRODUCT ACCEPTANCE PENDING / INDEPENDENT QA PENDING / INDEPENDENT CODE QA PASS / USER ACCEPTANCE PENDING`；
+- 范围：只补 Desktop Renderer 的终态失败卡片、安全进度映射、恢复动作和 focused tests；不重做 CTX/WTE Tool、文件
+  接口、上下文系统、Main/Preload/Core/Contract 或持久化；
+- 错误呈现：Workbench 在当前会话附近直接显示 `activeTaskSummary.failureSummary`。output-capacity 不足时提供“选择其他
+  模型并新建任务 / 缩小文件后重试”；前者清空 locked model 并打开模型菜单，后者只准备新的自然语言 Attempt，不修改
+  原 Task；失败 Task 的部分 Artifact fail-closed 不进入成果面板；
+- 进度与恢复：Renderer 只按已知 `progressKey` 映射“正在整理对话内容 / 等待模型 / 生成回复 / 准备调用工具”；未知
+  key 显示通用处理中，不信任任意摘要正文。recovering 显示“正在恢复任务上下文”，从 durable Session/Task 恢复且不调用
+  `submitTask`；
+- 可访问性：错误卡片使用 `role="alert"`；恢复按钮沿用 R3Button 键盘与焦点样式，在窄窗采用既有 flex-wrap，不产生固定
+  宽度按钮组；
+- 版本与边界：仅 Desktop=`0.0.0-mvp.wte.1-repair.1`；Root/Core/Document Worker 保持 `0.0.0-mvp.wte.1`，
+  Contracts/Admin 保持 `0.0.0-mvp.rsl.2`；未修改 migration、依赖或 lockfile；
+- 自测：Workbench/WTE focused `6 files / 81 tests PASS`、Desktop typecheck/build、focused TS/test ESLint、Architecture
+  boundary、DTP-4 audit/self-test `1 file / 2 tests PASS`、`git diff --check` PASS；1024×768 与 680×560
+  打包态 CSS 回归均无水平溢出；lockfile digest 保持 `5b15ae01…874f31`；
+- 诚实边界：普通用户仍不配置 Token 参数；页面不显示 Prompt、Token、Compaction ID、Context Revision、摘要正文、绝对
+  路径、WorkspaceGrant、digest 或 read proof。真实 Windows 11 NTFS WTE 回归继续属于既有 WFW/WTE 定向待办。
+- 独立 QA：[Claude Code 独立代码 QA](./qa/0.0.0-mvp.wte.1-repair.1-code-claude-qa.md)
+  `CODE_QA_PASS — USER_ACCEPTANCE_PENDING`, P0=0/P1=0/P2=0/P3=0。Workbench/WTE focused 多组 5~6-file 子集
+  全 PASS（实测 84 / 85 / 92 tests）；Desktop tsc/build exit 0 + Architecture boundary PASS + DTP-4 audit +
+  self-test 2/2 + git diff --check exit 0 + Core smoke `core.ready` + lockfile digest `5b15ae01…874f31` +
+  Core migration max 26 + 5 frozen Contract SHA256 全部不漂移 + 仅 Desktop version bump。8/8 关键事实命中：
+  failure card `role="alert"`、output-capacity 双动作不偷换模型、部分 Artifact fail-closed、
+  `presentWorkbenchModelProgress` 5 prefix 白名单、`recovering` 期间 `sendDisabled=true` 阻断
+  `submitTask`、保留 WTE-1 父批既有 read/write/conflict recovery、1024×768 与 680×560 无水平溢出。
+
+---
+
+## 0.0.0-mvp.wte.1 — Workspace Text Read / Continuous Edit
+
+- 日期：2026-09-01；
+- 状态：`IMPLEMENTED / DEVELOPER VERIFICATION PASS / INDEPENDENT CODE QA PASS / USER ACCEPTANCE PENDING`；
+  待验收 outcome：`WTE1_WORKSPACE_TEXT_READ_CONTINUOUS_EDIT_E2E_CONFORMANT`；
+- 产品闭环：用户在当前 Workspace 明确点名文本文件后，真实 Agent Loop 执行 `read_text`，模型收到磁盘 exact 内容，再用
+  existing WFW `replace_existing` 完成摘要校验、原子替换、`.prev`、Artifact 与安全预览；后续用户编辑重新读取最新版；
+- Worker：新增 256 KiB bounded strict UTF-8 reader；拒绝 absolute/traversal/hidden/symlink/hard-link/non-regular/NUL，
+  以 read 前后 stat 稳定性和一次内部重读避免返回可观察到的不一致内容；读写共享同一 Worker child；
+- Core：新增 read Registry definition/binding/handle，从 durable Task/Tool facts 派生 private Read Proof；当前 turn 的 exact
+  read content 接入 CTX-MVP-1 protected material 与 output admission。首次 `content_changed` 保持 Task running 并允许
+  reread 一次，第二次冲突立即终止当前 Attempt；`uncertain` 不进入自动 rebase；
+- Desktop：文本附件 allowlist、安全 read/write activity、第二次冲突四动作与 Task-generated Markdown/Text preview 已接通；
+  Renderer 不接收绝对路径、WorkspaceGrant、digest、proof 或 Tool Result 正文；
+- 真实 E2E：macOS packaged Electron 输出 `WTE1_WORKSPACE_TEXT_READ_CONTINUOUS_EDIT_E2E_CONFORMANT`，验证 real Renderer/
+  Main/Preload/Core、exact read in next request、replace、`.prev`、单一 Artifact head、Markdown preview、Core SIGKILL、
+  新 runtime identity、SQLite reopen 与 restart preview；
+- 版本：Root/Core/Desktop/Document Worker=`0.0.0-mvp.wte.1`；Contracts/Admin 保持 `0.0.0-mvp.rsl.2`；Central schema
+  v13、Core migration 26、依赖与 lockfile digest `5b15ae01…874f31` 不变；
+- 诚实边界：用户未点名的 Agent-discovered 路径当前 `workspace.file.policy_denied`，不伪造 confirmation resume；Windows
+  11 本地 NTFS WTE E2E 与用户接受尚未完成，故本批不能关闭。公网 400K Provider calibration 属 CTX/Provider 独立
+  P3，不阻塞 WTE-1；Windows 场景已并入 WFW/WTE 共用定向回归说明；
+- 方案：[WTE-1 方案](./WTE-1-WORKSPACE-TEXT-READ-CONTINUOUS-EDIT-DEVELOPMENT-PLAN.md)；
+  实施报告：[WTE-1 实施报告](./WTE-1-WORKSPACE-TEXT-READ-CONTINUOUS-EDIT-IMPLEMENTATION-REPORT.md)；
+  独立 QA：[Claude Code 独立代码 QA](./qa/0.0.0-mvp.wte.1-code-claude-qa.md)
+  `CODE_QA_PASS — USER_ACCEPTANCE_PENDING`, P0=0/P1=0/P2=0/P3=2（外部 pending items）。Document Worker
+  `27 files / 244 tests PASS`（exact match）+ WTE/CTX focused `9 files / 71 tests PASS` + Document Tool/WFW
+  regression `5 files / 37+ tests PASS` + WTE-1 聚焦三件套 `3 files / 11 tests PASS` + git diff --check exit 0
+  + DTP-4 audit + self-test 2/2 + Core smoke `core.ready` + Core/Desktop/Doc-Worker tsc exit 0 + lockfile digest
+  `5b15ae01…874f31` + Core migration max 26 + 5 frozen Contract SHA256 全部不漂移。12/12 关键事实命中。Windows
+  11 本地 NTFS E2E 是当前唯一关闭阻塞项；真实公网 400K Provider usage calibration 仍属 CTX/Provider 独立 P3，
+  不阻塞 WTE-1 冻结或在 Windows 门禁通过后的关闭。
+
+---
+
+## 0.0.0-mvp.ctx.1 — Model-Aware Long Context / Output Admission
+
+- 日期：2026-09-01；
+- 状态：`PASS/CLOSED / INDEPENDENT CODE QA PASS / USER ACCEPTED`；最高 outcome：
+  `CTX_MVP1_MODEL_AWARE_LONG_CONTEXT_CONFORMANT`；
+- 上游：用户接受 CTX-MVP-1 主方向，并要求编码前吸收 4 项 P0 与 3 项 P1：max output 必须成为 exact
+  Model capability、WTE output 必须 material-aware、4K output Model 不得被全局 8K 门槛拒绝、Continuation
+  Capsule v2 改为条件升级；
+- exact capability：受控 Admin-managed private deployment 新增可信 `contextWindowTokens/maxOutputTokens`，Core
+  生成 `capabilityProfileRevision` 并将同一 profile ref 写入既有 descriptor/binding；公开 Model definition 的
+  context 必须与 private profile 一致。历史缺 profile 的 Task 只保留原 context + 1K output 语义，不回写旧 lock；
+- per-round budget：普通任务使用 `min(8192, lockedMaxOutputTokens)`；WTE full replacement 使用 canonical
+  `write_text` Tool Call envelope + 25%/至少 1024 tokens headroom，超出 locked max output 时在 Provider call 前
+  以 `workspace.file.output_capacity_insufficient` 落为安全、不可重试 Task failure。相同 128K context、4K/128K
+  output capability 已分别覆盖拒绝与准入；
+- context policy：按 exact Task profile 计算 2%（512～16384）safety margin、动态 minimum headroom、80%
+  threshold；同一 policy 同时进入 Instruction Bundle guard、Context preparation、ModelRequest.maxOutputTokens 与
+  receipt。normal runtime 和 compaction 共用 `CalibratedTokenEstimator`，Fake estimator 只保留显式 historical tests；
+- material policy：从 durable Assistant Tool Call 的 exact capability identity 关联 Tool Result；当前 user turn 的
+  `tool.workspace.file.read_text` 结果保持 exact/no truncation，历史或其他结果继续 bounded preview；missing、duplicate、
+  task/action drift 全部 fail-closed，不通过字段名或正文猜测；
+- compaction：复用现有 durable first/rolling compaction、source range、pending job 和 status-first recovery。既有
+  50-round/50 Tool-batch、rolling summary、SQLite/restart 回归通过，未发现 goal/constraint/decision/Artifact/pending
+  continuation 必须新增 schema 的证据，因此 Capsule v2 为 `NOT_REQUIRED / NOT_IMPLEMENTED`；
+- 验证：CTX/context/deployment focused `7 files / 49 tests PASS`，另有 exact/context focused `4 files / 31 tests
+  PASS`；Desktop supervisor `1 file / 5 tests PASS`；Central Admin discovery `2 tests / BUILD SUCCESS`；Core/Desktop
+  typecheck、focused ESLint、build、DTP-4 audit 与 `git diff --check` PASS；
+- 版本与边界：Root/Core/Desktop=`0.0.0-mvp.ctx.1`，Central=`0.0.0-mvp.ctx.1-SNAPSHOT`；Contracts/Admin 保持
+  `0.0.0-mvp.rsl.2`，Document Worker 保持 `0.0.0-wfw.2`。Core migration max=26，Central schema v13、依赖和
+  lockfile 不变；未新增公共 Contract/IPC/Preload/Renderer 状态；
+- 已知边界：CTX-MVP-1 只冻结并实现 WTE 可消费的 Core-private material/output seam，不实现 `read_text` 或连续编辑
+  UI；真实公网 Provider 400K usage 校准与 WTE 64/128KiB 产品 E2E 随 WTE-1 联合验证，不得据此声明 WTE ready；
+- 方案：[CTX-MVP-1 详细方案](./CTX-MVP-1-MODEL-AWARE-LONG-CONTEXT-COMPACTION-DEVELOPMENT-PLAN.md)；
+  实施报告：[CTX-MVP-1 实施报告](./CTX-MVP-1-MODEL-AWARE-LONG-CONTEXT-COMPACTION-IMPLEMENTATION-REPORT.md)；
+  独立 QA：[Claude Code 独立代码 QA](./qa/0.0.0-mvp.ctx.1-code-claude-qa.md)
+  `CODE_QA_PASS`, P0=0/P1=0/P2=0/P3=1。7/49 + 4/31 + 1/5 + Central 2 tests
+  + git diff --check exit 0 + DTP-4 audit + self-test 2/2 + Core smoke `core.ready` + Core/Desktop tsc exit 0 + lockfile
+  digest `5b15ae01…874f31` + Core migration max 26 + 5 frozen Contract SHA256 全部不漂移。Capsule v2 保持
+  `NOT_REQUIRED / NOT_IMPLEMENTED`，production diff = 0。真实公网 400K Provider usage calibration 与 WTE-1 联合
+  E2E 仍分别保持 `REAL_PROVIDER_CALIBRATION_PENDING` 与 `WTE1_LONG_CONTEXT_JOINT_E2E_PENDING`，不阻塞
+  CTX-MVP-1 子批关闭；用户已正式接受独立 QA、关闭本批，并且只恢复 WTE-1 工作区文本读取与连续编辑开发。
+
+---
+
+## 0.0.0-dfe.9-repair.12 — Workbench Thinking Progress And Tool Message Isolation
+
+- 日期：2026-09-01；
+- 状态：`IMPLEMENTED / FOCUSED GATES PASS / PRODUCT ACCEPTANCE PENDING / INDEPENDENT QA PENDING`；
+- 目标：让长任务执行期间持续显示轻量“思考中…”反馈，并把 Core 的安全阶段放入可展开/收起的灰色进度列表；修复
+  Tool observation 原始 JSON 被误渲染为 RoboThree 对话消息的问题；
+- 实现：Workbench 只将 durable `user/assistant` 消息投影到产品会话；`tool` 消息继续保留在执行与成果投影边界，不进入
+  Chat。模型进度按当前 Task 有界保留最近 12 条 `safeSummary`，当前阶段实时更新，终态清理；
+- 安全边界：不展示模型隐藏 reasoning、Prompt、Token、Tool 参数、绝对路径、SHA-256 或内部摘要；未修改 Core、Main、
+  Preload、公共 Contract、Central、migration、依赖或 lockfile；
+- 版本：仅 Desktop 提升为 `0.0.0-dfe.9-repair.12`；Root/Core/Contracts/Admin 保持
+  `0.0.0-mvp.rsl.2`，Central 保持 `0.0.0-mvp.rsl.2-SNAPSHOT`；DTP-4 Desktop 版本基线同步；
+- 自测：Workbench focused `3 files / 54 tests PASS`，Desktop typecheck/build、focused ESLint、Architecture boundary、
+  DTP-4 audit 与 `git diff --check` PASS；打包态 1280px 页面无横向溢出；全仓 lint 被既有 Admin 生成 JS 的 62 个
+  `no-undef` 阻断，不归因本批；
+- 已知边界：进度列表只呈现 Core 已批准的安全业务摘要，不等同于模型隐藏思维链；无安全进度事件时只显示诚实等待状态。
+
+---
+
+## 0.0.0-mvp.rsl.2 — RSL-2 Skill Lifecycle End-to-End Implementation
+
+- 日期：2026-09-01；
+- 状态：`PASS/CLOSED / INDEPENDENT QA PASS_WITH_RISKS / USER ACCEPTED`；
+- 产品闭环：完成 Desktop 用户“创建草稿工作区 → Task/WFW 生成 SKILL.md → exact revision 测试 → 提交 → Admin 审核
+  → immutable release → 安装 → 新 Task exact 使用”和 Admin“上传 archive → admission → metadata → 真实 Task 测试
+  → 发布 → 安装 → 使用”两条链；
+- Central：以 B0013/U0013/manifest v13 落地 draft revision、test operation/fact、submission、release、package blob 与
+  command receipt；archive admission 阻断 traversal、link、特殊节点、重复路径、加密/分卷、嵌套包、依赖树、binary 和
+  超限输入，不执行脚本或自动安装依赖；
+- Core/Main/Preload：新增私有 lifecycle token/client、draft synchronizer、installed runtime source、草稿工作区、安装、
+  local discovery、Admin test coordinator 与 Desktop IPC/Preload routing；复用既有 Task/Agent Loop、Runtime Selection、
+  Capability Lock、WFW 和 recovery，不建设第二套 Runtime；
+- Desktop/Admin：智能中心、创建/详情、技能广场、Workbench 与 Admin upload/test/review/publish 页面均使用真实 adapter；
+  unavailable、identity missing、revision conflict 和 installation mismatch 全部 fail-closed；
+- 真实 E2E：同一测试类串行通过 2 tests，分别输出 `MVP_RSL2_SKILL_LIFECYCLE_E2E_CONFORMANT` 与
+  `MVP_RSL2_ADMIN_UPLOAD_SKILL_E2E_CONFORMANT`；均验证 real Electron/Main/Renderer/IPC/Core/SQLite reopen/Central
+  lifecycle/Gateway HTTP-SSE/WFW Artifact/Core SIGKILL，且输出不含 Token、正文、测试输入、路径或 package bytes；
+- 门禁：Contract/Core/Desktop `12 files / 56 tests PASS`，Admin `2 files / 16 tests PASS`，Central focused online/offline
+  各 `3 classes / 17 tests PASS / BUILD SUCCESS`，real E2E `2/2 PASS / BUILD SUCCESS`；typecheck、build、focused ESLint、
+  DTP-4 audit + self-test、Core smoke 与 `git diff --check` PASS；
+- 版本与边界：Root/Core/Desktop/Contracts/Admin=`0.0.0-mvp.rsl.2`，Central=`0.0.0-mvp.rsl.2-SNAPSHOT`；lockfile
+  digest `5b15ae01…874f31`，Core migration max=26。Personal Model、TGM、Knowledge Provider、production identity/
+  SSO/RBAC 与父 WFW-3 Windows NTFS 回归继续 GATED/deferred；
+- 独立 QA：Claude Code 只读复核为 `PASS_WITH_RISKS`，P0=0/P1=0/P2=0/P3=4；focused `10 files / 45 tests`、
+  Central offline archive/lifecycle、typecheck、audit、focused lint、Core smoke 与 frozen boundary 均通过。Claude 环境
+  缺少 PostgreSQL/Electron，故真实 E2E 未独立复跑；用户接受开发环境既有 `2 tests / 0 failures / BUILD SUCCESS` 作为
+  关闭证据。四项 P3 均为环境或预存工程噪声，不归因 RSL-2、不建立 repair；
+- 用户接受：正式关闭 RSL-2，并接受 `MVP_RSL2_SKILL_LIFECYCLE_E2E_CONFORMANT` 与
+  `MVP_RSL2_ADMIN_UPLOAD_SKILL_E2E_CONFORMANT`；
+- 报告：[RSL-2 实施报告](./MVP-RSL-2-SKILL-LIFECYCLE-END-TO-END-IMPLEMENTATION-REPORT.md)；
+  [独立 QA](./qa/0.0.0-mvp.rsl.2-skill-lifecycle-e2e-claude-qa.md)。
+
+### RSL-2 Admin Frontend Post-Closure UI Convergence — 子批聚焦 re-QA
+
+- 日期：2026-09-02；
+- 状态：`FOCUSED_RE_QA_PASS — USER_ACCEPTANCE_PENDING`（仅本子批；父 RSL-2 仍为 `PASS/CLOSED / INDEPENDENT QA PASS_WITH_RISKS / USER ACCEPTED`，不得改回 PENDING / OPEN / CODING）；
+- 聚焦范围：仅复核 SkillsPage 刷新 / SkillUploadPage 上传中状态与防重复提交 / EnterpriseSkillDraftPage restricted 使用范围禁用 / SelectShell disabled option 支持 / skill-lifecycle-rsl2 Admin focused tests，以及上述行为直接相关的 presentation / Adapter 调用边界；
+- 验证：Admin typecheck / negative typecheck / focused `2 files / 16 tests PASS` / Admin full `15 files / 78 tests PASS` / production build exit 0 / integration build exit 0 / `scan:static` exit 0（bundleEvidence dist + dist-integration 均 exists + 有 JS）/ `scan:deps` exit 0（isolated）/ focused ESLint 0 error（5 warning 为既有 Vue SFC 配置不命中）/ `git diff --check -- apps/admin-console` exit 0 / skip·todo·only 扫描无逃逸 / 沙箱无 EPERM 阻断；
+- 边界：lockfile SHA-256 `5b15ae01…874f31`、Core migration max=26、5 frozen Contract SHA-256 + `skill-lifecycle/v1alpha1` SHA-256 `489096be28f88e5443cf19f82b23c1babacdca26e833cca5aea24a7e19dbe128` 均不漂移；Admin `package.json` 版本未 bump（仍 `0.0.0-mvp.rsl.2`）；`services/core`、`services/central-service`、`packages/contracts` git status 干净；无后端 / Central / migration / 依赖 / lockfile / 新状态机 / SSO/RBAC / Fake / LocalStorage / Token / Secret / 包正文 / digest / 路径 引入；
+- 隔离：当前并行窗口 Desktop / Central Java / scripts / 文档 dirty 文件严格不归因、不修改、不读取；Desktop 本轮无代码修改，Desktop focused / build / architecture boundary / DTP-4 既有结果仅作状态承接，不重复执行 Desktop 完整代码 QA，不纳入本子批归因；
+- 关键事实 6/6 命中：① 刷新按钮 → `AdminAdapter.listSkillSubmissions`（无 cursor 首屏 + 状态筛选切换重置第一页 + 旧页不追加 + catch 清理 `nextCursor`）；② 上传期间 `<input type="file">` 与 `AdminButton` `disabled`/`loading`，连续点击只产生一次 `uploadEnterpriseSkillPackage`；③ `restricted` 通过 `SelectShell` 原生 `<option disabled>` + `onUsageScopeChange` 双重阻断，保存走 `validateEnterpriseSkillMetadata`，enterprise_all 行为不回归；④ `SelectShell` `option.disabled === true` 投射原生 `<option disabled>`，其他字段不变；⑤ Admin focused `2 files / 16 tests` + 全量 `15 files / 78 tests` 全 PASS，无 skip/todo/only 逃逸；⑥ 全部新文件消费 frozen `skill-lifecycle/v1alpha1`、`expectedDraftRevision` / `expectedSubmissionRevision` exact，`skilllifecycle.revision_conflict` / `submission_conflict` 后真实 `loadDraft()`/`loadDetail()`+`listSkillSubmissions`；
+- 报告：[RSL-2 Admin Frontend Post-Closure UI Convergence 独立聚焦 re-QA](./qa/rsl-2-admin-frontend-post-closure-ui-recode-claude-qa.md)。
+
+---
+
+## 0.0.0-mvp.rsl.2 — RSL-2 Step 1 Contract / Dependency Freeze
+
+- 日期：2026-09-01；
+- 状态：`STEP 1 FREEZE PASS / FRONTEND PARALLEL START AUTHORIZED / RSL-2 PARENT NOT CLOSED`；
+- 用户授权：正式接受 RSL-2 Revision 1.1，并要求先冻结共享接口与依赖，冻结完成后允许 Desktop/Admin 前端开始；
+- Shared Contract：新增 strict `@robothree/contracts/skill-lifecycle/v1alpha1`，冻结 Desktop 11 / Admin 10 个方法、
+  `skill.manage` 最小权限、revision/submission/operation identity、四个 Desktop scope、bounded safe projection、
+  17 个 typed safe error；upload bytes 仅作为 strict metadata 之外的 bounded multipart file part；
+- Desktop consumer re-freeze：首次前端消费按停手规则发现 3 个 durable identity 缺口；现已在不新增方法的前提下冻结
+  `CreateSkillDraftWorkspaceReceipt(draftId/workspaceGrantId/displayName)`、`SubmitSkillDraftReceipt(submissionId/
+  submissionRevision)`、`SkillDetail.submission` 与 installed Skill 必需的 `installationRevision`。缺失 identity、
+  installed 状态不一致均 strict reject；Renderer 不得用 mixed revision、页面内存或 LocalStorage 猜测；
+- Runtime 接缝证明：既有 `LockedSkillInstructionResolver` + `TaskInstructionBundleMaterializer` 已支持 portable exact Skill
+  reference 的 digest-checked injection；既有 WFW 保持 existing-parent-only，RSL-2 后续由受控 lifecycle service 创建
+  draft root，不向模型开放 mkdir/delete/archive shell Tool；
+- Junrar dependency admission：Central 准入 exact `com.github.junrar:junrar:8.1.0`；JAR/source/POM SHA-256 分别为
+  `53c23cc8…45e7` / `10b2b416…234b` / `8f02bbf8…a83c`。JDK 21、Maven offline、`-Xmx128m` 下
+  clean RAR、parent traversal、broken CRC、truncated header、1 GiB dictionary claim 5/5 PASS；生产调用方式冻结为
+  `Archive(InputStream)` + per-header validation + synchronous bounded `extractFile`，禁止 filesystem facade、外部
+  executable、native binding、shell 和额外 reader thread；
+- 版本：Root/Contracts=`0.0.0-mvp.rsl.2`，Central=`0.0.0-mvp.rsl.2-SNAPSHOT`；Core/Desktop 暂保持
+  `0.0.0-mvp.safe-progress.1`，Admin 暂保持 `0.0.0-mvp.rsl.1`，由各自真实实现批再同步 bump；
+- 验证：Contract build PASS，Contract focused `1 file / 14 tests PASS`，focused ESLint PASS，Junrar offline admission
+  `5 tests PASS / BUILD SUCCESS`，offline dependency tree PASS，historical five + additional no-diff six Contract
+  SHA-256 `11/11` exact，DTP-4 audit + self-test PASS，lockfile digest `5b15ae01…874f31`，Core migration max=26，
+  `git diff --check` PASS；
+- 诚实边界：Step 1 没有实现 Central v13 lifecycle/store、Core/Main/Preload/IPC、Desktop/Admin real Adapter 或联合 E2E。
+  两端可以开始 UI/Adapter/focused tests，但服务不可用必须 fail-closed，不得用 Fake、LocalStorage 或 fixture success；
+- 报告：[RSL-2 Step 1 Contract / Dependency Freeze](./MVP-RSL-2-STEP-1-CONTRACT-AND-DEPENDENCY-FREEZE-REPORT.md)。
+
+---
+
 ## MVP-RSL-2 Plan — Skill Lifecycle End-to-End
 
 - 日期：2026-09-01；
-- 状态：`REVISION 1 / DOCUMENT REVIEW PENDING / CODING GATED`；
+- 状态：`REVISION 1.1 / PLAN REVIEW PASS-CLOSED / STEP 1 FREEZE PASS / FRONTEND PARALLEL START AUTHORIZED`；
 - 产品目标：关闭 Desktop 用户“创建技能 → 真实 Task/WFW 生成 → exact revision 测试 → 提交 → Admin 审核 → immutable
   release → 安装 → 新 Task exact 使用”主链，并让 Admin 上传 ZIP/RAR/TAR.GZ/TGZ 后经同一测试与发布权威进入技能广场；
 - 复用边界：复用既有 SubmitTurn、Agent Loop、Runtime Selection、Entitlement、Capability Lock、Workbench、WFW、
@@ -15,6 +223,12 @@
   平台、测试报告系统或 Catalog；
 - 安全边界：安装不执行脚本、不安装依赖；Archive 必须阻断 traversal、link、特殊节点、重复路径、加密/分卷、嵌套展开和
   zip bomb。RAR 若无法以可审计、无 shell/native runtime 的 exact reader 安全满足，必须停手回评审，不得静默删除 P0；
+- Revision 1.1：RAR 候选固定为 Central pure-JVM `junrar:8.1.0` 并要求 checksum/license/CRC/hostile-input/peak-memory
+  admission；dependency manifest、MCP descriptor、dependency tree 与预编译 binary 不得进入 installed registry；
+  Admin upload staging、Central Skill store 与 Desktop installation 不复用 Personal Model 边界；发布同步沿用 Core
+  authenticated pull，禁止 Admin push；两条联合 E2E 串行且不以自动重试掩盖失败；
+- 聚焦复核拍板：历史 Contract SHA 口径固定为 historical five exact files，另列 additional no-diff six exact files；
+  `junrar:8.1.0` 必须经 InputStream/header API 逐项读取，禁止调用 filesystem extract facade；
 - 评审边界：48 项 focused QA、两条真实联合 E2E、20 项停手条件；本轮只新增方案与治理回链，未修改生产代码、Contract、
   migration、依赖、版本或 lockfile；
 - 方案：[MVP-RSL-2 Skill Lifecycle End-to-End 详细实施方案](./MVP-RSL-2-SKILL-LIFECYCLE-END-TO-END-DEVELOPMENT-PLAN.md)。

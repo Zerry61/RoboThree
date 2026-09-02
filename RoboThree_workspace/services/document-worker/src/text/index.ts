@@ -8,6 +8,18 @@ export {
   writeTextFile,
 } from "./text-file-write.js";
 
+export {
+  TEXT_FILE_READ_CAPABILITY_ID,
+  TEXT_FILE_READ_LIMITS_REVISION,
+  readTextFile,
+} from "./text-file-read.js";
+
+export type {
+  TextFileReadDependencies,
+  TextFileReadOutput,
+  TextFileReadRequest,
+} from "./text-file-read.js";
+
 export type {
   RecoveredTextFileWriteResult,
   TextFileWriteDependencies,

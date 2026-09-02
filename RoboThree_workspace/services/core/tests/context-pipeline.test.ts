@@ -39,6 +39,10 @@ import {
   turnAt,
   turnIds,
 } from "./turn-snapshot.fixtures.js";
+import { CalibratedTokenEstimator } from
+  "../src/application/calibrated-token-estimator.js";
+import { WORKSPACE_TEXT_READ_CAPABILITY_ID } from
+  "../src/application/context-material-policy.js";
 
 const entityId = (value: number) =>
   `019f7c20-0000-7000-8000-${String(value).padStart(12, "0")}`;
@@ -155,7 +159,8 @@ describe("KAF-5.2 Context budget boundaries", () => {
     it(`bounds a Tool Result at preview limit case ${size}`, () => {
       const fixture = snapshotFixture([
         userMessage(1, "start"),
-        toolMessage(2, "x".repeat(size)),
+        assistantToolCallMessage(2),
+        toolMessage(3, "x".repeat(size)),
       ]);
       const result = new ContextPipeline({
         budgetPolicy: new ContextBudgetPolicy({
@@ -426,7 +431,8 @@ describe("KAF-5.2 full re-budget and reduction", () => {
     });
     const after = snapshotFixture([
       userMessage(1, "run the tool"),
-      toolMessage(2, "z".repeat(128 * 1_024)),
+      assistantToolCallMessage(2),
+      toolMessage(3, "z".repeat(128 * 1_024)),
     ]);
     const afterResult = defaultPipeline().run({
       phase: "mid_turn",
@@ -446,6 +452,58 @@ describe("KAF-5.2 full re-budget and reduction", () => {
       truncated: true,
     });
     expect(afterResult.receipt.reductionApplied).toBe(true);
+  });
+
+  it("keeps the current WTE read result exact and untruncated", () => {
+    const assistant = assistantToolCallMessage(2);
+    if (assistant.role !== "assistant") throw new Error("fixture drifted");
+    const exactRead = {
+      ...assistant,
+      toolCalls: assistant.toolCalls.map((call) => ({
+        ...call,
+        capabilityId: WORKSPACE_TEXT_READ_CAPABILITY_ID,
+      })),
+    };
+    const exactContent = JSON.stringify({
+      status: "succeeded",
+      result: { content: "<main>可连续编辑的完整内容</main>\n".repeat(2_000) },
+    });
+    const splitReadResult = {
+      ...toolMessage(3, exactContent),
+      content: [
+        { type: "text" as const, text: exactContent.slice(0, Math.floor(exactContent.length / 2)) },
+        { type: "text" as const, text: exactContent.slice(Math.floor(exactContent.length / 2)) },
+      ],
+    };
+    const fixture = snapshotFixture([
+      userMessage(1, "读取当前文件"),
+      exactRead,
+      splitReadResult,
+    ]);
+    const result = new ContextPipeline({
+      budgetPolicy: new ContextBudgetPolicy({
+        modelContextWindow: 400_000,
+        reservedOutputTokens: 128_000,
+        safetyMarginTokens: 4_000,
+        compactionThresholdRatio: 1,
+        maxPreviewBytes: 4_096,
+      }),
+      estimator: new CalibratedTokenEstimator(),
+    }).run({
+      phase: "mid_turn",
+      requestId: entityId(509),
+      snapshot: fixture.snapshot,
+      conversationMessages: fixture.messages,
+      model,
+    });
+    const tool = result.request.messages.find((message) => message.role === "tool");
+
+    expect(tool?.role === "tool" ? tool.content[0]?.text : undefined).toBe(exactContent);
+    expect(result.request.artifacts[0]).toMatchObject({
+      originalBytes: new TextEncoder().encode(exactContent).byteLength,
+      previewBytes: new TextEncoder().encode(exactContent).byteLength,
+      truncated: false,
+    });
   });
 
   it("reduces oldest conversation turns without splitting a Tool call/result pair", () => {

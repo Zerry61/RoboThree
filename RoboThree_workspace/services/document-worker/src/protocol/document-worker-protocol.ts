@@ -315,10 +315,11 @@ export function parseDocumentWorkerInvoke(
   );
   const capabilityId = requireNonEmptyString(value.capabilityId, "capabilityId");
 
-  const privateWorkspaceTextWrite =
+  const privateWorkspaceTextCapability =
     protocolVersion === DOCUMENT_WORKER_PRIVATE_PROTOCOL_VERSION
-    && capabilityId === "tool.workspace.file.write_text";
-  if (!capabilityId.startsWith("tool.document.") && !privateWorkspaceTextWrite) {
+    && (capabilityId === "tool.workspace.file.write_text"
+      || capabilityId === "tool.workspace.file.read_text");
+  if (!capabilityId.startsWith("tool.document.") && !privateWorkspaceTextCapability) {
     throw new DocumentWorkerProtocolError(
       "document_worker.invalid_message",
       `capabilityId must use tool.document.* or an exact private workspace capability, got ${capabilityId}`,

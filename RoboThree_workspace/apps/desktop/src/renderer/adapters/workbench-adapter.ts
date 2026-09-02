@@ -312,6 +312,23 @@ const SUPPORTED_WORKSPACE_ATTACHMENT_MEDIA_TYPES = new Set([
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   "application/pdf",
+  "text/markdown",
+  "text/plain",
+  "text/html",
+  "text/css",
+  "text/javascript",
+  "text/csv",
+  "text/x-python",
+  "text/x-java-source",
+  "text/x-csharp",
+  "text/x-go",
+  "text/x-rust",
+  "text/x-sql",
+  "text/xml",
+  "application/json",
+  "application/yaml",
+  "application/toml",
+  "image/svg+xml",
 ]);
 
 function assertSupportedWorkspaceAttachment(
@@ -323,7 +340,7 @@ function assertSupportedWorkspaceAttachment(
     || !SUPPORTED_WORKSPACE_ATTACHMENT_MEDIA_TYPES.has(artifact.mediaType)
   ) {
     throw new DesktopWorkbenchAdapterError(
-      "当前仅支持添加工作区内的 DOCX、XLSX 或 PDF 资料。",
+      "当前仅支持添加工作区内的文档或 UTF-8 文本文件。",
     );
   }
 }

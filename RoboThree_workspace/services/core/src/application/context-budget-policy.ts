@@ -7,6 +7,7 @@ export type ContextBudgetPolicyConfig = Readonly<{
   reservedOutputTokens: number;
   safetyMarginTokens: number;
   compactionThresholdRatio: number;
+  minimumHeadroomTokens?: number;
   maxPreviewBytes: number;
 }>;
 
@@ -36,6 +37,9 @@ export class ContextBudgetPolicy {
     validatePositiveInteger(config.modelContextWindow, "modelContextWindow");
     validatePositiveInteger(config.reservedOutputTokens, "reservedOutputTokens");
     validatePositiveInteger(config.safetyMarginTokens, "safetyMarginTokens");
+    if (config.minimumHeadroomTokens !== undefined) {
+      validatePositiveInteger(config.minimumHeadroomTokens, "minimumHeadroomTokens");
+    }
     validatePositiveInteger(config.maxPreviewBytes, "maxPreviewBytes");
     if (
       !Number.isFinite(config.compactionThresholdRatio)
@@ -49,12 +53,22 @@ export class ContextBudgetPolicy {
     if (availableInputTokens <= 0) {
       throw new Error("Context budget reserves must leave a positive input budget");
     }
+    const ratioThresholdTokens = Math.floor(
+      availableInputTokens * config.compactionThresholdRatio,
+    );
+    const compactionThresholdTokens = config.minimumHeadroomTokens === undefined
+      ? ratioThresholdTokens
+      : Math.min(
+        ratioThresholdTokens,
+        availableInputTokens - config.minimumHeadroomTokens,
+      );
+    if (compactionThresholdTokens <= 0) {
+      throw new Error("Context budget headroom must leave a positive compaction threshold");
+    }
     const material = {
       ...config,
       availableInputTokens,
-      compactionThresholdTokens: Math.floor(
-        availableInputTokens * config.compactionThresholdRatio,
-      ),
+      compactionThresholdTokens,
     };
     this.#decision = Object.freeze({
       ...material,

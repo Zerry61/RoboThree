@@ -11,7 +11,10 @@
         @change="onChange"
       >
         <option value="" disabled>{{ placeholder }}</option>
-        <option v-for="option in options" :key="option.value" :value="option.value">{{ option.label }}</option>
+        <template v-for="option in options">
+          <option v-if="option.disabled === true" :key="option.value" :value="option.value" disabled>{{ option.label }}</option>
+          <option v-else :key="option.value" :value="option.value">{{ option.label }}</option>
+        </template>
       </select>
     </template>
   </FieldShell>
@@ -25,7 +28,7 @@ withDefaults(
     id: string;
     label: string;
     value: string;
-    options: readonly Readonly<{ value: string; label: string }>[];
+    options: readonly Readonly<{ value: string; label: string; disabled?: boolean }>[];
     placeholder?: string;
     help?: string;
     error?: string;

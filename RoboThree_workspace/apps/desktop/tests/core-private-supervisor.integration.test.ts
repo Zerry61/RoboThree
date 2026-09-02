@@ -28,6 +28,8 @@ describe("DCF-1.2A Electron Main CorePrivateSupervisor", () => {
         modelCreatedAt: "2026-08-30T00:00:00.000Z",
         displayName: "Admin Managed Model",
         supportsToolCalling: true,
+        contextWindowTokens: 400_000,
+        maxOutputTokens: 128_000,
       }), { status: 200, headers: { "content-type": "application/json" } });
     });
 
@@ -39,6 +41,8 @@ describe("DCF-1.2A Electron Main CorePrivateSupervisor", () => {
       modelCreatedAt: "2026-08-30T00:00:00.000Z",
       displayName: "Admin Managed Model",
       supportsToolCalling: true,
+      contextWindowTokens: 400_000,
+      maxOutputTokens: 128_000,
       centralBaseUrl: "http://127.0.0.1:41731/",
     });
     expect(resolved?.deployment).not.toContain("internal-trial-token");

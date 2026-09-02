@@ -30,6 +30,11 @@ import type {
   RobotReviewDetail,
   RobotReviewPage,
 } from '@robothree/contracts/agent-lifecycle/v1alpha1';
+import type {
+  AdminSkillLifecycleApiV1Alpha1,
+  SkillLifecycleMutationReceipt,
+  SkillOperation,
+} from '@robothree/contracts/skill-lifecycle/v1alpha1';
 
 export type AdminCapabilitySet = Readonly<{
   capabilitySetRevision: string;
@@ -70,7 +75,10 @@ export type AdminAdapter = Readonly<{
   testModelConnection(command: TestAdminModelConnectionCommand): Promise<AdminModelConnectionTestReceipt>;
   setModelLifecycle(command: SetAdminModelLifecycleCommand): Promise<AdminModelMutationReceipt>;
   setDefaultModel(command: SetDefaultAdminModelCommand): Promise<AdminModelMutationReceipt>;
-}>;
+}> & AdminSkillLifecycleApiV1Alpha1<File>;
+
+export type AdminSkillLifecycleReceipt = SkillLifecycleMutationReceipt;
+export type AdminSkillLifecycleOperation = SkillOperation;
 
 export type AdminPageStatus = 'loading' | 'empty' | 'ready' | 'unavailable' | 'permissionDenied' | 'notFound' | 'stale' | 'error' | 'disabled' | 'partial' | 'gated';
 

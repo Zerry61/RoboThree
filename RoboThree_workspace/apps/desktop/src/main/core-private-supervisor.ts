@@ -29,6 +29,10 @@ const INTERNAL_TRIAL_TOKEN_ENV =
   "ROBOTHREE_INTERNAL_TRIAL_ENTERPRISE_ACCESS_TOKEN" as const;
 const INTERNAL_TRIAL_AGENT_LIFECYCLE_TOKEN_ENV =
   "ROBOTHREE_INTERNAL_TRIAL_AGENT_LIFECYCLE_ACCESS_TOKEN" as const;
+const INTERNAL_TRIAL_SKILL_LIFECYCLE_TOKEN_ENV =
+  "ROBOTHREE_INTERNAL_TRIAL_SKILL_LIFECYCLE_ACCESS_TOKEN" as const;
+const PRIVATE_INSTALLED_SKILL_ROOT_ENV =
+  "ROBOTHREE_PRIVATE_INSTALLED_SKILL_ROOT" as const;
 
 type CoreReadyMessage = Readonly<{
   type: "desktop.core.ready";
@@ -52,6 +56,7 @@ export type InternalTrialCoreEnvironmentLease = Readonly<{
   deployment?: string;
   accessToken?: Buffer;
   agentLifecycleAccessToken?: Buffer;
+  skillLifecycleAccessToken?: Buffer;
 }>;
 type Dfi543TestHarness = Readonly<{
   credentialHelperDescriptor: Readonly<{
@@ -116,6 +121,7 @@ export class CorePrivateSupervisor {
     credentialHelperDescriptor?: ProductionPersonalCredentialHelperDescriptor;
     dfi543TestHarness?: Dfi543TestHarness;
     sensitiveTransportActivationDescriptor?: SensitiveTransportActivationDescriptor;
+    privateInstalledSkillRoot?: string;
     maxUnexpectedRestarts?: number;
     dependencies?: {
       startTimeoutMs?: number;
@@ -145,6 +151,7 @@ export class CorePrivateSupervisor {
         entryPath,
         input.dfi543TestHarness !== undefined,
         internalTrial,
+        input.privateInstalledSkillRoot,
       ));
     this.#createClient = input.dependencies?.createClient
       ?? ((clientInput) => new CorePrivateClient(clientInput));
@@ -241,6 +248,7 @@ export class CorePrivateSupervisor {
       await Promise.allSettled(pending);
       this.#internalTrialEnvironment?.accessToken?.fill(0);
       this.#internalTrialEnvironment?.agentLifecycleAccessToken?.fill(0);
+      this.#internalTrialEnvironment?.skillLifecycleAccessToken?.fill(0);
       this.#state = "stopped";
     })();
     this.#stopPromise = operation;
@@ -509,6 +517,7 @@ function spawnCoreChild(
   entryPath: string,
   testHarness = false,
   internalTrial?: InternalTrialCoreEnvironmentLease,
+  privateInstalledSkillRoot?: string,
 ): ChildProcess {
   return fork(entryPath, [], {
     cwd: dirname(entryPath),
@@ -527,6 +536,14 @@ function spawnCoreChild(
           [INTERNAL_TRIAL_AGENT_LIFECYCLE_TOKEN_ENV]:
             internalTrial.agentLifecycleAccessToken.toString("utf8"),
         }),
+      ...(internalTrial?.skillLifecycleAccessToken === undefined
+        ? {}
+        : {
+          [INTERNAL_TRIAL_SKILL_LIFECYCLE_TOKEN_ENV]:
+            internalTrial.skillLifecycleAccessToken.toString("utf8"),
+        }),
+      ...(privateInstalledSkillRoot === undefined
+        ? {} : { [PRIVATE_INSTALLED_SKILL_ROOT_ENV]: privateInstalledSkillRoot }),
     },
     execArgv: [],
     serialization: "json",
@@ -540,10 +557,13 @@ function captureInternalTrialCoreEnvironment(
   const deployment = environment[INTERNAL_TRIAL_DEPLOYMENT_ENV];
   const token = environment[INTERNAL_TRIAL_TOKEN_ENV];
   const agentLifecycleToken = environment[INTERNAL_TRIAL_AGENT_LIFECYCLE_TOKEN_ENV];
+  const skillLifecycleToken = environment[INTERNAL_TRIAL_SKILL_LIFECYCLE_TOKEN_ENV];
   delete environment[INTERNAL_TRIAL_DEPLOYMENT_ENV];
   delete environment[INTERNAL_TRIAL_TOKEN_ENV];
   delete environment[INTERNAL_TRIAL_AGENT_LIFECYCLE_TOKEN_ENV];
-  if (deployment === undefined && token === undefined && agentLifecycleToken === undefined) {
+  delete environment[INTERNAL_TRIAL_SKILL_LIFECYCLE_TOKEN_ENV];
+  if (deployment === undefined && token === undefined && agentLifecycleToken === undefined
+    && skillLifecycleToken === undefined) {
     return undefined;
   }
   // The supervisor supports stop/start reuse, so this privileged lease has the
@@ -554,6 +574,9 @@ function captureInternalTrialCoreEnvironment(
     ...(agentLifecycleToken === undefined
       ? {}
       : { agentLifecycleAccessToken: Buffer.from(agentLifecycleToken, "utf8") }),
+    ...(skillLifecycleToken === undefined
+      ? {}
+      : { skillLifecycleAccessToken: Buffer.from(skillLifecycleToken, "utf8") }),
   });
 }
 
@@ -624,12 +647,16 @@ function parseAdminModelDiscoveryResponse(encoded: string): Readonly<{
   modelCreatedAt: string;
   displayName: string;
   supportsToolCalling: true;
+  contextWindowTokens: number;
+  maxOutputTokens: number;
 }> {
   const value = JSON.parse(encoded) as unknown;
   if (!isRecord(value)
     || !hasExactKeys(value, [
       "configurationRevision",
+      "contextWindowTokens",
       "displayName",
+      "maxOutputTokens",
       "modelCreatedAt",
       "modelId",
       "schemaVersion",
@@ -645,7 +672,14 @@ function parseAdminModelDiscoveryResponse(encoded: string): Readonly<{
     || typeof value.displayName !== "string"
     || value.displayName.trim().length === 0
     || value.displayName.length > 160
-    || value.supportsToolCalling !== true) {
+    || value.supportsToolCalling !== true
+    || !Number.isSafeInteger(value.contextWindowTokens)
+    || (value.contextWindowTokens as number) < 8_192
+    || (value.contextWindowTokens as number) > 1_048_576
+    || !Number.isSafeInteger(value.maxOutputTokens)
+    || (value.maxOutputTokens as number) < 256
+    || (value.maxOutputTokens as number) > 262_144
+    || (value.maxOutputTokens as number) > (value.contextWindowTokens as number)) {
     throw new Error("Admin-managed internal-trial model discovery is invalid");
   }
   return Object.freeze({
@@ -655,6 +689,8 @@ function parseAdminModelDiscoveryResponse(encoded: string): Readonly<{
     modelCreatedAt: value.modelCreatedAt,
     displayName: value.displayName.trim(),
     supportsToolCalling: true,
+    contextWindowTokens: value.contextWindowTokens as number,
+    maxOutputTokens: value.maxOutputTokens as number,
   });
 }
 

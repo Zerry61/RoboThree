@@ -1331,9 +1331,9 @@ implements DesktopTaskSummaryReader {
       updatedAt: task.head.updatedAt,
       resolvedAgentId: selection.agent.agentDefinitionId,
       resolvedModelId: selection.resolvedModelLock.capabilityId,
-      ...(failureSummary(displayStatus) === undefined
+      ...(failureSummary(displayStatus, task.checkpoint.state) === undefined
         ? {}
-        : { failureSummary: failureSummary(displayStatus) }),
+        : { failureSummary: failureSummary(displayStatus, task.checkpoint.state) }),
     });
   }
 
@@ -1580,7 +1580,10 @@ export function projectToolActivityForDesktop(
     operationType: step?.action.kind ?? "tool_action",
     status,
     safetySummary: "Tool arguments and results are hidden.",
-    statusSummary: activityStatusSummary(status),
+    statusSummary: activityStatusSummary(status, step),
+    ...(workspaceTextTargetSummary(step?.action) === undefined
+      ? {}
+      : { targetSummary: workspaceTextTargetSummary(step?.action) }),
     startedAt: attempt.createdAt,
     updatedAt: attempt.updatedAt,
     ...(["completed", "failed", "cancelled", "timed_out", "uncertain"].includes(status)
@@ -2006,7 +2009,20 @@ function activeStep(state: TaskRunState) {
     candidate.stepId === run.activeStepId);
 }
 
-function failureSummary(status: TaskDisplayStatus): string | undefined {
+function failureSummary(
+  status: TaskDisplayStatus,
+  state: TaskRunState,
+): string | undefined {
+  const terminalCode = state.terminalError?.code;
+  if (terminalCode === "workspace.file.content_changed_repeated") {
+    return "文件在处理期间再次发生变化，本次未覆盖文件。";
+  }
+  if (terminalCode === "workspace.file.output_capacity_insufficient") {
+    return "当前模型无法完整生成修改后的文件，请缩小文件或选择输出能力更高的模型。";
+  }
+  if (terminalCode === "workspace.file.write_uncertain") {
+    return "写入结果需要核对，系统没有自动再次覆盖文件。";
+  }
   switch (status) {
     case "failed": return "Task failed.";
     case "cancelled": return "Task was cancelled.";
@@ -2018,7 +2034,23 @@ function failureSummary(status: TaskDisplayStatus): string | undefined {
 
 function activityStatusSummary(
   status: ToolActivityProjection["status"],
+  step?: TaskRunState["runs"][number]["steps"][number],
 ): string {
+  const operation = step?.action.kind;
+  const errorCode = step?.terminalError?.code;
+  if (operation === "tool.workspace.file.read_text") {
+    if (status === "preparing" || status === "running") return "正在读取磁盘最新内容。";
+    if (status === "completed") return "已读取磁盘最新内容。";
+    if (status === "failed") return "未能读取稳定的文本文件。";
+  }
+  if (operation === "tool.workspace.file.write_text") {
+    if (errorCode === "workspace.file.content_changed") {
+      return "文件已发生变化，本次写入未覆盖磁盘内容。";
+    }
+    if (status === "preparing" || status === "running") return "正在保存修改后的文件。";
+    if (status === "completed") return "文件已更新。";
+    if (status === "uncertain") return "写入结果待核对，系统不会自动重写。";
+  }
   switch (status) {
     case "uncertain": return "External result could not be confirmed.";
     case "failed": return "Tool action failed.";
@@ -2029,6 +2061,21 @@ function activityStatusSummary(
     case "waiting_confirmation": return "Tool action is waiting for confirmation.";
     case "timed_out": return "Tool action timed out.";
   }
+}
+
+function workspaceTextTargetSummary(action: Action | undefined): string | undefined {
+  if (
+    action === undefined
+    || (action.kind !== "tool.workspace.file.read_text"
+      && action.kind !== "tool.workspace.file.write_text")
+  ) return undefined;
+  const relativePath = action.payload.relativePath;
+  return typeof relativePath === "string"
+    && relativePath.length > 0
+    && relativePath.length <= 240
+    && isSafeWorkspaceRelativePath(relativePath)
+    ? relativePath
+    : undefined;
 }
 
 function toDesktopId(namespace: string, internalId: string): string {

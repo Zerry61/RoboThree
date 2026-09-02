@@ -13,6 +13,10 @@ import {
   createModelDefinition,
 } from "../application/runtime-selection-revisions.js";
 import {
+  createExactModelCapabilityProfile,
+  encodeExactModelCapabilityProfile,
+} from "../application/exact-model-capability-profile.js";
+import {
   createAdapterDescriptor,
   createCapabilityBinding,
   createCapabilityDefinition,
@@ -46,6 +50,8 @@ const AdminManagedDeploymentSchema = z.object({
   modelCreatedAt: z.iso.datetime({ offset: true }),
   displayName: z.string().trim().min(1).max(160),
   supportsToolCalling: z.literal(true),
+  contextWindowTokens: z.number().int().min(8_192).max(1_048_576),
+  maxOutputTokens: z.number().int().min(256).max(262_144),
 }).strict();
 
 const DeploymentSchema = z.discriminatedUnion("schemaVersion", [
@@ -184,11 +190,19 @@ export function consumeInternalTrialEnterpriseModelDeployment(input: Readonly<{
 function createAdminManagedRegistry(deployment: z.infer<
   typeof AdminManagedDeploymentSchema
 >): RegistrySnapshot {
+  if (deployment.maxOutputTokens > deployment.contextWindowTokens) throw invalid();
   const source = Object.freeze({
     trust: "enterprise" as const,
     packageId: "deployment.admin-model.internal-trial",
     packageRevision: deployment.configurationRevision,
   });
+  const profile = createExactModelCapabilityProfile({
+    capabilityId: deployment.modelId,
+    modelFamily: "openai-compatible",
+    contextWindowTokens: deployment.contextWindowTokens,
+    maxOutputTokens: deployment.maxOutputTokens,
+  });
+  const configurationRef = encodeExactModelCapabilityProfile(profile);
   const capability = createCapabilityDefinition({
     schemaVersion: CONTRACT_VERSION,
     capabilityId: deployment.modelId,
@@ -200,12 +214,7 @@ function createAdminManagedRegistry(deployment: z.infer<
       family: "openai-compatible",
       inputModalities: ["text"],
       outputModalities: ["text"],
-      // ADMIN-MVP-VS1 manages the one approved internal-trial model class.
-      // Keep the same execution capability baseline as the frozen VS1
-      // deployment path until a real consumer justifies a public capability
-      // field; 8k made the existing presentation Agent selectable but unable
-      // to start once its compiled instruction bundle was materialized.
-      contextWindow: 128_000,
+      contextWindow: deployment.contextWindowTokens,
       supportsStreaming: true,
     },
   });
@@ -218,6 +227,7 @@ function createAdminManagedRegistry(deployment: z.infer<
     implementationRef: "enterprise:model-gateway",
     runtimeBoundary: "remote",
     protocol: { name: "robothree-enterprise-model", version: "v1alpha1" },
+    configurationRef,
   });
   const binding = createCapabilityBinding({
     schemaVersion: CONTRACT_VERSION,
@@ -232,6 +242,7 @@ function createAdminManagedRegistry(deployment: z.infer<
     },
     port: "model_provider",
     source,
+    configurationRef,
   });
   return RegistrySnapshotSchema.parse(new RegistryBuilder({ trustedSources: [source] })
     .registerCapability(capability)

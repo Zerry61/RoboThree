@@ -22,6 +22,19 @@ import {
 export const CORE_PRIVATE_ORIGIN = "robothree://desktop-main";
 
 export const CORE_PRIVATE_ROUTES = Object.freeze({
+  skillLifecycleCompatibilityV1Alpha1: "/skill-lifecycle/v1alpha1/compatibility",
+  listSkillsV1Alpha1: "/skill-lifecycle/v1alpha1/list",
+  getSkillV1Alpha1: "/skill-lifecycle/v1alpha1/detail",
+  syncSkillDraftV1Alpha1: "/skill-lifecycle/v1alpha1/internal/sync-draft",
+  stageSkillReleaseV1Alpha1: "/skill-lifecycle/v1alpha1/internal/stage-release",
+  pollAdminSkillDraftTestV1Alpha1: "/skill-lifecycle/v1alpha1/internal/admin-test/poll",
+  stageAdminSkillDraftTestV1Alpha1: "/skill-lifecycle/v1alpha1/internal/admin-test/stage",
+  startAdminSkillDraftTestV1Alpha1: "/skill-lifecycle/v1alpha1/internal/admin-test/start",
+  queryAdminSkillDraftTestV1Alpha1: "/skill-lifecycle/v1alpha1/internal/admin-test/query",
+  checkSkillInstallationUseV1Alpha1: "/skill-lifecycle/v1alpha1/internal/check-installation-use",
+  startSkillDraftTestV1Alpha1: "/skill-lifecycle/v1alpha1/drafts/test",
+  submitSkillDraftV1Alpha1: "/skill-lifecycle/v1alpha1/drafts/submit",
+  withdrawSkillSubmissionV1Alpha1: "/skill-lifecycle/v1alpha1/drafts/withdraw",
   listMyRobotDraftsV1Alpha1: "/agent-lifecycle/v1alpha1/drafts/list",
   getMyRobotDraftV1Alpha1: "/agent-lifecycle/v1alpha1/drafts/detail",
   createRobotDraftV1Alpha1: "/agent-lifecycle/v1alpha1/drafts/create",
@@ -336,6 +349,32 @@ export class CorePrivateHttpServer implements RuntimeComponent {
     signal?: AbortSignal,
   ): Promise<{ ok: boolean; value?: unknown; error?: unknown } | undefined> {
     switch (path) {
+      case CORE_PRIVATE_ROUTES.skillLifecycleCompatibilityV1Alpha1:
+        return this.#facade.getSkillLifecycleCompatibilityV1Alpha1(input as never);
+      case CORE_PRIVATE_ROUTES.listSkillsV1Alpha1:
+        return this.#facade.listSkillsV1Alpha1(input as never);
+      case CORE_PRIVATE_ROUTES.getSkillV1Alpha1:
+        return this.#facade.getSkillV1Alpha1(input as never);
+      case CORE_PRIVATE_ROUTES.syncSkillDraftV1Alpha1:
+        return this.#facade.syncSkillDraftV1Alpha1(input);
+      case CORE_PRIVATE_ROUTES.stageSkillReleaseV1Alpha1:
+        return this.#facade.stageSkillReleaseV1Alpha1(input);
+      case CORE_PRIVATE_ROUTES.pollAdminSkillDraftTestV1Alpha1:
+        return this.#facade.pollAdminSkillDraftTestV1Alpha1(input);
+      case CORE_PRIVATE_ROUTES.stageAdminSkillDraftTestV1Alpha1:
+        return this.#facade.stageAdminSkillDraftTestV1Alpha1(input);
+      case CORE_PRIVATE_ROUTES.startAdminSkillDraftTestV1Alpha1:
+        return this.#facade.startAdminSkillDraftTestV1Alpha1(input);
+      case CORE_PRIVATE_ROUTES.queryAdminSkillDraftTestV1Alpha1:
+        return this.#facade.queryAdminSkillDraftTestV1Alpha1(input);
+      case CORE_PRIVATE_ROUTES.checkSkillInstallationUseV1Alpha1:
+        return this.#facade.checkSkillInstallationUseV1Alpha1(input);
+      case CORE_PRIVATE_ROUTES.startSkillDraftTestV1Alpha1:
+        return this.#facade.startSkillDraftTestV1Alpha1(input as never);
+      case CORE_PRIVATE_ROUTES.submitSkillDraftV1Alpha1:
+        return this.#facade.submitSkillDraftV1Alpha1(input as never);
+      case CORE_PRIVATE_ROUTES.withdrawSkillSubmissionV1Alpha1:
+        return this.#facade.withdrawSkillSubmissionV1Alpha1(input as never);
       case CORE_PRIVATE_ROUTES.listMyRobotDraftsV1Alpha1:
         return this.#facade.listMyRobotDraftsV1Alpha1(input as never);
       case CORE_PRIVATE_ROUTES.getMyRobotDraftV1Alpha1:

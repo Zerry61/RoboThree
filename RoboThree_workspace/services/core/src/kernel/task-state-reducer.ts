@@ -293,13 +293,17 @@ function recordObservation(
     { observedAt: command.observation.observedAt, stepStartedAt: step.startedAt, issuedAt: command.issuedAt },
   );
 
-  if (command.observation.outcome === "succeeded" || command.observation.outcome === "user_rejected") {
+  if (
+    command.observation.outcome === "succeeded"
+    || command.observation.outcome === "user_rejected"
+    || isRecoverableWorkspaceTextConflict(state, step, command.observation)
+  ) {
     const nextStep = terminalStep(
       step,
       command.observation.outcome,
       command.issuedAt,
       command.observation,
-      command.observation.outcome === "user_rejected" ? command.observation.error : undefined,
+      command.observation.outcome === "succeeded" ? undefined : command.observation.error,
     );
     const nextRun: RunState = {
       ...run,
@@ -320,6 +324,28 @@ function recordObservation(
   const status = command.observation.outcome;
   const nextStep = terminalStep(step, status, command.issuedAt, command.observation, command.observation.error);
   return terminateFromRun(state, command, run, nextStep, status, command.observation.error);
+}
+
+function isRecoverableWorkspaceTextConflict(
+  state: TaskRunState,
+  step: StepState,
+  observation: Observation,
+): boolean {
+  if (step.action.kind !== "tool.workspace.file.write_text"
+    || !isWorkspaceTextContentChanged(observation)) return false;
+  const priorConflictCount = state.runs.flatMap((run) => run.steps).filter(
+    (candidate) => candidate.action.kind === "tool.workspace.file.write_text"
+      && candidate.observation !== undefined
+      && isWorkspaceTextContentChanged(candidate.observation),
+  ).length;
+  return priorConflictCount === 0;
+}
+
+function isWorkspaceTextContentChanged(observation: Observation): boolean {
+  if (observation.outcome !== "failed") return false;
+  const detailCode = observation.error.details?.detailCode;
+  return observation.error.code === "workspace.file.content_changed"
+    || detailCode === "workspace.file.content_changed";
 }
 
 function completeRun(

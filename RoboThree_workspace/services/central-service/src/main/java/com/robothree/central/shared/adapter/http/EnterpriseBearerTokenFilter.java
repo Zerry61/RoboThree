@@ -51,6 +51,8 @@ public final class EnterpriseBearerTokenFilter extends OncePerRequestFilter {
                 && path.equals("/internal-trial/v1/admin-models/default");
         boolean internalTrialAgentLifecycle = path.startsWith(
                 "/internal-trial/v1/agent-lifecycle/");
+        boolean internalTrialSkillLifecycle = path.startsWith(
+                "/internal-trial/v1/skill-lifecycle/");
         boolean modelInvocation = path.matches("^/v1alpha[12]/model-invocations$")
                 ? "POST".equals(method)
                 : path.matches("^/v1alpha[12]/model-invocations/[^/]+$")
@@ -60,7 +62,7 @@ public final class EnterpriseBearerTokenFilter extends OncePerRequestFilter {
                                 : path.matches("^/v1alpha[12]/model-invocations/[^/]+/events$")
                                         && "GET".equals(method);
         return !configuration && !modelInvocation && !internalTrialAdminModel
-                && !internalTrialAgentLifecycle;
+                && !internalTrialAgentLifecycle && !internalTrialSkillLifecycle;
     }
 
     @Override
@@ -98,6 +100,15 @@ public final class EnterpriseBearerTokenFilter extends OncePerRequestFilter {
                     "errorCode", "agentlifecycle.unauthorized",
                     "safeSummary", "当前身份不能执行此操作。",
                     "correlationId", safeCorrelationId(request)));
+            return;
+        }
+        if (request.getRequestURI().startsWith("/internal-trial/v1/skill-lifecycle/")) {
+            objectMapper.writeValue(response.getOutputStream(), java.util.Map.of(
+                    "contractVersion", "skill-lifecycle.v1alpha1",
+                    "errorCode", "skilllifecycle.unauthorized",
+                    "safeSummary", "当前身份不能执行此操作。",
+                    "correlationId", safeCorrelationId(request),
+                    "retryable", false));
             return;
         }
         objectMapper.writeValue(response.getOutputStream(),

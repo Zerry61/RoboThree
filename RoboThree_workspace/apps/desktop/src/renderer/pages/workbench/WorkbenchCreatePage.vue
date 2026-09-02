@@ -41,6 +41,15 @@
         上一任务和成果不会被修改；请为修订版指定新的文件名。
       </template>
     </R3InlineNotice>
+    <R3InlineNotice
+      v-if="skillSelectionInvalidated"
+      class="workbench-page__feedback"
+      tone="warning"
+      title="已选技能不可用"
+      data-skill-selection-invalidated
+    >
+      已清除失效技能。请选择一个当前可用技能后再提交。
+    </R3InlineNotice>
 
     <div class="workbench-page__layout">
       <section class="workbench-page__conversation-workspace">
@@ -89,18 +98,46 @@
             <section
               v-if="executionProcessVisible"
               class="workbench-page__execution-process"
-              role="status"
-              aria-live="polite"
               data-task-progress
             >
-              <header>
-                <div>
+              <button
+                type="button"
+                class="workbench-page__execution-summary"
+                :aria-expanded="progressExpanded"
+                aria-controls="workbench-progress-details"
+                @click="progressExpanded = !progressExpanded"
+              >
+                <span
+                  v-if="taskThinkingActive"
+                  class="workbench-page__thinking-indicator"
+                  aria-hidden="true"
+                ><i></i><i></i><i></i></span>
+                <span v-else class="workbench-page__execution-status-icon" aria-hidden="true">
+                  {{ taskProgressStatusIcon }}
+                </span>
+                <span class="workbench-page__execution-copy">
                   <strong>{{ taskProgressTitle }}</strong>
-                  <span>{{ taskProgressDescription }}</span>
-                </div>
+                  <small aria-live="polite">{{ taskProgressDescription }}</small>
+                </span>
                 <time>{{ taskElapsedLabel }}</time>
-              </header>
-              <ol>
+                <span class="workbench-page__execution-chevron" aria-hidden="true">
+                  {{ progressExpanded ? "⌃" : "⌄" }}
+                </span>
+              </button>
+              <ol v-show="progressExpanded" id="workbench-progress-details">
+                <li
+                  v-for="(progress, index) in activeModelProgressHistory"
+                  :key="`${progress.taskId}:${progress.progressKey}`"
+                  :data-state="index === activeModelProgressHistory.length - 1 ? 'active' : 'completed'"
+                  data-model-progress-item
+                >
+                  <span class="workbench-page__execution-icon" aria-hidden="true">
+                    {{ index === activeModelProgressHistory.length - 1 ? "·" : "✓" }}
+                  </span>
+                  <div>
+                    <span>{{ progress.safeSummary }}</span>
+                  </div>
+                </li>
                 <li
                   v-for="item in executionProcessItems"
                   :key="item.id"
@@ -128,6 +165,53 @@
               <div>
                 <strong>任务已终止</strong>
                 <span>当前任务已停止。你可以继续输入新的消息。</span>
+              </div>
+            </section>
+
+            <section
+              v-if="workspaceTextConflictRecoveryVisible"
+              class="workbench-page__task-outcome workbench-page__task-outcome--attention"
+              role="alert"
+              data-workspace-text-conflict-recovery
+            >
+              <span class="workbench-page__task-outcome-mark" aria-hidden="true">!</span>
+              <div>
+                <strong>文件再次发生变化，本次未覆盖</strong>
+                <span>可以重新读取磁盘最新版后处理，或改为另存新文件。</span>
+                <div class="workbench-page__task-outcome-actions">
+                  <R3Button variant="secondary" @click="prepareWorkspaceTextRetry">基于最新版本重新处理</R3Button>
+                  <R3Button variant="secondary" @click="prepareWorkspaceTextSaveAs">另存为新文件</R3Button>
+                  <R3Button
+                    variant="secondary"
+                    :disabled="workspaceTextConflictArtifact === undefined"
+                    @click="void openWorkspaceTextConflictFile()"
+                  >打开文件</R3Button>
+                  <R3Button variant="secondary" @click="dismissWorkspaceTextConflict">取消本次修改</R3Button>
+                </div>
+              </div>
+            </section>
+
+            <section
+              v-if="taskFailureVisible"
+              class="workbench-page__task-outcome workbench-page__task-outcome--failure"
+              role="alert"
+              data-task-failure
+            >
+              <span class="workbench-page__task-outcome-mark" aria-hidden="true">!</span>
+              <div>
+                <strong>{{ taskFailureTitle }}</strong>
+                <span>{{ activeTaskFailureSummary }}</span>
+                <div
+                  v-if="outputCapacityInsufficient"
+                  class="workbench-page__task-outcome-actions"
+                >
+                  <R3Button variant="secondary" @click="void chooseOtherModelForNewTask()">
+                    选择其他模型并新建任务
+                  </R3Button>
+                  <R3Button variant="secondary" @click="prepareSmallerFileRetry">
+                    缩小文件后重试
+                  </R3Button>
+                </div>
               </div>
             </section>
 
@@ -541,7 +625,11 @@ import {
   subscribeWorkbenchNewTaskRequested,
 } from "../../app/shell-navigation-events.js";
 import type { DesktopRendererEvent } from "../../../shared/foundation-api.js";
-import { presentDurableMessage, presentStreamingAssistant } from
+import {
+  isProductConversationMessage,
+  presentDurableMessage,
+  presentStreamingAssistant,
+} from
   "../../presentation/message-presentation.js";
 import {
   presentArtifactPreview,
@@ -566,11 +654,18 @@ import {
   type WorkbenchAuthorizationMode,
   type WorkbenchSelection,
 } from "./workbench-model.js";
-import { presentWorkbenchExecution } from "./workbench-execution-presentation.js";
+import {
+  presentWorkbenchExecution,
+  presentWorkbenchModelProgress,
+} from "./workbench-execution-presentation.js";
 import {
   consumeFollowUpIntent,
   type WorkbenchFollowUpIntent,
 } from "./follow-up-intent.js";
+import {
+  consumeSkillCreatorWorkbenchIntent,
+  type SkillCreatorWorkbenchIntent,
+} from "./skill-creator-intent.js";
 
 defineOptions({ name: "RoboThreeWorkbench" });
 
@@ -583,12 +678,18 @@ const tasksAdapter = inject<TasksAdapter | undefined>(tasksAdapterKey, undefined
 const route = useRoute();
 const router = useRouter();
 const followUpIntent = ref<WorkbenchFollowUpIntent | undefined>(consumeFollowUpIntent());
+const skillCreatorIntent = ref<SkillCreatorWorkbenchIntent | undefined>(
+  consumeSkillCreatorWorkbenchIntent(),
+);
 
 type SelectOption = {
   label: string;
   value: string;
   disabled?: boolean;
 };
+
+const OUTPUT_CAPACITY_FAILURE_SUMMARY =
+  "当前模型无法完整生成修改后的文件，请缩小文件或选择输出能力更高的模型。";
 
 const emptyCatalog: WorkbenchCatalog = {
   workspaces: [],
@@ -616,6 +717,7 @@ const busy = ref(false);
 const error = ref("");
 const defaultWorkspaceUnavailable = ref(false);
 const notice = ref("");
+const skillSelectionInvalidated = ref(false);
 const attachmentNotice = ref("");
 const attachments = ref<ArtifactCatalogItemProjection[]>([]);
 const authorizationMode = ref<WorkbenchAuthorizationMode>("smart_confirm");
@@ -644,12 +746,18 @@ const conversationTitle = ref("新对话");
 const conversationSnapshot = ref<ConversationSnapshot>();
 const activeTaskDetail = ref<TaskDetailProjection>();
 const streamingAssistant = ref<StreamingAssistantState>();
-const activeModelProgress = ref<Readonly<{
+type ModelProgressPresentation = Readonly<{
   taskId: string;
   runtimeInstanceId: string;
   progressKey: string;
   safeSummary: string;
-}>>();
+}>;
+const activeModelProgress = ref<ModelProgressPresentation>();
+const pendingModelProgressByTask = new Map<string, ModelProgressPresentation>();
+const modelProgressHistoryByTask = new Map<string, ModelProgressPresentation[]>();
+const activeModelProgressHistory = ref<readonly ModelProgressPresentation[]>([]);
+const progressExpanded = ref(true);
+const dismissedTaskFailureId = ref("");
 const conversationStream = ref<HTMLElement>();
 const resultsPanelOpen = ref(false);
 type WorkbenchArtifactPreview =
@@ -670,6 +778,7 @@ type WorkbenchArtifactPreview =
 const artifactPreview = ref<WorkbenchArtifactPreview>();
 const taskControlBusy = ref(false);
 const cancellationRequestedTaskId = ref("");
+const dismissedWorkspaceTextConflictTaskId = ref("");
 const elapsedNow = ref(Date.now());
 let previewSequence = 0;
 let artifactPreviewSequence = 0;
@@ -680,10 +789,13 @@ let lastConversationRefreshAt = 0;
 let unsubscribeTasks: (() => void) | undefined;
 let unsubscribeNewTaskRequested: (() => void) | undefined;
 let followUpSelectionApplied = false;
+let skillCreatorAutoSubmitStarted = false;
 let hasActivated = false;
 
 const composerPlaceholder = computed(() => followUpIntent.value === undefined
-  ? "描述你想完成的任务…"
+  ? skillCreatorIntent.value === undefined
+    ? "描述你想完成的任务…"
+    : "继续补充技能创建要求…"
   : "例如：将第 3 页改为风险与下一步，并生成项目汇报-v2.pptx，不覆盖原文件…");
 const reasoningStatus = computed(() => {
   if (reasoningCompatibility.value === "loading") return "正在检查 Max 可用性…";
@@ -740,33 +852,74 @@ const cancellationPending = computed(() => cancellationRequestedTaskId.value !==
 const taskProgressVisible = computed(() => taskStopControlVisible.value);
 const executionProcessItems = computed(() => presentWorkbenchExecution(activeTaskDetail.value));
 const executionProcessVisible = computed(() => taskProgressVisible.value);
+const completedModelStepAt = computed(() => {
+  if (activeTaskSummary.value?.displayStatus !== "running") return undefined;
+  const steps = activeTaskDetail.value?.runs.flatMap((run) => run.steps) ?? [];
+  const hasActiveExecution = steps.some((step) => [
+    "preparing",
+    "queued",
+    "running",
+    "recovering",
+  ].includes(step.displayStatus)) || (activeTaskDetail.value?.toolActivities ?? []).some(
+    (activity) => activity.status === "preparing" || activity.status === "running",
+  );
+  if (hasActiveExecution) return undefined;
+  return steps
+    .filter((step) => step.actionType.includes("model") && step.displayStatus === "completed")
+    .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0]
+    ?.updatedAt;
+});
+const modelFinalizationDelayed = computed(() => {
+  const completedAt = completedModelStepAt.value;
+  return completedAt !== undefined
+    && elapsedNow.value - Date.parse(completedAt) >= 15_000;
+});
 const taskTerminationVisible = computed(() => (
   conversationActive.value
   && activeTaskSummary.value?.displayStatus === "cancelled"
 ));
 const taskProgressTitle = computed(() => {
   if (cancellationPending.value) return "正在终止任务";
+  if (modelFinalizationDelayed.value) return "任务收尾时间较长";
   switch (activeTaskSummary.value?.displayStatus) {
-    case "preparing": return "正在准备任务";
-    case "queued": return "任务正在排队";
-    case "running": return "RoboThree 正在处理";
+    case "preparing":
+    case "queued":
+    case "running": return "思考中…";
     case "waiting_confirmation": return "等待你的确认";
     case "recovering": return "正在恢复任务";
     case "manual_attention": return "任务需要你处理";
     default: return "正在同步任务状态";
   }
 });
+const taskThinkingActive = computed(() => !cancellationPending.value
+  && !modelFinalizationDelayed.value
+  && ["preparing", "queued", "running"].includes(
+    activeTaskSummary.value?.displayStatus ?? "",
+  ));
+const taskProgressStatusIcon = computed(() => {
+  switch (activeTaskSummary.value?.displayStatus) {
+    case "waiting_confirmation": return "!";
+    case "manual_attention": return "!";
+    case "recovering": return "↻";
+    default: return "·";
+  }
+});
 const taskProgressDescription = computed(() => {
   if (cancellationPending.value) return "停止请求已提交，正在等待 Core 确认。";
   switch (activeTaskSummary.value?.displayStatus) {
     case "waiting_confirmation": return "请检查待确认操作，或终止当前任务。";
-    case "recovering": return "正在从持久记录恢复，请勿重复提交。";
+    case "recovering": return "正在恢复任务上下文，请勿重复提交。";
     case "manual_attention": return "请检查当前结果，或终止当前任务。";
     default: {
+      if (completedModelStepAt.value !== undefined) {
+        return modelFinalizationDelayed.value
+          ? "模型已结束本轮处理，但 Core 尚未返回任务终态。你可以终止后重试。"
+          : "模型已结束本轮处理，Core 正在整理任务结果。";
+      }
       const progress = activeModelProgress.value;
       if (progress?.taskId === activeTaskId.value) return progress.safeSummary;
       return executionProcessItems.value.length === 0
-        ? "正在等待 Core 返回可展示的执行进展。"
+        ? "正在等待下一项安全执行进展"
         : "执行进展会在这里实时更新。";
     }
   }
@@ -778,6 +931,7 @@ const taskElapsedLabel = computed(() => {
 });
 const sendDisabledReason = computed(() => {
   if (conversationActive.value && !activeTaskAcceptsInput.value) return "RoboThree 正在回复";
+  if (skillSelectionInvalidated.value) return "已选技能不可用，请重新选择一个当前可用技能";
   return composerState.value.disabledReason;
 });
 const sendDisabled = computed(() => (
@@ -788,6 +942,7 @@ const conversationMessages = computed(() => {
   const items = (conversationSnapshot.value?.messages ?? [])
     .slice()
     .sort((left, right) => left.sequence - right.sequence)
+    .filter(isProductConversationMessage)
     .map((message) => ({
       id: message.messageId,
       presentation: presentDurableMessage(message),
@@ -815,9 +970,44 @@ const conversationMessages = computed(() => {
   }
   return items;
 });
-const conversationArtifacts = computed<readonly ArtifactProjection[]>(() =>
-  (activeTaskDetail.value?.artifacts ?? []).filter((artifact) =>
-    !artifact.lifecycle.deleted && !artifact.lifecycle.sourceDeleted));
+const conversationArtifacts = computed<readonly ArtifactProjection[]>(() => {
+  if (activeTaskSummary.value?.failureSummary === OUTPUT_CAPACITY_FAILURE_SUMMARY) return [];
+  return (activeTaskDetail.value?.artifacts ?? []).filter((artifact) =>
+    !artifact.lifecycle.deleted && !artifact.lifecycle.sourceDeleted);
+});
+const workspaceTextConflictActivities = computed(() =>
+  (activeTaskDetail.value?.toolActivities ?? []).filter((activity) =>
+    activity.operationType === "tool.workspace.file.write_text"
+    && activity.status === "failed"
+    && activity.statusSummary === "文件已发生变化，本次写入未覆盖磁盘内容。"));
+const workspaceTextConflictRelativePath = computed(() =>
+  workspaceTextConflictActivities.value.at(-1)?.targetSummary);
+const workspaceTextConflictRecoveryVisible = computed(() =>
+  activeTaskSummary.value?.displayStatus === "failed"
+  && workspaceTextConflictActivities.value.length >= 2
+  && dismissedWorkspaceTextConflictTaskId.value !== activeTaskId.value);
+const workspaceTextConflictArtifact = computed(() => {
+  const relativePath = workspaceTextConflictRelativePath.value;
+  return relativePath === undefined
+    ? undefined
+    : conversationArtifacts.value.find((artifact) => artifact.relativePath === relativePath);
+});
+const activeTaskFailureSummary = computed(() =>
+  activeTaskSummary.value?.failureSummary?.trim() ?? "");
+const outputCapacityInsufficient = computed(() => activeTaskFailureSummary.value
+  === OUTPUT_CAPACITY_FAILURE_SUMMARY);
+const taskFailureVisible = computed(() => activeTaskFailureSummary.value !== ""
+  && ["failed", "timed_out", "manual_attention"].includes(
+    activeTaskSummary.value?.displayStatus ?? "",
+  )
+  && !workspaceTextConflictRecoveryVisible.value
+  && dismissedTaskFailureId.value !== activeTaskId.value);
+const taskFailureTitle = computed(() => {
+  if (outputCapacityInsufficient.value) return "文件无法完整生成";
+  if (activeTaskSummary.value?.displayStatus === "timed_out") return "任务执行超时";
+  if (activeTaskSummary.value?.displayStatus === "manual_attention") return "任务需要你处理";
+  return "任务未能完成";
+});
 
 const agentOptions = computed<SelectOption[]>(() => {
   const options = catalog.agents.map((agent) => ({
@@ -939,6 +1129,7 @@ async function chooseAttachmentFromMenu(): Promise<void> {
 }
 
 function handleAgentSelection(agentId: string): void {
+  skillSelectionInvalidated.value = false;
   selection.agentSelectionInitialized = agentId !== "";
   if (agentId === "") {
     selection.requestedModelId = "";
@@ -964,6 +1155,7 @@ function handleAgentSelection(agentId: string): void {
 }
 
 function useGeneralAgent(): void {
+  skillSelectionInvalidated.value = false;
   selection.agentId = "";
   selection.agentSelectionInitialized = false;
   selection.requestedModelId = selectModelId(catalog.models, undefined, "");
@@ -1076,16 +1268,26 @@ async function initialize(): Promise<void> {
   } catch {
     reasoningCompatibility.value = "error";
   }
+  await activateSkillCreatorIntent();
 }
 
 async function refresh(): Promise<void> {
   loading.value = true;
   try {
+    const previousAgentId = selection.agentId;
+    const previousSkillIds = [...selection.selectedSkillIds];
     const next = await adapter.loadWorkbenchData();
     const previousWorkspaceGrantId = selection.workspaceGrantId;
     Object.assign(catalog, next);
     Object.assign(selection, normalizeWorkbenchSelection(catalog, selection));
+    if (previousAgentId === selection.agentId
+      && previousSkillIds.length > 0
+      && selection.selectedSkillIds.length !== previousSkillIds.length) {
+      selection.selectedSkillIds = [];
+      skillSelectionInvalidated.value = true;
+    }
     applyFollowUpSelection();
+    applySkillCreatorSelection();
     if (followUpIntent.value !== undefined && previousWorkspaceGrantId === "") {
       selection.workspaceGrantId = "";
     }
@@ -1098,9 +1300,14 @@ async function refresh(): Promise<void> {
     if (catalog.sessions.some((session) => session.sessionId === requestedSession)) {
       selection.sessionId = requestedSession;
     }
-    error.value = followUpIntent.value !== undefined && selection.sessionId === ""
-      ? "原对话已不可用，请返回任务页刷新后重试。"
-      : "";
+    if (skillCreatorIntent.value !== undefined
+      && selectedAgent.value?.agentId !== "agent.skill-creator") {
+      error.value = "技能创建助手暂不可用。草稿工作区已保留，请稍后重试。";
+    } else {
+      error.value = followUpIntent.value !== undefined && selection.sessionId === ""
+        ? "原对话已不可用，请返回任务页刷新后重试。"
+        : "";
+    }
   } catch (caught) {
     if (caught instanceof DesktopWorkbenchSubmitUncertainError) {
       uncertainSubmitCommandId.value = caught.commandId;
@@ -1156,6 +1363,10 @@ function removeAttachment(artifactId: string): void {
 async function submitTask(): Promise<void> {
   if (sendDisabled.value) return;
   const text = composer.value.trim();
+  streamingAssistant.value = undefined;
+  activeModelProgress.value = undefined;
+  activeModelProgressHistory.value = [];
+  progressExpanded.value = true;
   pendingUserMessage.value = {
     localId: `pending:${crypto.randomUUID()}`,
     content: text,
@@ -1194,6 +1405,8 @@ async function submitTask(): Promise<void> {
     selection.sessionId = result.session.sessionId;
     activeSessionId.value = result.session.sessionId;
     activeTaskId.value = result.receipt.taskId;
+    activeModelProgress.value = pendingModelProgressByTask.get(result.receipt.taskId);
+    activeModelProgressHistory.value = modelProgressHistoryByTask.get(result.receipt.taskId) ?? [];
     pendingUserMessage.value = {
       ...pendingUserMessage.value!,
       durableMessageId: result.receipt.userMessageId,
@@ -1206,6 +1419,7 @@ async function submitTask(): Promise<void> {
     }
     conversationTitle.value = result.session.title;
     followUpIntent.value = undefined;
+    skillCreatorIntent.value = undefined;
     rememberConversationSelection(result.session.sessionId, currentConversationSelection());
     await router?.replace({
       name: "workbench",
@@ -1285,6 +1499,17 @@ function attachmentTypeLabel(mediaType: string): string {
   if (mediaType === "application/pdf") return "PDF";
   if (mediaType.includes("wordprocessingml")) return "DOCX";
   if (mediaType.includes("spreadsheetml")) return "XLSX";
+  if (mediaType === "text/markdown") return "Markdown";
+  if (mediaType === "text/html") return "HTML";
+  if (
+    mediaType.startsWith("text/")
+    || mediaType === "application/json"
+    || mediaType === "application/yaml"
+    || mediaType === "application/xml"
+    || mediaType === "application/sql"
+    || mediaType === "application/toml"
+    || mediaType === "image/svg+xml"
+  ) return "文本";
   return "文件";
 }
 
@@ -1395,6 +1620,8 @@ function currentConversationSelection() {
 
 function resetForNewTask(): void {
   followUpIntent.value = undefined;
+  skillCreatorIntent.value = undefined;
+  skillCreatorAutoSubmitStarted = false;
   followUpSelectionApplied = false;
   selection.sessionId = "";
   composer.value = "";
@@ -1411,10 +1638,53 @@ function resetForNewTask(): void {
   pendingUserMessage.value = undefined;
   authorizationMode.value = "smart_confirm";
   streamingAssistant.value = undefined;
+  activeModelProgress.value = undefined;
+  activeModelProgressHistory.value = [];
+  pendingModelProgressByTask.clear();
+  modelProgressHistoryByTask.clear();
+  progressExpanded.value = true;
+  dismissedTaskFailureId.value = "";
   cancellationRequestedTaskId.value = "";
+  skillSelectionInvalidated.value = false;
   resultsPanelOpen.value = false;
   conversationRequestSequence += 1;
   closeComposerMenus();
+}
+
+function applySkillCreatorSelection(): void {
+  const intent = skillCreatorIntent.value;
+  if (intent === undefined) return;
+  const agent = catalog.agents.find((candidate) =>
+    candidate.agentId === intent.agentId && candidate.runnable);
+  selection.sessionId = "";
+  selection.selectedSkillIds = [];
+  selection.selectedKnowledgeIds = [];
+  attachments.value = [];
+  if (agent === undefined) {
+    selection.agentId = intent.agentId;
+    selection.agentSelectionInitialized = true;
+    selection.requestedModelId = "";
+    composer.value = intent.firstUserMessage;
+    error.value = "技能创建助手暂不可用。草稿工作区已保留，请稍后重试。";
+    return;
+  }
+  selection.agentId = agent.agentId;
+  selection.agentSelectionInitialized = true;
+  selection.requestedModelId = selectModelId(catalog.models, agent, agent.defaultModelId);
+  selection.workspaceGrantId = intent.workspaceGrantId;
+  composer.value = intent.firstUserMessage;
+}
+
+async function activateSkillCreatorIntent(): Promise<void> {
+  const intent = skillCreatorIntent.value;
+  if (intent === undefined || skillCreatorAutoSubmitStarted) return;
+  applySkillCreatorSelection();
+  if (selectedAgent.value?.agentId !== "agent.skill-creator"
+    || selection.workspaceGrantId !== intent.workspaceGrantId
+    || selection.requestedModelId === "") return;
+  skillCreatorAutoSubmitStarted = true;
+  await nextTick();
+  await submitTask();
 }
 
 async function startFreshConversation(): Promise<void> {
@@ -1469,6 +1739,7 @@ async function activateRouteConversation(): Promise<void> {
   conversationSnapshot.value = undefined;
   activeTaskDetail.value = undefined;
   streamingAssistant.value = undefined;
+  activeModelProgressHistory.value = modelProgressHistoryByTask.get(ids.taskId) ?? [];
   notice.value = "";
   error.value = "";
   await refreshActiveConversation();
@@ -1508,6 +1779,11 @@ async function refreshActiveConversation(): Promise<void> {
     activeTaskDetail.value = detail;
     if (presentTaskStatus(detail.summary.displayStatus).isTerminal) {
       cancellationRequestedTaskId.value = "";
+      streamingAssistant.value = undefined;
+      activeModelProgress.value = undefined;
+      activeModelProgressHistory.value = [];
+      pendingModelProgressByTask.delete(detail.summary.taskId);
+      modelProgressHistoryByTask.delete(detail.summary.taskId);
     }
     await scrollConversationToBottom();
   } catch {
@@ -1523,18 +1799,32 @@ function handleDesktopEvent(event: DesktopRendererEvent): void {
   if (!("deliveryKind" in event)) {
     streamingAssistant.value = undefined;
     activeModelProgress.value = undefined;
+    pendingModelProgressByTask.clear();
     void refreshActiveConversation();
     return;
   }
   if (event.deliveryKind === "ephemeral"
-    && event.payload.type === "progress_delta"
-    && event.payload.taskId === activeTaskId.value) {
-    activeModelProgress.value = {
+    && event.payload.type === "progress_delta") {
+    const progress: ModelProgressPresentation = {
       taskId: event.payload.taskId,
       runtimeInstanceId: event.runtimeInstanceId,
       progressKey: event.payload.progressKey,
-      safeSummary: event.payload.safeSummary,
+      safeSummary: presentWorkbenchModelProgress(event.payload.progressKey),
     };
+    if (event.payload.taskId === activeTaskId.value
+      || pendingUserMessage.value !== undefined) {
+      recordModelProgress(progress);
+      pendingModelProgressByTask.delete(event.payload.taskId);
+      pendingModelProgressByTask.set(event.payload.taskId, progress);
+      while (pendingModelProgressByTask.size > 8) {
+        const oldestTaskId = pendingModelProgressByTask.keys().next().value;
+        if (oldestTaskId === undefined) break;
+        pendingModelProgressByTask.delete(oldestTaskId);
+      }
+    }
+    if (event.payload.taskId === activeTaskId.value) {
+      activeModelProgress.value = progress;
+    }
     return;
   }
   if (event.deliveryKind === "ephemeral"
@@ -1568,7 +1858,6 @@ function handleDesktopEvent(event: DesktopRendererEvent): void {
     if (streamingAssistant.value?.messageId === event.payload.messageId) {
       streamingAssistant.value = undefined;
     }
-    activeModelProgress.value = undefined;
     void refreshActiveConversation();
     return;
   }
@@ -1576,7 +1865,11 @@ function handleDesktopEvent(event: DesktopRendererEvent): void {
     && event.payload.type === "task_status_changed"
     && event.payload.taskId === activeTaskId.value) {
     if (presentTaskStatus(event.payload.displayStatus).isTerminal) {
+      streamingAssistant.value = undefined;
+      pendingModelProgressByTask.delete(event.payload.taskId);
       activeModelProgress.value = undefined;
+      modelProgressHistoryByTask.delete(event.payload.taskId);
+      activeModelProgressHistory.value = [];
     }
     void refreshActiveConversation();
     notifyShellNavigationChanged();
@@ -1589,10 +1882,63 @@ function handleDesktopEvent(event: DesktopRendererEvent): void {
   }
 }
 
+function recordModelProgress(progress: ModelProgressPresentation): void {
+  const current = modelProgressHistoryByTask.get(progress.taskId) ?? [];
+  const withoutSameKey = current.filter((item) => item.progressKey !== progress.progressKey);
+  const next = [...withoutSameKey, progress].slice(-12);
+  modelProgressHistoryByTask.set(progress.taskId, next);
+  if (progress.taskId === activeTaskId.value || pendingUserMessage.value !== undefined) {
+    activeModelProgressHistory.value = next;
+  }
+}
+
+async function chooseOtherModelForNewTask(): Promise<void> {
+  await startFreshConversation();
+  selection.requestedModelId = "";
+  modelMenuOpen.value = true;
+  await nextTick();
+  modelMenuRoot.value
+    ?.querySelector<HTMLButtonElement>(".workbench-page__model-list button:not(:disabled)")
+    ?.focus();
+}
+
+function prepareSmallerFileRetry(): void {
+  composer.value = `文件已缩小，请重新完成：${activeTaskDetail.value?.goalSummary ?? "继续完成本次任务"}`;
+  dismissedTaskFailureId.value = activeTaskId.value;
+}
+
 async function scrollConversationToBottom(): Promise<void> {
   await nextTick();
   const element = conversationStream.value;
   if (element !== undefined) element.scrollTop = element.scrollHeight;
+}
+
+function prepareWorkspaceTextRetry(): void {
+  const relativePath = workspaceTextConflictRelativePath.value;
+  if (relativePath === undefined) return;
+  composer.value = `请基于磁盘最新版本重新处理 ${relativePath}。原修改要求：${activeTaskDetail.value?.goalSummary ?? "继续完成本次修改"}`;
+  dismissedWorkspaceTextConflictTaskId.value = activeTaskId.value;
+}
+
+function prepareWorkspaceTextSaveAs(): void {
+  const relativePath = workspaceTextConflictRelativePath.value;
+  if (relativePath === undefined) return;
+  composer.value = `请不要覆盖 ${relativePath}，将以下修改另存为一个新的文件：${activeTaskDetail.value?.goalSummary ?? "继续完成本次修改"}`;
+  dismissedWorkspaceTextConflictTaskId.value = activeTaskId.value;
+}
+
+async function openWorkspaceTextConflictFile(): Promise<void> {
+  const artifact = workspaceTextConflictArtifact.value;
+  if (tasksAdapter === undefined || artifact === undefined) return;
+  try {
+    await tasksAdapter.openArtifactLocation({ artifactId: artifact.artifactId });
+  } catch {
+    error.value = "文件暂时无法打开，请稍后重试。";
+  }
+}
+
+function dismissWorkspaceTextConflict(): void {
+  dismissedWorkspaceTextConflictTaskId.value = activeTaskId.value;
 }
 
 async function openArtifact(artifact: ArtifactProjection): Promise<void> {
@@ -1677,6 +2023,9 @@ function toggleSkill(skillId: string): void {
     selectedAgent.value,
     [...current],
   );
+  if (selection.selectedSkillIds.includes(skillId)) {
+    skillSelectionInvalidated.value = false;
+  }
 }
 
 function toggleKnowledge(knowledgeId: string): void {
@@ -2660,55 +3009,108 @@ function formatElapsed(milliseconds: number): string {
 
 .workbench-page__execution-process {
   width: min(820px, 100%);
-  margin: 24px auto 0;
+  margin: 18px auto 0;
   display: grid;
-  gap: 14px;
-  border-top: 1px solid var(--r3-color-border);
-  padding: 18px 2px 0;
+  gap: 10px;
+  padding: 0 2px;
   color: var(--r3-color-text-secondary);
 }
 
-.workbench-page__execution-process > header {
-  display: flex;
-  align-items: start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.workbench-page__execution-process > header > div {
-  min-width: 0;
+.workbench-page__execution-summary {
+  width: 100%;
+  min-height: 38px;
   display: grid;
-  gap: 3px;
+  grid-template-columns: 22px minmax(0, 1fr) auto 18px;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 6px;
+  padding: 4px 6px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
-.workbench-page__execution-process > header strong {
-  color: var(--r3-color-text);
-  font-size: var(--r3-font-size-sm);
+.workbench-page__execution-summary:hover {
+  background: var(--r3-color-surface-muted);
 }
 
-.workbench-page__execution-process > header span,
-.workbench-page__execution-process > header time {
-  font-size: var(--r3-font-size-xs);
+.workbench-page__execution-summary:focus-visible {
+  outline: 2px solid var(--r3-color-primary);
+  outline-offset: 2px;
 }
 
-.workbench-page__execution-process > header time {
+.workbench-page__execution-copy {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.workbench-page__execution-copy strong {
+  flex: 0 0 auto;
+  color: #5f6672;
+  font-size: 13px;
+  font-weight: 580;
+}
+
+.workbench-page__execution-copy small {
+  min-width: 0;
+  overflow: hidden;
+  color: #8a919d;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workbench-page__execution-summary time {
+  color: #8a919d;
+  font-size: 12px;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 
+.workbench-page__execution-chevron,
+.workbench-page__execution-status-icon {
+  display: grid;
+  place-items: center;
+  color: #8a919d;
+  font-size: 13px;
+}
+
+.workbench-page__thinking-indicator {
+  width: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+
+.workbench-page__thinking-indicator i {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--r3-color-primary);
+  animation: workbench-thinking-dot 1.1s ease-in-out infinite;
+}
+
+.workbench-page__thinking-indicator i:nth-child(2) { animation-delay: 0.14s; }
+.workbench-page__thinking-indicator i:nth-child(3) { animation-delay: 0.28s; }
+
 .workbench-page__execution-process ol {
   display: grid;
-  gap: 12px;
+  gap: 8px;
   margin: 0;
-  padding: 0;
+  padding: 2px 6px 4px 30px;
   list-style: none;
 }
 
 .workbench-page__execution-process li {
   display: grid;
-  grid-template-columns: 26px minmax(0, 1fr);
+  grid-template-columns: 18px minmax(0, 1fr);
   align-items: start;
-  gap: 10px;
+  gap: 8px;
 }
 
 .workbench-page__execution-process li > div {
@@ -2718,36 +3120,35 @@ function formatElapsed(milliseconds: number): string {
 }
 
 .workbench-page__execution-process li strong {
-  color: var(--r3-color-text);
-  font-size: 13px;
+  color: #6f7681;
+  font-size: 12px;
   font-weight: 560;
 }
 
 .workbench-page__execution-process li span {
+  color: #8a919d;
   font-size: 12px;
   line-height: 1.5;
 }
 
 .workbench-page__execution-icon {
-  width: 24px;
-  height: 24px;
+  width: 18px;
+  height: 18px;
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: var(--r3-color-surface-muted);
+  background: transparent;
   color: var(--r3-color-text-secondary);
   font-weight: 700;
 }
 
 .workbench-page__execution-process li[data-state="active"] .workbench-page__execution-icon {
-  background: #edf2ff;
   color: var(--r3-color-primary);
   animation: workbench-process-pulse 1.4s ease-in-out infinite;
 }
 
 .workbench-page__execution-process li[data-state="completed"] .workbench-page__execution-icon {
-  background: #e8f7ee;
-  color: #177245;
+  color: #7d8590;
 }
 
 .workbench-page__execution-process li[data-state="attention"] .workbench-page__execution-icon {
@@ -2763,6 +3164,18 @@ function formatElapsed(milliseconds: number): string {
 @keyframes workbench-process-pulse {
   0%, 100% { opacity: 0.55; }
   50% { opacity: 1; }
+}
+
+@keyframes workbench-thinking-dot {
+  0%, 65%, 100% { opacity: 0.3; transform: translateY(0); }
+  35% { opacity: 1; transform: translateY(-3px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workbench-page__thinking-indicator i,
+  .workbench-page__execution-process li[data-state="active"] .workbench-page__execution-icon {
+    animation: none;
+  }
 }
 
 .workbench-page__task-outcome {
@@ -2801,6 +3214,32 @@ function formatElapsed(milliseconds: number): string {
   background: var(--r3-color-surface-muted);
   color: var(--r3-color-text-secondary);
   font-size: 8px;
+}
+
+.workbench-page__task-outcome--attention .workbench-page__task-outcome-mark {
+  background: #fff5dc;
+  color: #8a5a00;
+  font-size: 14px;
+}
+
+.workbench-page__task-outcome--failure {
+  border: 1px solid #f1c8c8;
+  border-radius: 8px;
+  padding: 14px;
+  background: #fff7f7;
+}
+
+.workbench-page__task-outcome--failure .workbench-page__task-outcome-mark {
+  background: #fde8e8;
+  color: #a32828;
+  font-size: 14px;
+}
+
+.workbench-page__task-outcome-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
 }
 
 

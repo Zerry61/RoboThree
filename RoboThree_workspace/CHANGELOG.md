@@ -6,12 +6,76 @@ RoboThree 的重要工程变更记录。格式参考 [Keep a Changelog](https://
 
 ## [Unreleased]
 
+- Desktop `0.0.0-mvp.wte.1-repair.1` 补齐 CTX/WTE Workbench 终态呈现：当前任务直接显示 Core
+  `failureSummary`；输出能力不足提供“选择其他模型并新建任务 / 缩小文件后重试”，不在原 Task 静默换模型，也不展示
+  失败 Task 的部分 Artifact。模型进度按 `progressKey` 映射为业务文案，未知阶段降级为通用处理中，不展示 Prompt、
+  Token、Compaction identity 或内部摘要；recovering 恢复原会话且不重复提交。
+
+- Root/Core/Desktop/Document Worker `0.0.0-mvp.wte.1` 完成 WTE-1 工作区文本读取与连续编辑：新增
+  `tool.workspace.file.read_text`，复用同一个 Document Worker child、既有 Workspace/Policy/Capability Lock、WFW
+  `write_text`、EffectCoordinator 与 Artifact。读取执行 256 KiB hard limit、strict UTF-8、路径 containment、symlink/
+  hard-link/普通文件检查和 read 前后 stable-stat；当前 user turn 的 exact Tool Result 由 CTX-MVP-1 identity/material
+  policy 完整注入，64 KiB 分段无分隔符重组。replace 必须匹配当前 durable read proof；首次外部冲突允许 reread/rebase
+  一次，第二次冲突立即停止当前 Attempt，并在 Workbench 提供重新处理、另存、打开和取消。真实 macOS Electron E2E 已
+  通过 explicit Workspace、exact read、replace、`.prev`、单一 Artifact head、Markdown preview、Core SIGKILL/SQLite
+  reopen 与重启后预览。未新增公共 Contract、IPC/Preload API、migration、依赖、状态机或 lockfile 变化；当前为
+  `IMPLEMENTED / DEVELOPER VERIFICATION PASS / INDEPENDENT CODE QA PASS / USER ACCEPTANCE PENDING`。Windows 11
+  本地 NTFS WTE 回归已并入现有 WFW/WTE 共用定向待办，是当前唯一关闭阻塞项；真实公网 400K Provider 校准继续作为
+  CTX/Provider 独立 P3，不阻塞 WTE-1。当前仍不声明 WTE `PASS/CLOSED` 或 production ready。
+
+- Root/Core/Desktop `0.0.0-mvp.ctx.1`、Central `0.0.0-mvp.ctx.1-SNAPSHOT` 实现 CTX-MVP-1 的
+  model-aware context/output 基线：受控 deployment 将 `contextWindowTokens`、`maxOutputTokens` 与
+  `capabilityProfileRevision` 锁入既有 Task Model descriptor/binding，历史 Task 继续使用原 1K output 语义，
+  新 Task 不再依赖全局 8K/128K 假设。普通任务按 locked output cap 使用最多 8K；WTE full replacement 的
+  canonical Tool Call 按当前全文与增长 headroom 预估，超过 locked max output 时在 Provider 前以
+  `workspace.file.output_capacity_insufficient` fail-closed，不产生截断 Tool Call。Context budget 改为 2% 有界
+  safety margin、动态 headroom 和 per-round exact policy，生产 graph 与 compaction 均使用 calibrated estimator，
+  不再实例化 Fake estimator。当前 WTE read result 只由 durable Tool identity 驱动 protected exact 策略，identity
+  缺失、重复或漂移均拒绝；Skill references/examples 继续 on-demand。本批复用既有 first/rolling durable compaction，
+  50-round Tool-heavy 与 restart 回归通过，故 Continuation Capsule v2 保持 `NOT_REQUIRED/NOT_IMPLEMENTED`。
+  未新增公共 Contract、migration、依赖或 lockfile 变化。独立代码 QA P0/P1/P2=0、P3=1 已由用户接受，CTX-MVP-1
+  正式 `PASS/CLOSED`，最高 outcome 为 `CTX_MVP1_MODEL_AWARE_LONG_CONTEXT_CONFORMANT`；真实 Provider 校准与
+  WTE 长上下文 Electron E2E 继续作为 WTE-1 联合门禁，WTE read/write 连续编辑产品链仍由 WTE-1 单独实现。
+
+- Desktop `0.0.0-dfe.9-repair.12` 将执行中的模型状态收敛为轻量“思考中…”动画和可展开的安全进度列表；列表只消费
+  Core 已投影的 `safeSummary`，不展示模型隐藏 reasoning、Prompt、Token 或 Tool 参数。Workbench 对话只保留用户与
+  Assistant 消息，Tool observation 的原始 JSON、摘要、路径与 digest 不再作为 RoboThree 回复渲染。
+
+- 完成 MVP-RSL-2 Skill Lifecycle End-to-End：Central PostgreSQL v13 成为 draft revision、test fact、submission、
+  immutable release 与 package blob 的唯一 authority；Core/Main/Preload 接入既有 Task、Agent Loop、Runtime Selection、
+  WFW 与 exact Skill lock；Desktop 用户创建链和 Admin ZIP/RAR/TAR.GZ/TGZ 上传链均由真实 Adapter/UI 消费。两条串行
+  Central + Electron E2E 已分别完成创建/上传、真实 Task 测试、审核/发布、安装、新 Task exact 使用、WFW Artifact 与
+  Core `SIGKILL` 后 SQLite 恢复。安装不执行脚本、不安装依赖，不新增第二套 Runtime、文件平台或包管理器。Root/Core/
+  Desktop/Contracts/Admin 同步为 `0.0.0-mvp.rsl.2`，Central 为 `0.0.0-mvp.rsl.2-SNAPSHOT`；lockfile 与 Core migration
+  26 不漂移。独立只读 QA `PASS_WITH_RISKS`（P0=0/P1=0/P2=0/P3=4）已由用户接受，RSL-2 正式 `PASS/CLOSED`，
+  并接受 `MVP_RSL2_SKILL_LIFECYCLE_E2E_CONFORMANT` 与 `MVP_RSL2_ADMIN_UPLOAD_SKILL_E2E_CONFORMANT`。四项 P3
+  为环境或预存工程噪声，不归因本批、不建立 repair；本结论不代表 production ready。
+
+- RSL-2 Step 1 在 Desktop 首次消费停手后完成聚焦 re-freeze：`createSkillDraftWorkspace` 专用 receipt 新增必填
+  `draftId/workspaceGrantId/displayName`；`submitSkillDraft` 专用 receipt 与 `SkillDetail.submission` 提供 durable
+  `submissionId/submissionRevision`；installed Skill list/detail 强制携带 exact `installationRevision`。三项均为现有
+  11 个 Desktop 方法的 consumer identity 修正，不新增方法、Contract 版本、后端能力或本地缓存。Contract build、ESLint
+  与 focused `1 file / 14 tests` PASS；Desktop 前端可据此恢复编码。
+
+- 完成 MVP-RSL-2 Step 1 Contract / Dependency Freeze：Root/Contracts 升级到 `0.0.0-mvp.rsl.2`，新增 strict
+  `@robothree/contracts/skill-lifecycle/v1alpha1`，冻结 Desktop 11 个方法、Admin 10 个方法、`skill.manage` 权限与
+  17 个 typed safe error；Admin archive bytes 保持为 strict metadata 之外的 bounded multipart file part。Central
+  升级到 `0.0.0-mvp.rsl.2-SNAPSHOT` 并准入 exact `com.github.junrar:junrar:8.1.0`：JDK 21/offline/128MB heap
+  下 clean/traversal/CRC/truncated/1GiB-dictionary 5 项 focused proof 全 PASS，生产调用冻结为 InputStream + header +
+  synchronous bounded sink，禁止 filesystem facade、shell/native 与额外 reader thread。frozen Contract 11/11 digest、
+  lockfile `5b15ae01…874f31` 与 Core migration 26 均不漂移。当前只允许 Desktop/Admin 按 frozen consumer interface
+  并行开工；Central/Core/Main/Preload lifecycle 实现与联合 E2E 尚未完成，不宣称 RSL-2 parent closed。
+
 - 新增 MVP-RSL-2 Skill Lifecycle End-to-End docs-only 详细方案：以 Desktop 用户创建、真实 Task/WFW 生成、exact revision
   测试、提交、Admin 审核、immutable release、安装和新 Task exact 消费为主链，同时覆盖 Admin 直接上传
   ZIP/RAR/TAR.GZ/TGZ、安全解析、测试和发布。方案复用既有 Agent Loop、Runtime Selection、Entitlement、Workbench、
   WFW 与 RSL-1 生命周期模式，不建设第二套 Runtime、通用包管理器或文件平台；冻结 48 项 focused QA、两条真实联合
-  E2E 和 20 项停手条件。当前为 `REVISION 1 / DOCUMENT REVIEW PENDING / CODING GATED`，未修改生产代码、Contract、
-  migration、依赖、版本或 lockfile。
+  E2E 和 20 项停手条件。Revision 1.1 进一步冻结 Central pure-JVM RAR reader admission、Skill 包依赖/二进制白名单、
+  Skill package 与 Personal Model storage 的物理隔离、Core 主动 pull（禁止 Admin push）和串行 E2E 纪律。当前为
+  聚焦复核后进一步明确 historical five + additional no-diff six Contract SHA-256 口径，并要求 Junrar 只使用
+  InputStream/header 逐项读取 API、禁止 filesystem extract facade。当前为
+  `FOCUSED DIFFERENCE REVIEW PASS / USER ACCEPTANCE PENDING / CODING GATED`，未修改生产代码、Contract、migration、
+  依赖、版本或 lockfile。
 
 - Root/Core/Desktop `0.0.0-mvp.safe-progress.1` 接通模型执行的安全实时进度：Agent Loop 在上下文准备、模型请求发出、
   Provider stream 启动、首个回复片段和首个 Tool Call 五个阶段，复用既有 `progress_delta` 发布 content-free

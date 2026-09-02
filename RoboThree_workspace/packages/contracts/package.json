@@ -1,6 +1,6 @@
 {
   "name": "@robothree/contracts",
-  "version": "0.0.0-mvp.rsl.1",
+  "version": "0.0.0-mvp.rsl.2",
   "private": true,
   "type": "module",
   "exports": {
@@ -19,6 +19,10 @@
     "./agent-lifecycle/v1alpha1": {
       "types": "./dist/agent-lifecycle/v1alpha1/index.d.ts",
       "import": "./dist/agent-lifecycle/v1alpha1/index.js"
+    },
+    "./skill-lifecycle/v1alpha1": {
+      "types": "./dist/skill-lifecycle/v1alpha1/index.d.ts",
+      "import": "./dist/skill-lifecycle/v1alpha1/index.js"
     },
     "./desktop-private/personal-credential-broker-v1": {
       "types": "./dist/desktop-private/personal-credential-broker-v1/index.d.ts",

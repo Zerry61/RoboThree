@@ -65,6 +65,12 @@ public final class CentralSchemaPreflight {
     private static final LegacyScript V0011_UPGRADE = new LegacyScript(
             "U0011__admin_model_management_from_v0010.sql",
             "7ebb73e1d06171805457576882b9fc79218ae0dd6e6658d9fbf38beb37cd3bf5");
+    private static final LegacyScript V0012_FRESH = new LegacyScript(
+            "B0012__agent_lifecycle.sql",
+            "6ad78503febe5670655253e47943fe2aa4bf288ea8a46674f390732aed69e7c8");
+    private static final LegacyScript V0012_UPGRADE = new LegacyScript(
+            "U0012__agent_lifecycle_from_v0011.sql",
+            "c9c870aa3e35ebf08c3a7911b6e3fc542a7c3a45d9957cd42515a709f290851b");
 
     private final SchemaInspectionMapper mapper;
     private final SchemaManifest manifest;
@@ -139,6 +145,10 @@ public final class CentralSchemaPreflight {
         Map<Integer, SchemaInspectionMapper.SchemaVersionRow> byVersion = rows.stream()
                 .collect(Collectors.toUnmodifiableMap(
                         SchemaInspectionMapper.SchemaVersionRow::version, row -> row));
+        if (manifest.targetSchemaVersion() == 13) {
+            validateV0013UpgradeHistory(rows, byVersion);
+            return;
+        }
         if (manifest.targetSchemaVersion() == 12) {
             validateV0012UpgradeHistory(rows, byVersion);
             return;
@@ -160,6 +170,24 @@ public final class CentralSchemaPreflight {
             return;
         }
         validateV0007UpgradeHistory(rows, byVersion);
+    }
+
+    private static void validateV0013UpgradeHistory(
+            List<SchemaInspectionMapper.SchemaVersionRow> rows,
+            Map<Integer, SchemaInspectionMapper.SchemaVersionRow> byVersion) {
+        SchemaInspectionMapper.SchemaVersionRow v0012 = byVersion.get(12);
+        if (v0012 == null
+                || !(matches(v0012, V0012_FRESH) || matches(v0012, V0012_UPGRADE))
+                || !v0012.releaseVersion().equals("0.0.0-mvp.rsl.1")) {
+            throw integrity("persistence.schema_unsupported_history",
+                    "v0012 history row does not match frozen facts");
+        }
+        List<SchemaInspectionMapper.SchemaVersionRow> priorRows = rows.stream()
+                .filter(row -> row.version() != 13).toList();
+        Map<Integer, SchemaInspectionMapper.SchemaVersionRow> prior = byVersion.entrySet().stream()
+                .filter(entry -> entry.getKey() != 13)
+                .collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, Map.Entry::getValue));
+        validateV0012UpgradeHistory(priorRows, prior);
     }
 
     private static void validateV0012UpgradeHistory(

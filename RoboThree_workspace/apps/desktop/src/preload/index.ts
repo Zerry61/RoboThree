@@ -9,6 +9,7 @@ import {
   type RoboThreePersonalModelApiV1Alpha2,
   type RoboThreePersonalModelReadApiV1Alpha1,
   type RoboThreeAgentLifecycleApiV1Alpha1,
+  type RoboThreeSkillLifecycleApiV1Alpha1,
 } from "../shared/foundation-api.js";
 import {
   createDesktopApiV1Alpha1,
@@ -19,6 +20,7 @@ import {
   createPersonalModelApiV1Alpha2,
   createPersonalModelReadApiV1Alpha1,
   createAgentLifecycleApiV1Alpha1,
+  createSkillLifecycleApiV1Alpha1,
 } from "./create-desktop-api.js";
 import {
   PersonalCredentialTransportPreloadReceiver,
@@ -94,6 +96,13 @@ contextBridge.exposeInMainWorld(
   "robothreeAgentLifecycleV1Alpha1",
   agentLifecycleApiV1Alpha1,
 );
+const skillLifecycleApiV1Alpha1 = createSkillLifecycleApiV1Alpha1(
+  (channel, input) => ipcRenderer.invoke(channel, input) as Promise<unknown>,
+);
+contextBridge.exposeInMainWorld(
+  "robothreeSkillLifecycleV1Alpha1",
+  skillLifecycleApiV1Alpha1,
+);
 const personalModelApiV1Alpha1 = createPersonalModelReadApiV1Alpha1(
   (channel, input) => ipcRenderer.invoke(channel, input) as Promise<unknown>,
 );
@@ -124,5 +133,7 @@ declare global {
       RoboThreePersonalModelApiV1Alpha2;
     readonly robothreeAgentLifecycleV1Alpha1:
       RoboThreeAgentLifecycleApiV1Alpha1;
+    readonly robothreeSkillLifecycleV1Alpha1:
+      RoboThreeSkillLifecycleApiV1Alpha1;
   }
 }

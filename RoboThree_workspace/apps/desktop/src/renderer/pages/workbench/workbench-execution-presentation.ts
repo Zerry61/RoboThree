@@ -14,6 +14,15 @@ export type WorkbenchExecutionItem = Readonly<{
   state: "active" | "completed" | "attention" | "failed";
 }>;
 
+export function presentWorkbenchModelProgress(progressKey: string): string {
+  if (progressKey.startsWith("context.preparing.")) return "正在整理对话内容";
+  if (progressKey.startsWith("model.request_started.")) return "已向模型发出请求，正在等待响应";
+  if (progressKey.startsWith("model.stream_started.")) return "模型已开始处理当前请求";
+  if (progressKey.startsWith("model.first_content.")) return "模型正在生成回复";
+  if (progressKey.startsWith("model.first_tool_call.")) return "模型正在准备调用已授权工具";
+  return "任务正在继续处理";
+}
+
 export function presentWorkbenchExecution(
   detail: TaskDetailProjection | undefined,
 ): readonly WorkbenchExecutionItem[] {
@@ -56,11 +65,22 @@ function presentActivity(activity: ToolActivityProjection): WorkbenchExecutionIt
   return {
     id: `tool:${activity.activityId}`,
     title: toolTitle(activity),
-    detail: activity.statusSummary
-      ?? activity.targetSummary
-      ?? presentation.statusLabel,
+    detail: activityDetail(activity, presentation.statusLabel),
     state: toolState(activity.status),
   };
+}
+
+function activityDetail(
+  activity: ToolActivityProjection,
+  fallback: string,
+): string {
+  const status = activity.statusSummary ?? fallback;
+  if (
+    (activity.operationType === "tool.workspace.file.read_text"
+      || activity.operationType === "tool.workspace.file.write_text")
+    && activity.targetSummary !== undefined
+  ) return `${status} · ${activity.targetSummary}`;
+  return activity.statusSummary ?? activity.targetSummary ?? fallback;
 }
 
 function stepTitle(step: TaskStepProjection): string {
@@ -76,6 +96,7 @@ function toolTitle(activity: ToolActivityProjection): string {
     case "tool.document.xlsx.write": return "生成表格";
     case "tool.document.pdf.write": return "生成 PDF";
     case "tool.workspace.file.write_text": return "写入工作区文件";
+    case "tool.workspace.file.read_text": return "读取工作区文件";
     case "tool.document.docx.read":
     case "tool.document.xlsx.read":
     case "tool.document.pdf.read": return "读取工作区资料";

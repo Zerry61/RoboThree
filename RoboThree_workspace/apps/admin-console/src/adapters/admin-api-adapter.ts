@@ -39,6 +39,25 @@ import {
   RobotReviewDetailSchema,
   RobotReviewPageSchema,
 } from '@robothree/contracts/agent-lifecycle/v1alpha1';
+import {
+  SKILL_LIFECYCLE_CONTRACT_VERSION,
+  ApproveSkillSubmissionCommandSchema,
+  EnterpriseSkillDraftSchema,
+  GetEnterpriseSkillDraftQuerySchema,
+  GetSkillSubmissionQuerySchema,
+  ListSkillSubmissionsQuerySchema,
+  PublishEnterpriseSkillDraftCommandSchema,
+  QueryEnterpriseSkillDraftTestSchema,
+  RejectSkillSubmissionCommandSchema,
+  SkillLifecycleMutationReceiptSchema,
+  SkillLifecycleSafeErrorSchema,
+  SkillOperationSchema,
+  SkillSubmissionDetailSchema,
+  SkillSubmissionPageSchema,
+  StartEnterpriseSkillDraftTestCommandSchema,
+  UpdateEnterpriseSkillDraftMetadataCommandSchema,
+  UploadEnterpriseSkillPackageCommandSchema,
+} from '@robothree/contracts/skill-lifecycle/v1alpha1';
 import type { AdminAdapter, AdminCapabilitySet, AdminListOptions } from './admin-adapter';
 import { AdminApiError } from './admin-api-error';
 export { AdminApiError } from './admin-api-error';
@@ -49,6 +68,7 @@ const MAX_ETAG_ENTRIES = 32;
 const BASE_PATH = '/admin/v1alpha1';
 const MUTATION_BASE_PATH = '/admin/v1alpha2';
 const ROBOT_REVIEW_BASE_PATH = '/admin/v1alpha2/robot-reviews';
+const SKILL_LIFECYCLE_BASE_PATH = '/admin/v1alpha2/skill-lifecycle';
 
 type SchemaLike<T> = Readonly<{ parse(value: unknown): T }>;
 type CachedResponse = Readonly<{ etag: string; data: unknown }>;
@@ -209,7 +229,73 @@ export function createAdminApiAdapter(fetchImplementation: typeof fetch = global
       `${MUTATION_BASE_PATH}/models/default`,
       SetDefaultAdminModelCommandSchema.parse(command),
       createAdminControlV1Alpha2SuccessEnvelopeSchema(AdminModelMutationReceiptSchema),
-    )
+    ),
+    listSkillSubmissions: (query) => requestSkillLifecycle(
+      pathWithQuery(`${SKILL_LIFECYCLE_BASE_PATH}/submissions`, {
+        state: query.state,
+        cursor: query.cursor,
+        limit: String(query.limit)
+      }),
+      SkillSubmissionPageSchema,
+      ListSkillSubmissionsQuerySchema.parse(query).correlationId,
+    ),
+    getSkillSubmission: (query) => {
+      const parsed = GetSkillSubmissionQuerySchema.parse(query);
+      return requestSkillLifecycle(
+        `${SKILL_LIFECYCLE_BASE_PATH}/submissions/${encodeUuid(parsed.submissionId)}`,
+        SkillSubmissionDetailSchema,
+        parsed.correlationId,
+      );
+    },
+    approveSkillSubmission: (command) => mutateSkillLifecycle(
+      `${SKILL_LIFECYCLE_BASE_PATH}/submissions/commands`,
+      ApproveSkillSubmissionCommandSchema.parse(command),
+    ),
+    rejectSkillSubmission: (command) => mutateSkillLifecycle(
+      `${SKILL_LIFECYCLE_BASE_PATH}/submissions/commands`,
+      RejectSkillSubmissionCommandSchema.parse(command),
+    ),
+    uploadEnterpriseSkillPackage: (command, archive) => uploadEnterpriseSkillPackage(
+      UploadEnterpriseSkillPackageCommandSchema.parse(command),
+      archive,
+    ),
+    getEnterpriseSkillDraft: (query) => {
+      const parsed = GetEnterpriseSkillDraftQuerySchema.parse(query);
+      return requestSkillLifecycle(
+        `${SKILL_LIFECYCLE_BASE_PATH}/enterprise/drafts/${encodeResourceId(parsed.skillId)}`,
+        EnterpriseSkillDraftSchema,
+        parsed.correlationId,
+      );
+    },
+    updateEnterpriseSkillDraftMetadata: (command) => {
+      const parsed = UpdateEnterpriseSkillDraftMetadataCommandSchema.parse(command);
+      return mutateSkillLifecycle(
+        `${SKILL_LIFECYCLE_BASE_PATH}/enterprise/drafts/${encodeResourceId(parsed.skillId)}/metadata`,
+        parsed,
+      );
+    },
+    startEnterpriseSkillDraftTest: (command) => {
+      const parsed = StartEnterpriseSkillDraftTestCommandSchema.parse(command);
+      return mutateSkillLifecycle(
+        `${SKILL_LIFECYCLE_BASE_PATH}/enterprise/drafts/${encodeResourceId(parsed.skillId)}/tests`,
+        parsed,
+      );
+    },
+    queryEnterpriseSkillDraftTest: (query) => {
+      const parsed = QueryEnterpriseSkillDraftTestSchema.parse(query);
+      return requestSkillLifecycle(
+        `${SKILL_LIFECYCLE_BASE_PATH}/enterprise/operations/${encodeUuid(parsed.operationId)}`,
+        SkillOperationSchema,
+        parsed.correlationId,
+      );
+    },
+    publishEnterpriseSkillDraft: (command) => {
+      const parsed = PublishEnterpriseSkillDraftCommandSchema.parse(command);
+      return mutateSkillLifecycle(
+        `${SKILL_LIFECYCLE_BASE_PATH}/enterprise/drafts/${encodeResourceId(parsed.skillId)}/publish`,
+        parsed,
+      );
+    }
   });
 
   async function mutate<TCommand extends object, TEnvelope extends { data: unknown }>(
@@ -343,6 +429,111 @@ export function createAdminApiAdapter(fetchImplementation: typeof fetch = global
       globalThis.clearTimeout(timeout);
     }
   }
+
+  async function requestSkillLifecycle<T>(
+    path: string,
+    schema: SchemaLike<T>,
+    correlationId: string,
+  ): Promise<T> {
+    if (!path.startsWith(SKILL_LIFECYCLE_BASE_PATH) || path.includes('://')) {
+      throw new AdminApiError('invalid_request', '技能管理请求路径不合法', correlationId);
+    }
+    const controller = new AbortController();
+    const timeout = globalThis.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    try {
+      const response = await fetchImplementation(path, {
+        method: 'GET',
+        credentials: 'same-origin',
+        redirect: 'error',
+        cache: 'no-store',
+        signal: controller.signal,
+        headers: {
+          Accept: 'application/json',
+          'X-RoboThree-Contract-Version': SKILL_LIFECYCLE_CONTRACT_VERSION,
+          'X-RoboThree-Query-Id': crypto.randomUUID(),
+          'X-RoboThree-Correlation-Id': correlationId,
+        },
+      });
+      return parseSkillLifecycleResponse(response, schema, correlationId);
+    } catch (error) {
+      if (error instanceof AdminApiError) throw error;
+      if (controller.signal.aborted) throw new AdminApiError('skilllifecycle.service_unavailable', '技能服务请求超时', correlationId);
+      throw new AdminApiError('skilllifecycle.service_unavailable', '技能服务暂时不可用，请稍后重试', correlationId);
+    } finally {
+      globalThis.clearTimeout(timeout);
+    }
+  }
+
+  async function mutateSkillLifecycle<TCommand extends { correlationId: string }>(
+    path: string,
+    command: TCommand,
+  ) {
+    if (!path.startsWith(SKILL_LIFECYCLE_BASE_PATH) || path.includes('://')) {
+      throw new AdminApiError('invalid_request', '技能管理请求路径不合法', command.correlationId);
+    }
+    const controller = new AbortController();
+    const timeout = globalThis.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    try {
+      const body = JSON.stringify(command);
+      if (new TextEncoder().encode(body).byteLength > MAX_RESPONSE_BYTES) {
+        throw new AdminApiError('skilllifecycle.invalid_request', '技能管理请求超过安全大小限制', command.correlationId);
+      }
+      const response = await fetchImplementation(path, {
+        method: 'POST',
+        credentials: 'same-origin',
+        redirect: 'error',
+        cache: 'no-store',
+        signal: controller.signal,
+        body,
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-RoboThree-Contract-Version': SKILL_LIFECYCLE_CONTRACT_VERSION,
+          'X-RoboThree-Correlation-Id': command.correlationId,
+        },
+      });
+      return parseSkillLifecycleResponse(response, SkillLifecycleMutationReceiptSchema, command.correlationId);
+    } catch (error) {
+      if (error instanceof AdminApiError) throw error;
+      if (controller.signal.aborted) throw new AdminApiError('skilllifecycle.service_unavailable', '技能管理操作超时', command.correlationId);
+      throw new AdminApiError('skilllifecycle.service_unavailable', '技能服务暂时不可用，请稍后重试', command.correlationId);
+    } finally {
+      globalThis.clearTimeout(timeout);
+    }
+  }
+
+  async function uploadEnterpriseSkillPackage(
+    command: ReturnType<typeof UploadEnterpriseSkillPackageCommandSchema.parse>,
+    archive: File,
+  ) {
+    const controller = new AbortController();
+    const timeout = globalThis.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    try {
+      const form = new FormData();
+      form.append('metadata', JSON.stringify(command));
+      form.append('archive', archive, command.upload.archiveFileName);
+      const response = await fetchImplementation(`${SKILL_LIFECYCLE_BASE_PATH}/enterprise/uploads`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        redirect: 'error',
+        cache: 'no-store',
+        signal: controller.signal,
+        body: form,
+        headers: {
+          Accept: 'application/json',
+          'X-RoboThree-Contract-Version': SKILL_LIFECYCLE_CONTRACT_VERSION,
+          'X-RoboThree-Correlation-Id': command.correlationId,
+        },
+      });
+      return parseSkillLifecycleResponse(response, SkillLifecycleMutationReceiptSchema, command.correlationId);
+    } catch (error) {
+      if (error instanceof AdminApiError) throw error;
+      if (controller.signal.aborted) throw new AdminApiError('skilllifecycle.service_unavailable', '技能包上传超时', command.correlationId);
+      throw new AdminApiError('skilllifecycle.service_unavailable', '技能服务暂时不可用，请稍后重试', command.correlationId);
+    } finally {
+      globalThis.clearTimeout(timeout);
+    }
+  }
 }
 
 async function parseAgentLifecycleResponse<T>(
@@ -368,6 +559,39 @@ async function parseAgentLifecycleResponse<T>(
     throw new AdminApiError(safeError.errorCode, safeError.safeSummary, safeError.correlationId);
   }
   return schema.parse(json);
+}
+
+async function parseSkillLifecycleResponse<T>(
+  response: Response,
+  schema: SchemaLike<T>,
+  correlationId: string,
+): Promise<T> {
+  const contentLength = Number(response.headers.get('content-length') ?? '0');
+  if (contentLength > MAX_RESPONSE_BYTES) {
+    throw new AdminApiError('skilllifecycle.service_unavailable', '技能服务响应超过安全大小限制', correlationId);
+  }
+  const contentType = response.headers.get('content-type') ?? '';
+  if (!contentType.toLowerCase().includes('application/json')) {
+    throw new AdminApiError('skilllifecycle.service_unavailable', '技能服务响应格式不受支持', correlationId);
+  }
+  const text = await response.text();
+  if (new TextEncoder().encode(text).byteLength > MAX_RESPONSE_BYTES) {
+    throw new AdminApiError('skilllifecycle.service_unavailable', '技能服务响应超过安全大小限制', correlationId);
+  }
+  const json: unknown = JSON.parse(text);
+  if (!response.ok) {
+    const safeError = SkillLifecycleSafeErrorSchema.parse(json);
+    throw new AdminApiError(safeError.errorCode, safeError.safeSummary, safeError.correlationId);
+  }
+  return schema.parse(json);
+}
+
+function pathWithQuery(path: string, values: Readonly<Record<string, string | undefined>>): string {
+  const url = new URL(path, 'http://127.0.0.1');
+  for (const [key, value] of Object.entries(values)) {
+    if (value !== undefined) url.searchParams.set(key, value);
+  }
+  return `${url.pathname}${url.search}`;
 }
 
 function rememberEtag(cache: Map<string, CachedResponse>, key: string, value: CachedResponse): void {

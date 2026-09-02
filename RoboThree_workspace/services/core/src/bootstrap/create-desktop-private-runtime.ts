@@ -14,6 +14,8 @@ import { lstat, readFile, realpath, stat } from "node:fs/promises";
 import { isAbsolute, resolve, win32 } from "node:path";
 import {
   PPTX_WRITE_CAPABILITY_ID,
+  TEXT_FILE_READ_CAPABILITY_ID,
+  TEXT_FILE_READ_LIMITS_REVISION,
   TEXT_FILE_WRITE_CAPABILITY_ID,
   TEXT_FILE_WRITE_LIMITS_REVISION,
   computePptxWriteRequestDigest,
@@ -23,7 +25,6 @@ import {
 } from "@robothree/document-worker";
 
 import { FakeAgentToolCallExecutor } from "../adapters/fake/fake-agent-tool-call-executor.js";
-import { ConservativeTokenEstimator } from "../adapters/fake/conservative-token-estimator.js";
 import { DesktopDocumentScriptedModelProvider } from "../adapters/fake/desktop-document-scripted-model-provider.js";
 import { createScriptedDesktopAgentFixture } from "../adapters/fake/scripted-desktop-agent-fixture.js";
 import { DocumentWorkerToolBackend } from "../adapters/document-worker/document-worker-tool-backend.js";
@@ -36,6 +37,10 @@ import { InternalTrialAgentLifecycleAccessToken } from
   "../adapters/environment/internal-trial-agent-lifecycle-access-token.js";
 import { HttpAgentLifecycleClient } from
   "../adapters/http/http-agent-lifecycle-client.js";
+import { InternalTrialSkillLifecycleAccessToken } from
+  "../adapters/environment/internal-trial-skill-lifecycle-access-token.js";
+import { HttpSkillLifecycleClient } from
+  "../adapters/http/http-skill-lifecycle-client.js";
 import { FrozenRegistrySnapshotProvider } from
   "../adapters/memory/frozen-registry-snapshot-provider.js";
 import { EphemeralWorkspaceSelectionStore } from "../adapters/memory/ephemeral-workspace-selection-store.js";
@@ -82,6 +87,16 @@ import { AgentLoopCoordinator } from "../application/agent-loop-coordinator.js";
 import { AuthorizationEvaluator } from "../application/authorization-evaluator.js";
 import { ContextBudgetPolicy } from "../application/context-budget-policy.js";
 import { ContextPipeline } from "../application/context-pipeline.js";
+import { CalibratedTokenEstimator } from
+  "../application/calibrated-token-estimator.js";
+import { TaskContextBudgetResolver } from
+  "../application/task-context-budget-resolver.js";
+import { WorkspaceSkillDraftSynchronizer } from
+  "../application/workspace-skill-draft-synchronizer.js";
+import {
+  CompositeLockedSkillInstructionResolver,
+  InstalledSkillRuntimeSource,
+} from "../application/installed-skill-runtime-source.js";
 import { TaskInstructionBundleMaterializer } from
   "../application/instruction-bundle-compiler.js";
 import { DesktopApplicationFacade } from "../application/desktop-application-facade.js";
@@ -185,6 +200,11 @@ import {
   createPresentationAgentCatalogProjection,
 } from "../application/built-in-presentation-agent-source.js";
 import {
+  BUILT_IN_SKILL_CREATOR_AGENT_ID,
+  BuiltInSkillCreatorAgentSource,
+} from
+  "../application/built-in-skill-creator-agent-source.js";
+import {
   TrustedLocalSkillInstructionResolver,
   loadPresentationPlanningSkillManifest,
 } from "../application/trusted-local-skill-instruction-resolver.js";
@@ -219,6 +239,14 @@ import { TurnSnapshotBuilder } from "../application/turn-snapshot-builder.js";
 import { ToolExecutionService } from "../application/tool-execution-service.js";
 import { deriveWorkspaceTextArtifactProof } from
   "../application/workspace-text-artifact-authority.js";
+import {
+  assertWorkspaceTextPathIsExplicitlyRequested,
+  assertWorkspaceTextEditAttemptCanWrite,
+  deriveWorkspaceTextEditReadProof,
+} from
+  "../application/workspace-text-edit-read-authority.js";
+import { WorkspaceTextRoundOutputMaterialResolver } from
+  "../application/workspace-text-round-output-material.js";
 import { workspaceTextPostconditionToEffectQueryResult } from
   "../application/workspace-text-effect-recovery.js";
 import { UserConfirmationCoordinator } from "../application/user-confirmation-coordinator.js";
@@ -240,6 +268,9 @@ import {
   WORKSPACE_TEXT_TOOL_ADAPTER_DESCRIPTOR,
   WORKSPACE_TEXT_TOOL_BINDING,
   WORKSPACE_TEXT_TOOL_DEFINITION,
+  WORKSPACE_TEXT_READ_TOOL_DEFINITION,
+  WORKSPACE_TEXT_READ_TOOL_ADAPTER_DESCRIPTOR,
+  WORKSPACE_TEXT_READ_TOOL_SOURCE,
   WORKSPACE_TEXT_TOOL_SOURCE,
   registerWorkspaceTextToolRecords,
 } from "../registry/workspace-text-tool-registry.js";
@@ -330,6 +361,8 @@ export function createDesktopPrivateRuntime(input: {
     : InternalTrialEnterpriseAccessTokenProvider.consume({ environment, clock });
   const internalTrialAgentLifecycleToken = fixtureMode ? undefined
     : InternalTrialAgentLifecycleAccessToken.consume({ environment, clock });
+  const internalTrialSkillLifecycleToken = fixtureMode ? undefined
+    : InternalTrialSkillLifecycleAccessToken.consume({ environment, clock });
   if ((internalTrialDeployment === undefined)
     !== (internalTrialTokenProvider === undefined)) {
     throw new Error("internal_trial_model_runtime_incomplete");
@@ -337,6 +370,10 @@ export function createDesktopPrivateRuntime(input: {
   if (internalTrialAgentLifecycleToken !== undefined
     && internalTrialDeployment === undefined) {
     throw new Error("internal_trial_agent_lifecycle_runtime_incomplete");
+  }
+  if (internalTrialSkillLifecycleToken !== undefined
+    && internalTrialDeployment === undefined) {
+    throw new Error("internal_trial_skill_lifecycle_runtime_incomplete");
   }
   const agentLifecycleSource = new InternalTrialAgentLifecycleSource();
   const agentLifecycleClient = internalTrialAgentLifecycleToken === undefined
@@ -347,6 +384,21 @@ export function createDesktopPrivateRuntime(input: {
       token: internalTrialAgentLifecycleToken,
       allowInsecureLoopback: internalTrialDeployment.allowInsecureLoopback,
     });
+  const skillLifecycleClient = internalTrialSkillLifecycleToken === undefined
+    || internalTrialDeployment === undefined
+    ? undefined
+    : new HttpSkillLifecycleClient({
+      baseUrl: internalTrialDeployment.centralBaseUrl,
+      token: internalTrialSkillLifecycleToken,
+      allowInsecureLoopback: internalTrialDeployment.allowInsecureLoopback,
+    });
+  const installedSkillRoot = fixtureMode
+    ? undefined : environment.ROBOTHREE_PRIVATE_INSTALLED_SKILL_ROOT;
+  delete environment.ROBOTHREE_PRIVATE_INSTALLED_SKILL_ROOT;
+  const installedSkillSource = new InstalledSkillRuntimeSource({
+    ...(installedSkillRoot === undefined ? {} : { installedRoot: installedSkillRoot }),
+  });
+  const installedSkillRefs = installedSkillSource.manifests();
   const runtimeInstanceId = `runtime.instance-${ids.next()}`;
   const ephemeralEvents = new DesktopEphemeralEventBus({
     clock,
@@ -443,6 +495,9 @@ export function createDesktopPrivateRuntime(input: {
   const generalToolRefs = internalTrialDeployment === undefined
     ? presentationToolRefs
     : [...presentationToolRefs, {
+      capabilityId: WORKSPACE_TEXT_READ_TOOL_DEFINITION.capabilityId,
+      capabilityRevision: WORKSPACE_TEXT_READ_TOOL_DEFINITION.revision,
+    }, {
       capabilityId: WORKSPACE_TEXT_TOOL_DEFINITION.capabilityId,
       capabilityRevision: WORKSPACE_TEXT_TOOL_DEFINITION.revision,
     }];
@@ -467,10 +522,37 @@ export function createDesktopPrivateRuntime(input: {
       tools: presentationToolRefs,
       minimumContextWindow: 8_192,
     });
+  const skillCreatorAgent = internalTrialDeployment === undefined
+    ? undefined
+    : new BuiltInSkillCreatorAgentSource({
+      model: {
+        modelId: internalTrialDeployment.capability.capabilityId,
+        revision: internalTrialDeployment.capability.revision,
+        digest: internalTrialDeployment.capability.revision,
+      },
+      readTool: {
+        capabilityId: WORKSPACE_TEXT_READ_TOOL_DEFINITION.capabilityId,
+        capabilityRevision: WORKSPACE_TEXT_READ_TOOL_DEFINITION.revision,
+      },
+      writeTool: {
+        capabilityId: WORKSPACE_TEXT_TOOL_DEFINITION.capabilityId,
+        capabilityRevision: WORKSPACE_TEXT_TOOL_DEFINITION.revision,
+      },
+    });
   if (fixtureMode) {
     catalog.registerAgent(runtime.agent, true).registerModel(runtime.model);
   } else if (internalTrialDeployment !== undefined) {
     catalog.registerModel(internalTrialDeployment.model);
+    catalog.registerAgent(agentLifecycleSource.catalogProjection(
+      builtInGeneralAgent,
+      internalTrialDeployment.model.modelId,
+    ), true);
+    if (skillCreatorAgent !== undefined) {
+      catalog.registerAgent(agentLifecycleSource.catalogProjection(
+        skillCreatorAgent.loadDefault(),
+        internalTrialDeployment.model.modelId,
+      ), true);
+    }
     if (presentationAgent !== undefined && presentationSkill !== undefined
       && presentationToolRefs.length !== 0) {
       catalog.registerAgent(createPresentationAgentCatalogProjection({
@@ -554,9 +636,15 @@ export function createDesktopPrivateRuntime(input: {
     adapterDescriptorId: WORKSPACE_TEXT_TOOL_ADAPTER_DESCRIPTOR.adapterDescriptorId,
     adapterDescriptorRevision: WORKSPACE_TEXT_TOOL_ADAPTER_DESCRIPTOR.revision,
   });
-  const documentWorkerHandles = documentBackend === undefined || workspaceTextHandle === undefined
+  const workspaceTextReadHandle = documentBackend?.createTextReadHandle({
+    adapterDescriptorId: WORKSPACE_TEXT_READ_TOOL_ADAPTER_DESCRIPTOR.adapterDescriptorId,
+    adapterDescriptorRevision: WORKSPACE_TEXT_READ_TOOL_ADAPTER_DESCRIPTOR.revision,
+  });
+  const documentWorkerHandles = documentBackend === undefined
+    || workspaceTextHandle === undefined
+    || workspaceTextReadHandle === undefined
     ? undefined
-    : new RuntimeAdapterHandles([documentBackend, workspaceTextHandle]);
+    : new RuntimeAdapterHandles([documentBackend, workspaceTextHandle, workspaceTextReadHandle]);
   const documentToolService = documentBackend === undefined
     || documentWorkerHandles === undefined
     ? undefined
@@ -577,6 +665,18 @@ export function createDesktopPrivateRuntime(input: {
             action: hydration.action,
             workspaces: foundation,
             manualArtifacts: foundation,
+          }),
+        }), new ToolEffectExecutor({
+          adapterDescriptorId: WORKSPACE_TEXT_READ_TOOL_ADAPTER_DESCRIPTOR.adapterDescriptorId,
+          persistence: tasks,
+          handles: documentWorkerHandles,
+          clock,
+          hydrateAction: (hydration) => hydrateWorkspaceTextToolAction({
+            action: hydration.action,
+            taskId: hydration.attempt.taskId,
+            tasks,
+            workspaces: foundation,
+            artifactLifecycles: foundation,
           }),
         }), new ToolEffectExecutor({
           adapterDescriptorId: WORKSPACE_TEXT_TOOL_ADAPTER_DESCRIPTOR.adapterDescriptorId,
@@ -641,6 +741,17 @@ export function createDesktopPrivateRuntime(input: {
             ids,
             activeUserId,
           })
+          : call.capabilityId === TEXT_FILE_READ_CAPABILITY_ID
+            ? buildWorkspaceTextReadExecution({
+              call,
+              signal,
+              taskRuntime,
+              tasks,
+              workspaces: foundation,
+              clock,
+              ids,
+              activeUserId,
+            })
           : buildDesktopDocumentToolExecution({
           call,
           signal,
@@ -747,7 +858,10 @@ export function createDesktopPrivateRuntime(input: {
         registry: enterpriseR2DRegistrySnapshot(
           internalTrialDeployment,
           activeRegistry.registryRevision,
-          presentationSkillRef,
+          [
+            ...(presentationSkillRef === undefined ? [] : [presentationSkillRef]),
+            ...installedSkillRefs,
+          ],
           generalToolRefs,
         ),
         model: {
@@ -755,13 +869,17 @@ export function createDesktopPrivateRuntime(input: {
           revision: internalTrialDeployment.capability.revision,
           digest: internalTrialDeployment.capability.revision,
         },
-        ...(presentationSkillRef === undefined
-          ? {}
-          : { skill: presentationSkillRef }),
+        skills: [
+          ...(presentationSkillRef === undefined ? [] : [presentationSkillRef]),
+          ...installedSkillRefs,
+        ],
         tools: generalToolRefs,
         ...(presentationAgent === undefined
           ? {}
           : { presentationAgent }),
+        ...(skillCreatorAgent === undefined
+          ? {}
+          : { skillCreatorAgent }),
         additionalAgents: agentLifecycleSource,
         modelLocks: lockService,
         toolPolicy: {
@@ -775,6 +893,12 @@ export function createDesktopPrivateRuntime(input: {
                     presentationToolRefs.some((ref) =>
                       ref.capabilityId === tool.capabilityId
                       && ref.capabilityRevision === tool.capabilityRevision))
+                  : input.exactAgent.agentDefinitionId === BUILT_IN_SKILL_CREATOR_AGENT_ID
+                    ? input.entitlementSnapshot.tools.filter((tool) =>
+                      (tool.capabilityId === WORKSPACE_TEXT_READ_TOOL_DEFINITION.capabilityId
+                        && tool.capabilityRevision === WORKSPACE_TEXT_READ_TOOL_DEFINITION.revision)
+                      || (tool.capabilityId === WORKSPACE_TEXT_TOOL_DEFINITION.capabilityId
+                        && tool.capabilityRevision === WORKSPACE_TEXT_TOOL_DEFINITION.revision))
                   : [] };
           },
         },
@@ -891,7 +1015,10 @@ export function createDesktopPrivateRuntime(input: {
     compactionThresholdRatio: 0.8,
     maxPreviewBytes: 4_096,
   });
-  const contextTokenEstimator = new ConservativeTokenEstimator();
+  const contextTokenEstimator = new CalibratedTokenEstimator();
+  const taskContextBudgets = new TaskContextBudgetResolver({
+    estimator: contextTokenEstimator,
+  });
   const executionAgents = fixtureMode
     ? catalog
     : {
@@ -905,6 +1032,12 @@ export function createDesktopPrivateRuntime(input: {
             revision,
           );
           if (presentation !== undefined) return presentation;
+        }
+        if (skillCreatorAgent !== undefined) {
+          const creator = skillCreatorAgent.loadDefault();
+          if (agentDefinitionId === creator.agentDefinitionId && revision === creator.revision) {
+            return creator;
+          }
         }
         return agentLifecycleSource.loadExactAgent(agentDefinitionId, revision);
       },
@@ -923,14 +1056,20 @@ export function createDesktopPrivateRuntime(input: {
       budgetPolicy: contextBudgetPolicy,
       estimator: contextTokenEstimator,
     }),
+    contextBudgetResolver: taskContextBudgets,
+    roundOutputMaterialResolver: new WorkspaceTextRoundOutputMaterialResolver(),
+    tokenEstimator: contextTokenEstimator,
     instructionRuntimeResolver: new TaskLockedInstructionRuntimeResolver({
       materializer: new TaskInstructionBundleMaterializer({
         tokenEstimator: contextTokenEstimator,
         budgetPolicy: contextBudgetPolicy,
-        ...(presentationSkill === undefined ? {} : {
-          lockedSkillInstructionResolver: new TrustedLocalSkillInstructionResolver({
-            manifest: presentationSkill,
-          }),
+        ...((presentationSkill === undefined && installedSkillRefs.length === 0) ? {} : {
+          lockedSkillInstructionResolver: new CompositeLockedSkillInstructionResolver([
+            ...(presentationSkill === undefined ? [] : [
+              new TrustedLocalSkillInstructionResolver({ manifest: presentationSkill }),
+            ]),
+            ...(installedSkillRefs.length === 0 ? [] : [installedSkillSource]),
+          ]),
         }),
       }),
       enabled: cpcInstructionRuntimeEnabled,
@@ -1182,18 +1321,25 @@ export function createDesktopPrivateRuntime(input: {
     transportProductionReady: () =>
       input.sensitiveTransportProductionReady === true,
   });
+  const workspaceGrantService = new WorkspaceGrantService({
+    clock,
+    persistence: foundation,
+    selectionResolver: workspaceSelections,
+    pathResolver: new NodeWorkspacePathResolver(),
+  });
+  const skillDraftSynchronizer = skillLifecycleClient === undefined
+    ? undefined
+    : new WorkspaceSkillDraftSynchronizer({
+      workspaces: workspaceGrantService,
+      lifecycle: skillLifecycleClient,
+    });
   const facade = new DesktopApplicationFacade({
     clock,
     runtimeInstanceId,
     coreVersion: CORE_VERSION,
     runtimeStatus: () => runtimeStatus,
     workspaceSelections,
-    workspaces: new WorkspaceGrantService({
-      clock,
-      persistence: foundation,
-      selectionResolver: workspaceSelections,
-      pathResolver: new NodeWorkspacePathResolver(),
-    }),
+    workspaces: workspaceGrantService,
     sessions: new DesktopSessionService({
       clock,
       conversation,
@@ -1235,6 +1381,9 @@ export function createDesktopPrivateRuntime(input: {
         agentLifecycleSource.registerDraft(detail);
       },
     }),
+    ...(skillLifecycleClient === undefined ? {} : { skillLifecycle: skillLifecycleClient }),
+    ...(skillDraftSynchronizer === undefined ? {} : { skillDraftSynchronizer }),
+    skillInstallationTasks: tasks,
     ...(refreshPublishedAgents === undefined ? {} : { refreshPublishedAgents }),
   });
   const server = new CorePrivateHttpServer({
@@ -1285,6 +1434,8 @@ export function createDesktopPrivateRuntime(input: {
         started = true;
         runtimeStatus = "ready";
         void facade.resumeRobotDraftTestsV1Alpha1();
+        void facade.resumeSkillDraftTestsV1Alpha1();
+        void facade.resumeAdminSkillDraftTestsV1Alpha1();
         if (activeAgentLoopStartupRecovery === undefined) {
           recovery.start();
         } else {
@@ -1324,6 +1475,115 @@ export function createDesktopPrivateRuntime(input: {
   });
 }
 
+async function buildWorkspaceTextReadExecution(input: {
+  call: AssistantToolCall;
+  signal: AbortSignal;
+  taskRuntime: DurableTaskRuntime;
+  tasks: TaskPersistence;
+  workspaces: WorkspaceGrantPersistence;
+  clock: Clock;
+  ids: IdGenerator;
+  activeUserId: string;
+}) {
+  const { call } = input;
+  if (call.capabilityId !== TEXT_FILE_READ_CAPABILITY_ID) {
+    throw new Error("Workspace Text Reader received another capability");
+  }
+  const selection = await input.tasks.loadReadableTaskRuntimeSelection(call.taskId);
+  if (selection?.workspaceGrantId === undefined) {
+    throw new Error("Workspace Text Reader requires a locked workspace grant");
+  }
+  const grant = await input.workspaces.loadWorkspaceGrant(selection.workspaceGrantId);
+  if (grant === undefined || grant.status !== "active") {
+    throw new Error("Workspace Text Reader workspace grant is unavailable");
+  }
+  const model = parseWorkspaceTextReadModelArguments(call.arguments);
+  await assertWorkspaceTextPathIsExplicitlyRequested({
+    taskId: call.taskId,
+    relativePath: model.relativePath,
+    tasks: input.tasks,
+  });
+  const payload = JsonObjectSchema.parse({
+    workspaceGrantId: grant.workspaceGrantId,
+    relativePath: model.relativePath,
+    limitsRevision: TEXT_FILE_READ_LIMITS_REVISION,
+    limits: DOCUMENT_TOOL_LIMITS,
+  });
+  const step = await ensureDocumentToolStep({
+    taskRuntime: input.taskRuntime,
+    clock: input.clock,
+    ids: input.ids,
+    call,
+    modelPayload: JsonObjectSchema.parse(call.arguments),
+  });
+  const targetRealPath = resolve(grant.rootRealPath, model.relativePath);
+  return {
+    taskId: call.taskId,
+    runId: step.runId,
+    stepId: step.stepId,
+    registryRevision: selection.registryRevision,
+    capabilityId: call.capabilityId,
+    action: { actionId: call.actionId, kind: call.capabilityId, payload },
+    idempotencyKey: `workspace-text-read:${call.taskId}:${call.toolCallId}`,
+    riskFactKinds: ["routine_file"] satisfies readonly ToolRiskFactKind[],
+    authorization: {
+      context: documentToolAuthorizationContext({
+        activeUserId: input.activeUserId,
+        capabilityId: call.capabilityId,
+        workspaceGrantId: grant.workspaceGrantId,
+        workspaceRoot: grant.rootRealPath,
+        targetRealPath,
+        operation: "read",
+      }),
+      currentContext: async () => {
+        const currentGrant = await input.workspaces.loadWorkspaceGrant(grant.workspaceGrantId);
+        if (currentGrant === undefined || currentGrant.status !== "active") {
+          return unavailableDocumentToolAuthorizationContext({
+            activeUserId: input.activeUserId,
+            capabilityId: call.capabilityId,
+            workspaceGrantId: grant.workspaceGrantId,
+            targetRealPath,
+            operation: "read",
+          });
+        }
+        return documentToolAuthorizationContext({
+          activeUserId: input.activeUserId,
+          capabilityId: call.capabilityId,
+          workspaceGrantId: currentGrant.workspaceGrantId,
+          workspaceRoot: currentGrant.rootRealPath,
+          targetRealPath: resolve(currentGrant.rootRealPath, model.relativePath),
+          operation: "read",
+        });
+      },
+    },
+    deadlineAt: new Date(Date.parse(input.clock.now()) + 30_000).toISOString(),
+    signal: input.signal,
+    modelArguments: call.arguments,
+  };
+}
+
+async function resolveWorkspaceTextReplacementProof(input: {
+  taskId: string;
+  workspaceGrantId: string;
+  relativePath: string;
+  expectedPreviousSha256: string;
+  tasks: TaskPersistence;
+  artifactLifecycles: ArtifactLifecyclePersistence;
+}): Promise<Readonly<{
+  kind: "edit_read" | "owned_artifact";
+  digest: string;
+}>> {
+  try {
+    const readProof = await deriveWorkspaceTextEditReadProof(input);
+    return { kind: "edit_read", digest: readProof.digest };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message !== "workspace_text_read.capability_lock_missing") throw error;
+  }
+  const artifactProof = await deriveWorkspaceTextArtifactProof(input);
+  return { kind: "owned_artifact", digest: artifactProof.digest };
+}
+
 async function buildWorkspaceTextToolExecution(input: {
   call: AssistantToolCall;
   signal: AbortSignal;
@@ -1348,9 +1608,14 @@ async function buildWorkspaceTextToolExecution(input: {
     throw new Error("Workspace Text Tool workspace grant is unavailable");
   }
   const model = parseWorkspaceTextModelArguments(call.arguments);
+  await assertWorkspaceTextEditAttemptCanWrite({
+    taskId: call.taskId,
+    relativePath: model.relativePath,
+    tasks: input.tasks,
+  });
   const contentSha256 = `sha256:${createHash("sha256").update(model.content, "utf8").digest("hex")}`;
   const proof = model.mode === "replace_existing"
-    ? await deriveWorkspaceTextArtifactProof({
+    ? await resolveWorkspaceTextReplacementProof({
       taskId: call.taskId,
       workspaceGrantId: grant.workspaceGrantId,
       relativePath: model.relativePath,
@@ -1368,7 +1633,11 @@ async function buildWorkspaceTextToolExecution(input: {
     ...(model.expectedPreviousSha256 === undefined
       ? {}
       : { expectedPreviousSha256: model.expectedPreviousSha256 }),
-    ...(proof === undefined ? {} : { ownedArtifactProofDigest: proof.digest }),
+    ...(proof?.kind === "owned_artifact"
+      ? { ownedArtifactProofDigest: proof.digest }
+      : proof?.kind === "edit_read"
+        ? { editReadProofDigest: proof.digest }
+        : {}),
     limitsRevision: TEXT_FILE_WRITE_LIMITS_REVISION,
     limits: DOCUMENT_TOOL_LIMITS,
   });
@@ -1411,7 +1680,7 @@ async function buildWorkspaceTextToolExecution(input: {
           });
         }
         if (model.mode === "replace_existing") {
-          const currentProof = await deriveWorkspaceTextArtifactProof({
+          const currentProof = await resolveWorkspaceTextReplacementProof({
             taskId: call.taskId,
             workspaceGrantId: currentGrant.workspaceGrantId,
             relativePath: model.relativePath,
@@ -1419,7 +1688,7 @@ async function buildWorkspaceTextToolExecution(input: {
             tasks: input.tasks,
             artifactLifecycles: input.artifactLifecycles,
           });
-          if (currentProof.digest !== proof?.digest) {
+          if (currentProof.kind !== proof?.kind || currentProof.digest !== proof?.digest) {
             return unavailableDocumentToolAuthorizationContext({
               activeUserId: input.activeUserId,
               capabilityId: call.capabilityId,
@@ -1453,8 +1722,41 @@ async function hydrateWorkspaceTextToolAction(input: {
   artifactLifecycles: ArtifactLifecyclePersistence;
 }): Promise<Action> {
   const action = ActionSchema.parse(input.action);
-  if (action.kind !== TEXT_FILE_WRITE_CAPABILITY_ID) return action;
+  if (
+    action.kind !== TEXT_FILE_READ_CAPABILITY_ID
+    && action.kind !== TEXT_FILE_WRITE_CAPABILITY_ID
+  ) return action;
   const payload = JsonObjectSchema.parse(action.payload);
+  if (action.kind === TEXT_FILE_READ_CAPABILITY_ID) {
+    const allowed = new Set([
+      "workspaceGrantId",
+      "relativePath",
+      "limitsRevision",
+      "limits",
+    ]);
+    if (Object.keys(payload).some((key) => !allowed.has(key))) {
+      throw new Error("Workspace Text Reader durable Action contains unsupported fields");
+    }
+    const workspaceGrantId = requireActionString(payload.workspaceGrantId, "workspaceGrantId");
+    const relativePath = requireActionString(payload.relativePath, "relativePath");
+    if (payload.limitsRevision !== TEXT_FILE_READ_LIMITS_REVISION) {
+      throw new Error("workspace_text_read.limits_revision_mismatch");
+    }
+    const grant = await input.workspaces.loadWorkspaceGrant(workspaceGrantId);
+    if (grant === undefined || grant.status !== "active") {
+      throw new Error("Workspace Text Reader workspace grant is unavailable before dispatch");
+    }
+    return ActionSchema.parse({
+      ...action,
+      payload: {
+        workspaceRoot: grant.rootRealPath,
+        workspaceGrantId,
+        relativePath,
+        limitsRevision: payload.limitsRevision,
+        limits: payload.limits,
+      },
+    });
+  }
   const allowed = new Set([
     "workspaceGrantId",
     "relativePath",
@@ -1462,6 +1764,7 @@ async function hydrateWorkspaceTextToolAction(input: {
     "contentSha256",
     "mode",
     "expectedPreviousSha256",
+    "editReadProofDigest",
     "ownedArtifactProofDigest",
     "limitsRevision",
     "limits",
@@ -1494,7 +1797,7 @@ async function hydrateWorkspaceTextToolAction(input: {
       payload.expectedPreviousSha256,
       "expectedPreviousSha256",
     );
-    const proof = await deriveWorkspaceTextArtifactProof({
+    const proof = await resolveWorkspaceTextReplacementProof({
       taskId: input.taskId,
       workspaceGrantId,
       relativePath,
@@ -1502,8 +1805,11 @@ async function hydrateWorkspaceTextToolAction(input: {
       tasks: input.tasks,
       artifactLifecycles: input.artifactLifecycles,
     });
-    if (proof.digest !== payload.ownedArtifactProofDigest) {
-      throw new Error("workspace_text.owned_artifact_proof_changed");
+    const durableProofDigest = proof.kind === "edit_read"
+      ? payload.editReadProofDigest
+      : payload.ownedArtifactProofDigest;
+    if (proof.digest !== durableProofDigest) {
+      throw new Error("workspace_text.replacement_proof_changed");
     }
   }
   return ActionSchema.parse({
@@ -1520,10 +1826,23 @@ async function hydrateWorkspaceTextToolAction(input: {
       ...(payload.ownedArtifactProofDigest === undefined
         ? {}
         : { ownedArtifactProofDigest: payload.ownedArtifactProofDigest }),
+      ...(payload.editReadProofDigest === undefined
+        ? {}
+        : { editReadProofDigest: payload.editReadProofDigest }),
       limitsRevision: payload.limitsRevision,
       limits: payload.limits,
     },
   });
+}
+
+function parseWorkspaceTextReadModelArguments(value: unknown): Readonly<{
+  relativePath: string;
+}> {
+  const parsed = JsonObjectSchema.parse(value);
+  if (Object.keys(parsed).length !== 1 || typeof parsed.relativePath !== "string") {
+    throw new Error("Workspace Text Reader arguments must contain only relativePath");
+  }
+  return { relativePath: requireActionString(parsed.relativePath, "relativePath") };
 }
 
 function parseWorkspaceTextModelArguments(value: unknown): Readonly<{
@@ -2147,8 +2466,17 @@ function runtimeFixture(input: Readonly<{
     : undefined;
   const registryBuilder = new RegistryBuilder({
     trustedSources: fixtureMode
-      ? [source, DOCUMENT_TOOL_SOURCE, WORKSPACE_TEXT_TOOL_SOURCE]
-      : [DOCUMENT_TOOL_SOURCE, WORKSPACE_TEXT_TOOL_SOURCE],
+      ? [
+        source,
+        DOCUMENT_TOOL_SOURCE,
+        WORKSPACE_TEXT_READ_TOOL_SOURCE,
+        WORKSPACE_TEXT_TOOL_SOURCE,
+      ]
+      : [
+        DOCUMENT_TOOL_SOURCE,
+        WORKSPACE_TEXT_READ_TOOL_SOURCE,
+        WORKSPACE_TEXT_TOOL_SOURCE,
+      ],
   });
   if (fixtureMode) {
     registryBuilder
@@ -2279,11 +2607,11 @@ function mergeRegistrySnapshots(
 function enterpriseR2DRegistrySnapshot(
   deployment: InternalTrialEnterpriseModelDeployment,
   registryRevision: string,
-  skill?: Readonly<{
+  skills: readonly Readonly<{
     skillId: string;
     revision: string;
     contentDigest: string;
-  }>,
+  }>[] = [],
   tools: readonly Readonly<{
     capabilityId: string;
     capabilityRevision: string;
@@ -2307,11 +2635,11 @@ function enterpriseR2DRegistrySnapshot(
       },
       available: true,
     }],
-    skills: skill === undefined ? [] : [{
+    skills: skills.map((skill) => ({
       ref: skill,
       available: true,
       materialAvailable: true,
-    }],
+    })),
     tools: tools.map((tool) => ({ ref: tool, available: true })),
     knowledge: [],
     knowledgeProviderReady: false,

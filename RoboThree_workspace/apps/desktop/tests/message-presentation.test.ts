@@ -5,6 +5,7 @@ import type { MessageProjection } from "@robothree/contracts";
 import { describe, expect, it } from "vitest";
 
 import {
+  isProductConversationMessage,
   messageAuthorName,
   messageAvatar,
   messageStatusLabel,
@@ -33,6 +34,17 @@ function message(
 }
 
 describe("Message presentation", () => {
+  it("keeps tool observations out of the product conversation", () => {
+    expect([
+      message("user"),
+      message("assistant"),
+      message("tool", { content: "{\"sha256\":\"private\"}" }),
+    ].filter(isProductConversationMessage).map((item) => item.role)).toEqual([
+      "user",
+      "assistant",
+    ]);
+  });
+
   it("covers user, assistant, and tool durable message identity", () => {
     expect(["user", "assistant", "tool"].map((role) => [
       role,

@@ -163,10 +163,32 @@ import {
   UpdateRobotDraftCommandSchema,
   WithdrawRobotSubmissionCommandSchema,
 } from "@robothree/contracts/agent-lifecycle/v1alpha1";
+import {
+  CreateSkillDraftWorkspaceCommandSchema,
+  CreateSkillDraftWorkspaceReceiptSchema,
+  GetSkillLifecycleCompatibilityQuerySchema,
+  GetSkillQuerySchema,
+  InstallSkillReleaseCommandSchema,
+  ListSkillsQuerySchema,
+  QuerySkillOperationSchema,
+  RefreshSkillDraftCommandSchema,
+  SkillDetailSchema,
+  SkillLifecycleCompatibilitySchema,
+  SkillLifecycleMutationReceiptSchema,
+  SkillLifecycleSafeErrorSchema,
+  SkillOperationSchema,
+  SkillPageSchema,
+  StartSkillDraftTestCommandSchema,
+  SubmitSkillDraftCommandSchema,
+  SubmitSkillDraftReceiptSchema,
+  UninstallSkillReleaseCommandSchema,
+  WithdrawSkillSubmissionCommandSchema,
+} from "@robothree/contracts/skill-lifecycle/v1alpha1";
 
 import {
   DESKTOP_IPC_CHANNELS,
   AGENT_LIFECYCLE_V1ALPHA1_IPC_CHANNELS,
+  SKILL_LIFECYCLE_V1ALPHA1_IPC_CHANNELS,
   DESKTOP_V1ALPHA2_IPC_CHANNELS,
   DESKTOP_V1ALPHA4_IPC_CHANNELS,
   DESKTOP_V1ALPHA5_IPC_CHANNELS,
@@ -204,6 +226,8 @@ import {
   type AgentLifecycleV1Alpha1InvokeChannel,
   type RendererAgentLifecycleSafeResult,
   type RoboThreeAgentLifecycleApiV1Alpha1,
+  type RoboThreeSkillLifecycleApiV1Alpha1,
+  type SkillLifecycleV1Alpha1InvokeChannel,
 } from "../shared/foundation-api.js";
 
 export type InvokeFoundationStatus = (channel: typeof FOUNDATION_STATUS_CHANNEL) => Promise<FoundationStatus>;
@@ -244,6 +268,52 @@ export function createAgentLifecycleApiV1Alpha1(
       WithdrawRobotSubmissionCommandSchema.parse(command), RobotLifecycleMutationReceiptSchema),
   };
   return Object.freeze(api);
+}
+
+export type InvokeSkillLifecycleV1Alpha1Api = (
+  channel: SkillLifecycleV1Alpha1InvokeChannel,
+  input: unknown,
+) => Promise<unknown>;
+
+export function createSkillLifecycleApiV1Alpha1(
+  invokeRaw: InvokeSkillLifecycleV1Alpha1Api,
+): RoboThreeSkillLifecycleApiV1Alpha1 {
+  const invoke = <T>(channel: SkillLifecycleV1Alpha1InvokeChannel, request: unknown,
+    parser: Parser<T>): Promise<T> => invokeRaw(channel, request)
+      .then((value) => unwrapSkillLifecycleResult(value, parser));
+  return Object.freeze({
+    getSkillLifecycleCompatibility: (query) => invoke(
+      SKILL_LIFECYCLE_V1ALPHA1_IPC_CHANNELS.getSkillLifecycleCompatibility,
+      GetSkillLifecycleCompatibilityQuerySchema.parse(query), SkillLifecycleCompatibilitySchema),
+    listSkills: (query) => invoke(SKILL_LIFECYCLE_V1ALPHA1_IPC_CHANNELS.listSkills,
+      ListSkillsQuerySchema.parse(query), SkillPageSchema),
+    getSkill: (query) => invoke(SKILL_LIFECYCLE_V1ALPHA1_IPC_CHANNELS.getSkill,
+      GetSkillQuerySchema.parse(query), SkillDetailSchema),
+    createSkillDraftWorkspace: (command) => invoke(
+      SKILL_LIFECYCLE_V1ALPHA1_IPC_CHANNELS.createSkillDraftWorkspace,
+      CreateSkillDraftWorkspaceCommandSchema.parse(command), CreateSkillDraftWorkspaceReceiptSchema),
+    refreshSkillDraft: (command) => invoke(
+      SKILL_LIFECYCLE_V1ALPHA1_IPC_CHANNELS.refreshSkillDraft,
+      RefreshSkillDraftCommandSchema.parse(command), SkillLifecycleMutationReceiptSchema),
+    startSkillDraftTest: (command) => invoke(
+      SKILL_LIFECYCLE_V1ALPHA1_IPC_CHANNELS.startSkillDraftTest,
+      StartSkillDraftTestCommandSchema.parse(command), SkillLifecycleMutationReceiptSchema),
+    submitSkillDraft: (command) => invoke(
+      SKILL_LIFECYCLE_V1ALPHA1_IPC_CHANNELS.submitSkillDraft,
+      SubmitSkillDraftCommandSchema.parse(command), SubmitSkillDraftReceiptSchema),
+    withdrawSkillSubmission: (command) => invoke(
+      SKILL_LIFECYCLE_V1ALPHA1_IPC_CHANNELS.withdrawSkillSubmission,
+      WithdrawSkillSubmissionCommandSchema.parse(command), SkillLifecycleMutationReceiptSchema),
+    installSkillRelease: (command) => invoke(
+      SKILL_LIFECYCLE_V1ALPHA1_IPC_CHANNELS.installSkillRelease,
+      InstallSkillReleaseCommandSchema.parse(command), SkillLifecycleMutationReceiptSchema),
+    uninstallSkillRelease: (command) => invoke(
+      SKILL_LIFECYCLE_V1ALPHA1_IPC_CHANNELS.uninstallSkillRelease,
+      UninstallSkillReleaseCommandSchema.parse(command), SkillLifecycleMutationReceiptSchema),
+    querySkillOperation: (query) => invoke(
+      SKILL_LIFECYCLE_V1ALPHA1_IPC_CHANNELS.querySkillOperation,
+      QuerySkillOperationSchema.parse(query), SkillOperationSchema),
+  });
 }
 
 export function createDesktopApi(invoke: InvokeFoundationStatus): RoboThreeDesktopApi {
@@ -782,6 +852,23 @@ function parseAgentLifecycleResult<T>(value: unknown, parser: Parser<T>): Render
   }
   if (!keys.every((key) => key === "ok" || key === "error")) throw new Error("Invalid Agent lifecycle error envelope");
   return { ok: false, error: AgentLifecycleSafeErrorSchema.parse(value.error) };
+}
+
+function unwrapSkillLifecycleResult<T>(value: unknown, parser: Parser<T>): T {
+  if (!isRecord(value) || typeof value.ok !== "boolean") {
+    throw new Error("Desktop Main returned an invalid Skill lifecycle envelope");
+  }
+  const keys = Object.keys(value);
+  if (value.ok) {
+    if (!keys.every((key) => key === "ok" || key === "value")) {
+      throw new Error("Invalid Skill lifecycle success envelope");
+    }
+    return parser.parse(value.value);
+  }
+  if (!keys.every((key) => key === "ok" || key === "error")) {
+    throw new Error("Invalid Skill lifecycle error envelope");
+  }
+  throw SkillLifecycleSafeErrorSchema.parse(value.error);
 }
 
 function parseSafeResultV1Alpha2<T>(

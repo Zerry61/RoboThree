@@ -13,6 +13,9 @@ import RobotsPage from '../pages/robots/RobotsPage.vue';
 import RobotDetailPage from '../pages/robots/RobotDetailPage.vue';
 import SkillsPage from '../pages/skills/SkillsPage.vue';
 import SkillDetailPage from '../pages/skills/SkillDetailPage.vue';
+import SkillSubmissionDetailPage from '../pages/skills/SkillSubmissionDetailPage.vue';
+import SkillUploadPage from '../pages/skills/SkillUploadPage.vue';
+import EnterpriseSkillDraftPage from '../pages/skills/EnterpriseSkillDraftPage.vue';
 import KnowledgePage from '../pages/knowledge/KnowledgePage.vue';
 import KnowledgeDetailPage from '../pages/knowledge/KnowledgeDetailPage.vue';
 import SystemUsersPage from '../pages/system/SystemUsersPage.vue';
@@ -181,6 +184,52 @@ export const routes: readonly AdminRouteRecord[] = [
       menuPermissionAlias: provisionalPermissionAlias('admin.skills.menu'),
       routePermissionAlias: provisionalPermissionAlias('admin.skills.route'),
       capabilityKey: 'admin.skills'
+    }
+  },
+  {
+    path: '/skills/new',
+    name: 'admin.skills.upload',
+    component: SkillUploadPage,
+    meta: {
+      module: 'skills',
+      navKey: 'skills',
+      pageTitle: '上传企业技能包',
+      implementationGate: 'shellImplemented',
+      routePermissionAlias: provisionalPermissionAlias('admin.skills.route'),
+      operationPermissionAlias: provisionalPermissionAlias('admin.skills.operate'),
+      capabilityKey: 'admin.skills.mutation',
+      sensitiveSurface: true
+    }
+  },
+  {
+    path: '/skills/reviews/:submissionId',
+    name: 'admin.skills.review.detail',
+    component: SkillSubmissionDetailPage,
+    props: (route) => ({ submissionId: route.params.submissionId }),
+    meta: {
+      module: 'skills',
+      navKey: 'skills',
+      pageTitle: '技能审核详情',
+      implementationGate: 'shellImplemented',
+      routePermissionAlias: provisionalPermissionAlias('admin.skills.route'),
+      operationPermissionAlias: provisionalPermissionAlias('admin.skills.operate'),
+      capabilityKey: 'admin.skills.review'
+    }
+  },
+  {
+    path: '/skills/drafts/:skillId',
+    name: 'admin.skills.draft.detail',
+    component: EnterpriseSkillDraftPage,
+    props: (route) => ({ skillId: route.params.skillId }),
+    meta: {
+      module: 'skills',
+      navKey: 'skills',
+      pageTitle: '企业技能草稿',
+      implementationGate: 'shellImplemented',
+      routePermissionAlias: provisionalPermissionAlias('admin.skills.route'),
+      operationPermissionAlias: provisionalPermissionAlias('admin.skills.operate'),
+      capabilityKey: 'admin.skills.mutation',
+      sensitiveSurface: true
     }
   },
   {

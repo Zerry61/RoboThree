@@ -120,6 +120,90 @@ describe("InMemoryTaskRuntime", () => {
     expect(runtime.snapshot.runs[1]?.status).toBe("running");
   });
 
+  it("keeps the current run active after the exact recoverable workspace text conflict", async () => {
+    const runtime = createRuntime();
+    await accept(runtime.dispatch(startRun()));
+    await accept(runtime.dispatch(startStep({ actionKind: "tool.workspace.file.write_text" })));
+    const observed = await accept(runtime.dispatch(command("record_observation", at.observation, {
+      runId: entity.run1,
+      stepId: entity.step1,
+      observation: {
+        observationId: entity.observation1,
+        actionId: entity.action1,
+        observedAt: at.observation,
+        outcome: "failed",
+        error: {
+          code: "workspace.file.content_changed",
+          category: "validation",
+          message: "The file changed after the exact read",
+          retryable: true,
+          details: { detailCode: "workspace.file.content_changed" },
+        },
+      },
+    })));
+
+    expect(observed.state.status).toBe("running");
+    expect(observed.state.runs[0]).toMatchObject({ status: "running" });
+    expect(observed.state.runs[0]?.activeStepId).toBeUndefined();
+    expect(observed.state.runs[0]?.steps[0]).toMatchObject({
+      status: "failed",
+      terminalError: { code: "workspace.file.content_changed" },
+    });
+
+    const next = await accept(runtime.dispatch(command("start_step", at.complete, {
+      runId: entity.run1,
+      stepId: entity.step2,
+      planRevision: {
+        executionPlanId: entity.plan,
+        planRevisionId: entity.planRevision,
+        revision: 2,
+      },
+      action: {
+        actionId: entity.action2,
+        kind: "model.generate",
+        payload: { prompt: "reread latest content" },
+      },
+    })));
+    expect(next.state.runs[0]?.activeStepId).toBe(entity.step2);
+  });
+
+  it("terminates the current attempt immediately after the second workspace text conflict", async () => {
+    const runtime = createRuntime();
+    await accept(runtime.dispatch(startRun()));
+    await accept(runtime.dispatch(startStep({ actionKind: "tool.workspace.file.write_text" })));
+    await accept(runtime.dispatch(command("record_observation", at.observation, {
+      runId: entity.run1,
+      stepId: entity.step1,
+      observation: workspaceTextConflict(entity.observation1, entity.action1, at.observation),
+    })));
+    await accept(runtime.dispatch(command("start_step", at.complete, {
+      runId: entity.run1,
+      stepId: entity.step2,
+      planRevision: {
+        executionPlanId: entity.plan,
+        planRevisionId: entity.planRevision,
+        revision: 2,
+      },
+      action: {
+        actionId: entity.action2,
+        kind: "tool.workspace.file.write_text",
+        payload: { relativePath: "notes.md" },
+      },
+    })));
+    const observed = await accept(runtime.dispatch(command("record_observation", at.retry, {
+      runId: entity.run1,
+      stepId: entity.step2,
+      observation: workspaceTextConflict(id(13), entity.action2, at.retry),
+    })));
+
+    expect(observed.state.status).toBe("failed");
+    expect(observed.state.runs[0]).toMatchObject({ status: "failed" });
+    expect(observed.state.runs[0]?.steps[1]).toMatchObject({
+      status: "failed",
+      terminalError: { code: "workspace.file.content_changed" },
+    });
+  });
+
   it("does not retry after the overall Task deadline", async () => {
     const runtime = createRuntime({ deadlineAt: at.complete });
     await accept(runtime.dispatch(startRun()));
@@ -249,7 +333,12 @@ function startRun(overrides: Record<string, unknown> = {}): TaskCommand {
   return command("start_run", at.run, { runId: entity.run1, ...overrides });
 }
 
-function startStep(overrides: { actionId?: string; deadlineAt?: string; stepId?: string } = {}): TaskCommand {
+function startStep(overrides: {
+  actionId?: string;
+  actionKind?: string;
+  deadlineAt?: string;
+  stepId?: string;
+} = {}): TaskCommand {
   return command("start_step", at.step, {
     runId: entity.run1,
     stepId: overrides.stepId ?? entity.step1,
@@ -260,11 +349,31 @@ function startStep(overrides: { actionId?: string; deadlineAt?: string; stepId?:
     },
     action: {
       actionId: overrides.actionId ?? entity.action1,
-      kind: "model.generate",
+      kind: overrides.actionKind ?? "model.generate",
       payload: { prompt: "hello" },
     },
     ...(overrides.deadlineAt === undefined ? {} : { deadlineAt: overrides.deadlineAt }),
   });
+}
+
+function workspaceTextConflict(
+  observationId: string,
+  actionId: string,
+  observedAt: string,
+) {
+  return {
+    observationId,
+    actionId,
+    observedAt,
+    outcome: "failed" as const,
+    error: {
+      code: "workspace.file.content_changed",
+      category: "validation" as const,
+      message: "The file changed after the exact read",
+      retryable: true,
+      details: { detailCode: "workspace.file.content_changed" },
+    },
+  };
 }
 
 function successObservation(overrides: { issuedAt?: string; runId?: string } = {}): TaskCommand {

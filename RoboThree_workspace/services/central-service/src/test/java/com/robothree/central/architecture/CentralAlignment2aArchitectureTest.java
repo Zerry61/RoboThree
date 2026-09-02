@@ -165,15 +165,15 @@ class CentralAlignment2aArchitectureTest {
     void manifestSidecarAndScriptsMatchCanonicalDigestAuthority() throws IOException {
         SchemaManifest manifest = new SchemaManifestLoader().load();
         Path manifestPath =
-                SQL_ROOT.resolve("manifest/postgresql-v0012.json");
+                SQL_ROOT.resolve("manifest/postgresql-v0013.json");
         String manifestDigest = digest("SHA-256", Files.readAllBytes(manifestPath));
 
         assertThat(Files.readString(Path.of(manifestPath + ".sha256")))
-                .isEqualTo(manifestDigest + "  postgresql-v0012.json\n");
+                .isEqualTo(manifestDigest + "  postgresql-v0013.json\n");
         for (SchemaManifest.Script script : manifest.scripts()) {
             Path directory = switch (script.entryPath()) {
                 case "fresh" -> SQL_ROOT.resolve("baseline");
-                case "v0011_upgrade" -> SQL_ROOT.resolve("upgrade");
+                case "v0012_upgrade" -> SQL_ROOT.resolve("upgrade");
                 default -> throw new AssertionError("unknown entry path");
             };
             assertThat(digest("SHA-256", Files.readAllBytes(directory.resolve(

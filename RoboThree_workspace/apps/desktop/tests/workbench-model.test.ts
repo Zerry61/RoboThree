@@ -112,7 +112,7 @@ describe("DFE-2A Workbench view model", () => {
       selectedKnowledgeIds: ["knowledge:missing"],
     });
 
-    expect(selection.workspaceGrantId).toBe("workspace:one");
+    expect(selection.workspaceGrantId).toBe("");
     expect(selection.sessionId).toBe("");
     expect(selection.agentId).toBe("");
     expect(selection.requestedModelId).toBe("model:gpt");
@@ -139,7 +139,7 @@ describe("DFE-2A Workbench view model", () => {
     })).toMatchObject({
       sendDisabled: true,
       disabledReason: "",
-      selectionSummary: "通用机器人 · 0 个工具 · 0/0 个技能 · 0/0 个知识源 · 已选择工作区",
+      selectionSummary: "通用机器人 · 0 个工具 · 0/0 个技能 · 0/0 个知识源 · RoboThree 默认工作区",
     });
 
     expect(presentWorkbenchComposer({

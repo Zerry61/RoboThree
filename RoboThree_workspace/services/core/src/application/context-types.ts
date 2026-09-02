@@ -18,6 +18,7 @@ import type {
   DynamicRequestFactsEvidenceV1,
   DynamicRequestFactsV1,
 } from "./dynamic-request-facts.js";
+import type { ContextBudgetPolicy } from "./context-budget-policy.js";
 
 export type ContextAssemblyPhase = "pre_call" | "mid_turn";
 
@@ -192,6 +193,7 @@ export type ContextPipelineInput = Readonly<{
   instructions?: readonly MaterializedInstructionSource[];
   selectedSkills?: readonly SelectedSkillContext[];
   toolCandidates?: readonly ToolSchemaCandidate[];
+  budgetPolicy?: ContextBudgetPolicy;
 }>;
 
 export type ContextAssemblyReceipt = Readonly<{
@@ -209,6 +211,8 @@ export type ContextAssemblyReceipt = Readonly<{
   reducedSegmentIds: readonly string[];
   initialEstimatedInputTokens: number;
   finalEstimatedInputTokens: number;
+  modelContextWindow: number;
+  reservedOutputTokens: number;
   availableInputTokens: number;
   compactionThresholdTokens: number;
   reductionApplied: boolean;

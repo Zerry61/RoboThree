@@ -591,7 +591,7 @@ export class DesktopIpcRouter {
       artifactId: query.artifactId,
     }).catch(() => undefined);
     if (source === undefined) return undefined;
-    if (!source.ok || source.value.taskId !== undefined) return undefined;
+    if (!source.ok) return undefined;
     const resolved = await resolvePreviewableContainedFile({
       rootRealPath: source.value.rootRealPath,
       relativePath: source.value.relativePath,
@@ -908,6 +908,26 @@ const WORKSPACE_TEXT_PREVIEW_EXTENSIONS = new Set([
   ".markdown",
   ".html",
   ".htm",
+  ".css",
+  ".js",
+  ".ts",
+  ".jsx",
+  ".tsx",
+  ".vue",
+  ".json",
+  ".yaml",
+  ".yml",
+  ".xml",
+  ".svg",
+  ".csv",
+  ".sql",
+  ".py",
+  ".java",
+  ".cs",
+  ".go",
+  ".rs",
+  ".toml",
+  ".ini",
 ]);
 const WORKSPACE_HTML_PREVIEW_EXTENSIONS = new Set([".html", ".htm"]);
 const PPTX_HTML_PREVIEW_EXTENSIONS = new Set([".pptx"]);
@@ -941,6 +961,26 @@ const SUPPORTED_REGISTER_MEDIA = new Map<string, {
   [".txt", { mediaType: "text/plain" }],
   [".html", { mediaType: "text/html" }],
   [".htm", { mediaType: "text/html" }],
+  [".css", { mediaType: "text/css" }],
+  [".js", { mediaType: "text/javascript" }],
+  [".jsx", { mediaType: "text/javascript" }],
+  [".ts", { mediaType: "text/typescript" }],
+  [".tsx", { mediaType: "text/typescript" }],
+  [".vue", { mediaType: "text/plain" }],
+  [".json", { mediaType: "application/json" }],
+  [".yaml", { mediaType: "application/yaml" }],
+  [".yml", { mediaType: "application/yaml" }],
+  [".xml", { mediaType: "application/xml" }],
+  [".svg", { mediaType: "image/svg+xml" }],
+  [".csv", { mediaType: "text/csv" }],
+  [".sql", { mediaType: "application/sql" }],
+  [".py", { mediaType: "text/x-python" }],
+  [".java", { mediaType: "text/x-java-source" }],
+  [".cs", { mediaType: "text/plain" }],
+  [".go", { mediaType: "text/plain" }],
+  [".rs", { mediaType: "text/plain" }],
+  [".toml", { mediaType: "application/toml" }],
+  [".ini", { mediaType: "text/plain" }],
 ]);
 
 async function resolveRegisterableWorkspaceFile(input: {

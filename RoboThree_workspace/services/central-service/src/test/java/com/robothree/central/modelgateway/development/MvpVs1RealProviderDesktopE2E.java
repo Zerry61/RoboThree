@@ -513,6 +513,8 @@ final class MvpVs1RealProviderDesktopE2E {
                 "modelId", "model.internal-trial",
                 "modelCreatedAt", "2026-08-30T00:00:00.000Z",
                 "displayName", "DeepSeek-V4",
+                "contextWindowTokens", 128_000,
+                "maxOutputTokens", 8_192,
                 "supportsToolCalling", true));
     }
 

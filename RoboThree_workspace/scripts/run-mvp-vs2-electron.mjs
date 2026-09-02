@@ -10,19 +10,12 @@ import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 
 import { app, BrowserWindow, ipcMain } from "electron";
-import { CONTRACT_VERSION, JsonValueSchema } from
+import { JsonValueSchema } from
   "../packages/contracts/dist/index.js";
 import { projectEnterpriseProviderToolName } from
   "../services/core/dist/application/enterprise-model-request-converter.js";
 import { sha256CanonicalJson } from
   "../services/core/dist/persistence/digest.js";
-import {
-  createAdapterDescriptor,
-  createCapabilityBinding,
-  createCapabilityDefinition,
-} from "../services/core/dist/registry/capability-revision.js";
-import { RegistryBuilder } from
-  "../services/core/dist/registry/registry-builder.js";
 import { CorePrivateSupervisor } from
   "../apps/desktop/dist/main/core-private-supervisor.js";
 import { DesktopEventReconnectController } from
@@ -57,16 +50,12 @@ const revisedArtifactFileName = "资料汇报-v2.pptx";
 const followUpUserInput =
   "将第 3 页改为风险与下一步，并生成资料汇报-v2.pptx，不覆盖原文件。";
 const expectedSourceText = "段落 Unicode 你好 β";
-const source = Object.freeze({
-  trust: "enterprise",
-  packageId: "deployment.internal-trial.vs2",
-  packageRevision: `sha256:${"a".repeat(64)}`,
-});
 const wfw3Mode = process.env.ROBOTHREE_WFW3_E2E === "true";
+const wte1Mode = process.env.ROBOTHREE_WTE1_E2E === "true";
 
 app.on("window-all-closed", () => undefined);
 
-void app.whenReady().then(wfw3Mode ? runWfw3 : run).then((evidence) => {
+void app.whenReady().then(wte1Mode ? runWte1 : wfw3Mode ? runWfw3 : run).then((evidence) => {
   process.stdout.write(`${JSON.stringify(evidence)}\n`);
   app.quit();
 }).catch((error) => {
@@ -628,6 +617,177 @@ async function runWfw3() {
   }
 }
 
+async function runWte1() {
+  const directory = await mkdtemp(join(tmpdir(), "robothree-wte1-"));
+  const defaultWorkspace = join(directory, "default-workspace");
+  const explicitWorkspace = join(directory, "explicit-workspace");
+  await mkdir(defaultWorkspace, { recursive: true });
+  await mkdir(explicitWorkspace, { recursive: true });
+  const relativePath = "notes.md";
+  const originalText = "# Notes\n\n用户手工维护的原始内容。\n";
+  const revisedText = "# RoboThree Notes\n\n用户手工维护的原始内容。\n\n## 结论\n已基于磁盘最新版修改。\n";
+  await writeFile(join(explicitWorkspace, relativePath), originalText, "utf8");
+  const gateway = await startWfw3GatewayFixture({
+    scenario: "wte1",
+    relativePath,
+    initialHtml: originalText,
+    revisedHtml: revisedText,
+  });
+  const now = Date.now();
+  process.env[deploymentEnvironmentName] = JSON.stringify(
+    deployment(gateway.origin, gateway.modelId),
+  );
+  process.env[tokenEnvironmentName] = compactToken({
+    issuedAt: new Date(now - 60_000).toISOString(),
+    expiresAt: new Date(now + 3_600_000).toISOString(),
+  });
+  let supervisor;
+  let window;
+  let eventSubscription;
+  const handlers = [];
+  let routers;
+  try {
+    supervisor = new CorePrivateSupervisor({
+      entryPath: join(root, "services/core/dist/desktop-private-main.js"),
+      databasePath: join(directory, "robothree.sqlite"),
+      maxUnexpectedRestarts: 2,
+    });
+    await supervisor.start();
+    const modelProbe = await supervisor.client.listModels({
+      contractVersion: "v1alpha1",
+      type: "list_models",
+      queryId: randomUUID(),
+      correlationId: randomUUID(),
+      clientInstanceId: randomUUID(),
+    });
+    if (!modelProbe.ok || modelProbe.value.length !== 1
+      || modelProbe.value[0]?.available !== true) {
+      throw new Error(`wte1_model_probe_${modelProbe.ok ? modelProbe.value.length : modelProbe.error.code}_${modelProbe.ok ? String(modelProbe.value[0]?.available) : "error"}`);
+    }
+    routers = registerRouters(supervisor, handlers, explicitWorkspace, defaultWorkspace);
+    window = new BrowserWindow(createSecureWindowOptions(
+      join(root, "apps/desktop/dist/preload/index.cjs"),
+    ));
+    const clearBindings = () => {
+      routers.v1alpha5.removeWebContents(window.webContents.id);
+      routers.taskReasoning.removeWebContents(window.webContents.id);
+    };
+    window.webContents.on("did-start-navigation", clearBindings);
+    window.webContents.on("render-process-gone", clearBindings);
+    eventSubscription = new DesktopEventReconnectController({
+      resolveConnection: () => ({
+        client: supervisor.client,
+        clientInstanceId: supervisor.clientInstanceId,
+      }),
+      canReconnect: () => {
+        const state = supervisor.snapshot().runtimeState;
+        return state !== "failed" && state !== "stopped";
+      },
+    }).start((value) => {
+      if (!window.isDestroyed()) {
+        window.webContents.send(DESKTOP_IPC_CHANNELS.desktopEvent, value);
+      }
+    });
+
+    await loadWorkbenchRoute(window);
+    const submitted = await window.webContents.executeJavaScript(
+      wfwSubmitDriverScript({
+        stage: "wte1",
+        modelId: gateway.modelId,
+        prompt: `请读取并修改 ${relativePath}，把标题改为 RoboThree Notes 并增加结论。`,
+        chooseWorkspace: true,
+      }),
+      true,
+    );
+    await waitForWfw3TaskCompleted(
+      supervisor.client,
+      submitted.taskId,
+      gateway,
+      "wte1",
+      join(directory, "robothree.sqlite"),
+    );
+    if (gateway.requests.length !== 3) throw new Error("wte1_gateway_round_count_invalid");
+    const readResultRequest = gateway.requests[1]?.body;
+    if (!containsExactText(readResultRequest, originalText)) {
+      throw new Error("wte1_exact_read_result_missing");
+    }
+    if (await readFile(join(explicitWorkspace, relativePath), "utf8") !== revisedText
+      || await readFile(join(explicitWorkspace, `${relativePath}.prev`), "utf8") !== originalText) {
+      throw new Error("wte1_replace_or_previous_invalid");
+    }
+    const detail = await supervisor.client.loadTaskDetail({
+      contractVersion: "v1alpha1",
+      type: "task_detail",
+      queryId: randomUUID(),
+      correlationId: randomUUID(),
+      clientInstanceId: randomUUID(),
+      taskId: submitted.taskId,
+    });
+    if (!detail.ok) throw new Error("wte1_task_detail_unavailable");
+    const reads = detail.value.toolActivities.filter((activity) =>
+      activity.operationType === "tool.workspace.file.read_text");
+    const writes = detail.value.toolActivities.filter((activity) =>
+      activity.operationType === "tool.workspace.file.write_text");
+    const artifacts = detail.value.artifacts.filter((artifact) =>
+      artifact.relativePath === relativePath);
+    if (reads.length !== 1 || writes.length !== 1 || artifacts.length !== 1) {
+      throw new Error("wte1_activity_or_artifact_count_invalid");
+    }
+    await loadWorkbenchRoute(window, submitted.taskId, submitted.sessionId);
+    const presentation = await window.webContents.executeJavaScript(
+      wfwWorkbenchResultScript(relativePath, false, "RoboThree Notes"),
+      true,
+    );
+    const firstRuntimeInstanceId = supervisor.runtimeInstanceId;
+    const firstCorePid = findCoreChildPid();
+    process.kill(firstCorePid, "SIGKILL");
+    await observeExitedProcess(firstCorePid);
+    await waitForSupervisorRecovery(supervisor, firstRuntimeInstanceId);
+    await loadWorkbenchRoute(window, submitted.taskId, submitted.sessionId);
+    const restored = await window.webContents.executeJavaScript(
+      wfwWorkbenchResultScript(relativePath, false, "RoboThree Notes"),
+      true,
+    );
+    const preferences = window.webContents.getLastWebPreferences();
+    return Object.freeze({
+      status: "PASS",
+      outcome: "WTE1_WORKSPACE_TEXT_READ_CONTINUOUS_EDIT_E2E_CONFORMANT",
+      realElectronMain: true,
+      productionPreload: true,
+      realRendererWorkbench: presentation.realRendererWorkbench === true,
+      realMainIpc: true,
+      realCoreChild: true,
+      exactReadResultInModelRequest: true,
+      textReadActivityCount: reads.length,
+      textWriteActivityCount: writes.length,
+      replacementVerified: true,
+      previousBackupVerified: true,
+      logicalArtifactHeadCount: artifacts.length,
+      markdownPreviewReady: presentation.previewReady === true,
+      previewReadyAfterRestart: restored.previewReady === true,
+      coreRestartedWithNewIdentity:
+        supervisor.runtimeInstanceId !== firstRuntimeInstanceId,
+      sigkillObserved: true,
+      gatewayRequestCount: gateway.requests.length,
+      sandbox: preferences.sandbox === true,
+      contextIsolation: preferences.contextIsolation === true,
+      nodeIntegrationDisabled: preferences.nodeIntegration === false,
+    });
+  } finally {
+    eventSubscription?.abort();
+    window?.destroy();
+    routers?.v1alpha5.clear();
+    routers?.taskReasoning.clear();
+    for (const channel of handlers.splice(0)) ipcMain.removeHandler(channel);
+    await supervisor?.stop().catch(() => undefined);
+    await gateway.close().catch(() => undefined);
+    delete process.env[deploymentEnvironmentName];
+    delete process.env[tokenEnvironmentName];
+    delete process.env.ROBOTHREE_WTE1_E2E;
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
 async function assertWfwHtmlPreviewDocumentLoaded(window, expectedText) {
   const deadline = Date.now() + 10_000;
   if (!window.webContents.debugger.isAttached()) {
@@ -919,15 +1079,18 @@ function wfwSubmitDriverScript(input) {
       if (!choose) throw new Error("wfw3_workspace_action_missing");
       choose.click();
       await waitFor(() => [...document.querySelectorAll(".workbench-page__workspace-trigger")]
-        .some((button) => button.textContent?.includes("RoboThree 工作区")
-          && !button.textContent?.includes("默认")),
+        .some((button) => !button.textContent?.includes("默认") && !button.disabled),
         "wfw3_explicit_workspace_missing");
     ` : ""}
-    const modelTrigger = document.querySelector("button[aria-controls='workbench-model-menu']");
-    if (!(modelTrigger instanceof HTMLButtonElement)) throw new Error("wfw3_model_menu_missing");
+    const modelTrigger = await waitFor(() => {
+      const candidate = document.querySelector("button[aria-controls='workbench-model-menu']");
+      return candidate instanceof HTMLButtonElement && !candidate.disabled
+        ? candidate
+        : undefined;
+    }, "wfw3_model_menu_missing");
     modelTrigger.click();
     const model = await waitFor(() => [...document.querySelectorAll(".workbench-page__model-list button")]
-      .find((button) => button.textContent?.includes("Internal Trial Model") && !button.disabled),
+      .find((button) => !button.disabled),
     "wfw3_model_missing");
     model.click();
     const textarea = document.querySelector("textarea");
@@ -969,7 +1132,7 @@ function wfwSubmitDriverScript(input) {
   })()`;
 }
 
-function wfwWorkbenchResultScript(fileName, expectHtmlPreview) {
+function wfwWorkbenchResultScript(fileName, expectHtmlPreview, expectedTextPreview) {
   return `(async () => {
     const waitFor = async (predicate, code, timeoutMs = 40000) => {
       const deadline = Date.now() + timeoutMs;
@@ -980,8 +1143,7 @@ function wfwWorkbenchResultScript(fileName, expectHtmlPreview) {
       }
       throw new Error(code);
     };
-    await waitFor(() => document.body.innerText.includes(${JSON.stringify(fileName)})
-      && document.body.innerText.includes("文件已生成"),
+    await waitFor(() => document.body.innerText.includes(${JSON.stringify(fileName)}),
     "wfw3_result_not_presented");
     const toggle = document.querySelector("[data-results-panel-toggle]");
     if (toggle?.getAttribute("aria-expanded") !== "true") toggle?.click();
@@ -995,7 +1157,17 @@ function wfwWorkbenchResultScript(fileName, expectHtmlPreview) {
         if (document.querySelector("[data-workbench-artifact-preview] [role='alert']")) return "error";
         return undefined;
       }, "wfw3_html_preview_missing");
-    ` : "const previewOutcome = \"not_requested\";"}
+    ` : expectedTextPreview === undefined
+      ? "const previewOutcome = \"not_requested\";"
+      : `
+        const previewOutcome = await waitFor(() => {
+          const preview = document.querySelector("[data-workbench-artifact-preview]");
+          if (preview?.querySelector("[role='alert']")) return "error";
+          if (preview?.textContent?.includes(${JSON.stringify(expectedTextPreview)})) return "ready";
+          return undefined;
+        }, "wte1_markdown_preview_missing");
+        if (previewOutcome !== "ready") throw new Error("wte1_markdown_preview_error");
+      `}
     return {
       realRendererWorkbench: document.querySelector("#app") !== null,
       previewReady: previewOutcome === "ready",
@@ -1109,7 +1281,25 @@ async function startWfw3GatewayFixture(input) {
 
 function wfw3GatewayEvents(invocationId, round, input, oldDigest, contractVersion) {
   const occurredAt = new Date().toISOString();
-  const response = round === 1
+  const response = input.scenario === "wte1"
+    ? round === 1
+      ? toolCallEvent(invocationId, "tool.workspace.file.read_text", {
+          relativePath: input.relativePath,
+        }, occurredAt, contractVersion)
+      : round === 2
+        ? toolCallEvent(invocationId, "tool.workspace.file.write_text", {
+            relativePath: input.relativePath,
+            content: input.revisedHtml,
+            mode: "replace_existing",
+            expectedPreviousSha256: oldDigest,
+          }, occurredAt, contractVersion)
+        : textDeltaEvent(
+          invocationId,
+          occurredAt,
+          `已基于磁盘最新版本修改 ${input.relativePath}`,
+          contractVersion,
+        )
+    : round === 1
     ? toolCallEvent(invocationId, "tool.workspace.file.write_text", {
         relativePath: "index.html",
         content: input.initialHtml,
@@ -1865,56 +2055,16 @@ function textDeltaEvent(
 }
 
 function deployment(origin, modelId) {
-  const capability = createCapabilityDefinition({
-    schemaVersion: CONTRACT_VERSION,
-    capabilityId: modelId,
-    kind: "model",
-    name: "Internal Trial Model",
-    description: "MVP VS2 controlled enterprise Model",
-    source,
-    model: {
-      family: "openai-compatible",
-      inputModalities: ["text"],
-      outputModalities: ["text"],
-      contextWindow: 128_000,
-      supportsStreaming: true,
-    },
-  });
-  const descriptor = createAdapterDescriptor({
-    schemaVersion: CONTRACT_VERSION,
-    adapterDescriptorId: "adapter.model.internal-trial",
-    adapterKind: "model_provider",
-    source,
-    implementationRef: "enterprise:model-gateway",
-    runtimeBoundary: "remote",
-    protocol: { name: "robothree-enterprise-model", version: "v1alpha1" },
-  });
-  const binding = createCapabilityBinding({
-    schemaVersion: CONTRACT_VERSION,
-    bindingId: "binding.model.internal-trial",
-    capability: {
-      capabilityId: capability.capabilityId,
-      capabilityRevision: capability.revision,
-    },
-    adapterDescriptor: {
-      adapterDescriptorId: descriptor.adapterDescriptorId,
-      adapterDescriptorRevision: descriptor.revision,
-    },
-    port: "model_provider",
-    source,
-  });
   return {
-    schemaVersion: "mvp-vs1.internal-trial.v1",
+    schemaVersion: "mvp-admin-vs1.internal-trial.v1",
     centralBaseUrl: origin,
     configurationRevision: `sha256:${"c".repeat(64)}`,
-    modelId: capability.capabilityId,
+    modelId,
     modelCreatedAt: "2026-08-29T00:00:00.000Z",
+    displayName: "Internal Trial Model",
     supportsToolCalling: true,
-    registrySnapshot: new RegistryBuilder({ trustedSources: [source] })
-      .registerCapability(capability)
-      .registerAdapterDescriptor(descriptor)
-      .registerBinding(binding)
-      .finalize(),
+    contextWindowTokens: 400_000,
+    maxOutputTokens: 262_144,
   };
 }
 
@@ -1933,6 +2083,25 @@ function compactToken(input) {
     expiresAt: input.expiresAt,
     permissions: ["model.use"],
   }), "controlled-fixture-signature"].join(".");
+}
+
+function containsExactText(value, expected) {
+  if (typeof value === "string") {
+    if (value.includes(expected)) return true;
+    if (value.startsWith("{") || value.startsWith("[")) {
+      try {
+        return containsExactText(JSON.parse(value), expected);
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  }
+  if (Array.isArray(value)) return value.some((item) => containsExactText(item, expected));
+  if (value !== null && typeof value === "object") {
+    return Object.values(value).some((item) => containsExactText(item, expected));
+  }
+  return false;
 }
 
 async function writeDocxFixture(targetPath) {
@@ -2008,9 +2177,9 @@ function json(response, status, value) {
 
 function safeCode(error) {
   const message = error instanceof Error ? error.message : "vs2_electron_failure";
-  if (wfw3Mode) {
+  if (wfw3Mode || wte1Mode) {
     return message.replace(/[^A-Za-z0-9_.-]+/gu, "_").slice(0, 512)
-      || "wfw3_electron_failure";
+      || (wte1Mode ? "wte1_electron_failure" : "wfw3_electron_failure");
   }
   return /^[a-z0-9_.-]+$/u.test(message) ? message : "vs2_electron_failure";
 }

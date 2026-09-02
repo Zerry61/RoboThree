@@ -90,6 +90,8 @@ describe("internal-trial enterprise Model deployment", () => {
         modelCreatedAt: "2026-08-30T00:00:00.000Z",
         displayName: "Admin Managed Model",
         supportsToolCalling: true,
+        contextWindowTokens: 400_000,
+        maxOutputTokens: 128_000,
       }),
     };
 
@@ -104,7 +106,17 @@ describe("internal-trial enterprise Model deployment", () => {
       capability: {
         capabilityId: "model.admin-managed",
         name: "Admin Managed Model",
-        model: { contextWindow: 128_000 },
+        model: { contextWindow: 400_000 },
+      },
+      descriptor: {
+        configurationRef: expect.stringMatching(
+          /^model-capability-profile:v1\/400000\/128000\/[a-f0-9]{64}$/u,
+        ),
+      },
+      binding: {
+        configurationRef: expect.stringMatching(
+          /^model-capability-profile:v1\/400000\/128000\/[a-f0-9]{64}$/u,
+        ),
       },
       model: {
         modelId: "model.admin-managed",
@@ -170,6 +182,8 @@ describe("internal-trial enterprise Model deployment", () => {
         modelCreatedAt: "2026-08-30T00:00:00.000Z",
         displayName: "Admin Managed Model",
         supportsToolCalling: true,
+        contextWindowTokens: 128_000,
+        maxOutputTokens: 8_192,
       }),
       [INTERNAL_TRIAL_ENTERPRISE_ACCESS_TOKEN_ENV]: compactToken({
         issuedAt: new Date(now - 60_000).toISOString(),

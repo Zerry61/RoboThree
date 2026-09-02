@@ -119,7 +119,8 @@ final class AdminModelCommandServiceTest {
         assertThat(discovery).isNotNull();
         assertThat(discovery.fieldNames()).toIterable().containsExactlyInAnyOrder(
                 "schemaVersion", "configurationRevision", "modelId", "modelCreatedAt",
-                "displayName", "supportsToolCalling");
+                "displayName", "supportsToolCalling", "contextWindowTokens",
+                "maxOutputTokens");
         assertThat(discovery.toString()).doesNotContain("provider.example")
                 .doesNotContain("gpt-compatible")
                 .doesNotContain("secret-value");

@@ -13,6 +13,7 @@ import type { BrowserWindow as BrowserWindowType } from "electron";
 import {
   DESKTOP_IPC_CHANNELS,
   AGENT_LIFECYCLE_V1ALPHA1_IPC_CHANNELS,
+  SKILL_LIFECYCLE_V1ALPHA1_IPC_CHANNELS,
   DESKTOP_V1ALPHA2_IPC_CHANNELS,
   DESKTOP_V1ALPHA4_IPC_CHANNELS,
   DESKTOP_V1ALPHA5_IPC_CHANNELS,
@@ -28,6 +29,7 @@ import {
   type PersonalModelV1Alpha1InvokeChannel,
   type PersonalModelV1Alpha2InvokeChannel,
   type AgentLifecycleV1Alpha1InvokeChannel,
+  type SkillLifecycleV1Alpha1InvokeChannel,
 } from "../shared/foundation-api.js";
 import { CorePrivateSupervisor } from "./core-private-supervisor.js";
 import { DesktopEventReconnectController } from "./desktop-event-reconnect-controller.js";
@@ -44,6 +46,12 @@ import { PersonalModelV1Alpha2IpcRouter } from
   "./personal-model-v1alpha2-ipc-router.js";
 import { AgentLifecycleV1Alpha1IpcRouter } from
   "./agent-lifecycle-v1alpha1-ipc-router.js";
+import { SkillLifecycleV1Alpha1IpcRouter } from
+  "./skill-lifecycle-v1alpha1-ipc-router.js";
+import { SkillDraftWorkspaceService } from "./skill-draft-workspace-service.js";
+import { SkillInstallationService } from "./skill-installation-service.js";
+import { SkillLocalDiscoveryService } from "./skill-local-discovery-service.js";
+import { AdminSkillDraftTestCoordinator } from "./admin-skill-draft-test-coordinator.js";
 import { HtmlPreviewSandbox } from "./html-preview-sandbox.js";
 import { PersonalCredentialTransportProductionController } from "./personal-credential-transport-controller.js";
 import { resolvePackagedPersonalCredentialHelper } from
@@ -64,6 +72,7 @@ if (!hasSingleInstanceLock) {
 
 let supervisor: CorePrivateSupervisor | undefined;
 let eventSubscription: AbortController | undefined;
+let adminSkillTests: AdminSkillDraftTestCoordinator | undefined;
 const htmlPreviewSandbox = new HtmlPreviewSandbox();
 const personalCredentialTransport = new PersonalCredentialTransportProductionController({
   // Historical STRM-2 snapshot: foundationEnabled: false.
@@ -111,6 +120,7 @@ if (hasSingleInstanceLock) {
     event.preventDefault();
     quitting = true;
     eventSubscription?.abort();
+    adminSkillTests?.stop();
     void Promise.allSettled([
       htmlPreviewSandbox.closeAll(),
       supervisor?.stop(),
@@ -132,6 +142,7 @@ if (hasSingleInstanceLock) {
         import.meta.url,
       )),
       databasePath: join(app.getPath("userData"), "robothree.sqlite"),
+      privateInstalledSkillRoot: join(app.getPath("home"), ".robothree", "skills", "installed"),
       sensitiveTransportActivationDescriptor: STRM3_SENSITIVE_TRANSPORT_ACTIVATION,
       ...(credentialHelperDescriptor === undefined
         ? {}
@@ -195,9 +206,25 @@ function createMainWindow(): BrowserWindowType {
 }
 
 function registerBusinessIpc(core: CorePrivateSupervisor): void {
+  const privateRootPath = join(app.getPath("home"), ".robothree");
   const defaultWorkspace = new DefaultWorkspaceGrantProvider({
     resolveClient: () => core.client,
-    rootPath: join(app.getPath("home"), ".robothree"),
+    rootPath: privateRootPath,
+  });
+  const skillDraftWorkspaces = new SkillDraftWorkspaceService({
+    privateRootPath,
+    onSynced: () => core.restart(),
+  });
+  const skillInstallations = new SkillInstallationService({
+    privateRootPath,
+    onInstalled: () => core.restart(),
+  });
+  adminSkillTests?.stop();
+  adminSkillTests = new AdminSkillDraftTestCoordinator({ core, installations: skillInstallations });
+  adminSkillTests.start();
+  const skillLocalDiscovery = new SkillLocalDiscoveryService({
+    privateRootPath,
+    onChanged: () => core.restart(),
   });
   const ensureDefaultWorkspaceGrant = (input: Readonly<{
     clientInstanceId: string;
@@ -249,8 +276,20 @@ function registerBusinessIpc(core: CorePrivateSupervisor): void {
           {
             name: "Supported Documents",
             extensions: options?.documentSourcesOnly === true
-              ? ["pdf", "xlsx", "docx"]
-              : ["pdf", "xlsx", "docx", "md", "markdown", "txt", "html", "htm"],
+              ? [
+                "pdf", "xlsx", "docx",
+                "md", "markdown", "txt", "html", "htm", "css",
+                "js", "ts", "jsx", "tsx", "vue", "json", "yaml", "yml",
+                "xml", "svg", "csv", "sql", "py", "java", "cs", "go", "rs",
+                "toml", "ini",
+              ]
+              : [
+                "pdf", "xlsx", "docx",
+                "md", "markdown", "txt", "html", "htm", "css",
+                "js", "ts", "jsx", "tsx", "vue", "json", "yaml", "yml",
+                "xml", "svg", "csv", "sql", "py", "java", "cs", "go", "rs",
+                "toml", "ini",
+              ],
           },
         ],
       });
@@ -358,6 +397,23 @@ function registerBusinessIpc(core: CorePrivateSupervisor): void {
   for (const channel of agentLifecycleChannels) {
     ipcMain.handle(channel, (event, input: unknown) =>
       agentLifecycleRouter.dispatch(channel, input, event));
+  }
+  const skillLifecycleRouter = new SkillLifecycleV1Alpha1IpcRouter({
+    resolveConnection: () => core.connectionLease(),
+    isCurrentConnection: (lease) => core.isCurrentConnectionLease(lease),
+    isAuthorizedWebContents: (webContentsId) => mainWindow !== undefined
+      && !mainWindow.isDestroyed()
+      && mainWindow.webContents.id === webContentsId,
+    draftWorkspaces: skillDraftWorkspaces,
+      installations: skillInstallations,
+      localDiscovery: skillLocalDiscovery,
+  });
+  const skillLifecycleChannels = Object.values(
+    SKILL_LIFECYCLE_V1ALPHA1_IPC_CHANNELS,
+  ) as SkillLifecycleV1Alpha1InvokeChannel[];
+  for (const channel of skillLifecycleChannels) {
+    ipcMain.handle(channel, (event, input: unknown) =>
+      skillLifecycleRouter.dispatch(channel, input, event));
   }
   if (mainWindow !== undefined && !mainWindow.isDestroyed()) {
     const webContents = mainWindow.webContents;

@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { open as openFile, rm as removeFile } from "node:fs/promises";
 
 import {
   AgentProjectionSchema,
@@ -224,6 +225,27 @@ import {
   type UpdateRobotDraftCommand,
   type WithdrawRobotSubmissionCommand,
 } from "@robothree/contracts/agent-lifecycle/v1alpha1";
+import {
+  GetSkillLifecycleCompatibilityQuerySchema,
+  GetSkillQuerySchema,
+  ListSkillsQuerySchema,
+  SkillDraftMaterialSchema,
+  StartSkillDraftTestCommandSchema,
+  SubmitSkillDraftCommandSchema,
+  WithdrawSkillSubmissionCommandSchema,
+  type GetSkillQuery,
+  type GetSkillLifecycleCompatibilityQuery,
+  type ListSkillsQuery,
+  type PublishedSkillRelease,
+  type SkillDetail,
+  type SkillLifecycleCompatibility,
+  type SkillLifecycleMutationReceipt,
+  type SkillPage,
+  type StartSkillDraftTestCommand,
+  type SubmitSkillDraftCommand,
+  type SubmitSkillDraftReceipt,
+  type WithdrawSkillSubmissionCommand,
+} from "@robothree/contracts/skill-lifecycle/v1alpha1";
 
 import type { Clock } from "../ports/clock.js";
 import { CatalogQueryError } from "../ports/catalog-query.js";
@@ -233,6 +255,7 @@ import type {
 } from "../ports/catalog-query.js";
 import type { RuntimeSelectionContextProvider } from "../ports/runtime-selection-context-provider.js";
 import type { SubmitTurnPersistence } from "../ports/submit-turn-persistence.js";
+import type { TaskPersistence } from "../ports/task-persistence.js";
 import type { WorkspaceSelectionIssuer } from "../ports/workspace-selection.js";
 import {
   WorkspaceBrowserPortError,
@@ -266,12 +289,71 @@ type AgentLifecyclePort = Readonly<{
     | BeginRobotDraftTestCommand | CompleteRobotDraftTestCommand
   ): Promise<RobotLifecycleMutationReceipt>;
 }>;
+type SkillLifecyclePort = Readonly<{
+  listDrafts(): Promise<SkillPage>;
+  getDraft(skillId: string): Promise<SkillDetail>;
+  listPublished(): Promise<readonly PublishedSkillRelease[]>;
+  download(input: Readonly<{
+    skillId: string;
+    releaseRevision: string;
+    packageDigest: string;
+  }>): Promise<Readonly<{
+    bytes: Uint8Array;
+    packageDigest: string;
+    manifestDigest: string;
+  }>>;
+  submit(command: SubmitSkillDraftCommand): Promise<SubmitSkillDraftReceipt>;
+  withdraw(command: WithdrawSkillSubmissionCommand): Promise<SkillLifecycleMutationReceipt>;
+  beginTest(command: Readonly<{
+    contractVersion: "skill-lifecycle.v1alpha1";
+    kind: "begin_skill_draft_test";
+    commandId: string;
+    correlationId: string;
+    skillId: string;
+    expectedDraftRevision: string;
+    taskId: string;
+  }>): Promise<SkillLifecycleMutationReceipt>;
+  completeTest(command: Readonly<{
+    contractVersion: "skill-lifecycle.v1alpha1";
+    kind: "complete_skill_draft_test";
+    commandId: string;
+    correlationId: string;
+    skillId: string;
+    expectedDraftRevision: string;
+    taskId: string;
+    result: "passed" | "failed";
+    safeReason?: string;
+    resultDigest: string;
+  }>): Promise<unknown>;
+  listAdminTestRequests(): Promise<readonly Readonly<{
+    operationId: string; correlationId: string; skillId: string; draftRevision: string;
+    packageDigest: string; manifestDigest: string; skillMarkdownDigest: string;
+    testInput: string;
+  }>[]>;
+  listRunningAdminTestRequests(): Promise<readonly Readonly<{
+    operationId: string; correlationId: string; skillId: string; targetRevision: string;
+    state: "running"; taskId: string;
+  }>[]>;
+  downloadAdminTestPackage(input: Readonly<{ operationId: string }>): Promise<Readonly<{
+    bytes: Uint8Array; packageDigest: string; manifestDigest: string;
+  }>>;
+  claimAdminTestRequest(input: Readonly<{ operationId: string; taskId: string }>): Promise<unknown>;
+  queryAdminTestRequest(operationId: string): Promise<Readonly<{
+    state: "accepted" | "running" | "succeeded" | "failed";
+  }>>;
+  completeAdminTestRequest(input: Readonly<{
+    operationId: string; taskId: string; result: "passed" | "failed";
+    safeReason?: string; resultDigest: string;
+  }>): Promise<unknown>;
+}>;
 import {
   projectSubmitTurnReceiptV1Alpha4,
   type SubmitTurnCoordinator,
   type SubmitTurnCoordinatorResult,
 } from "./submit-turn-coordinator.js";
 import type { WorkspaceGrantService } from "./workspace-grant-service.js";
+import type { WorkspaceSkillDraftSynchronizer } from
+  "./workspace-skill-draft-synchronizer.js";
 
 export type DesktopApplicationResult<T> =
   | Readonly<{ ok: true; value: T }>
@@ -345,7 +427,16 @@ export class DesktopApplicationFacade {
   readonly #personalModelManagement: PersonalModelManagementReadService | undefined;
   readonly #personalModelCommands: PersonalModelManagementCommandService | undefined;
   readonly #agentLifecycle: AgentLifecyclePort | undefined;
+  readonly #skillLifecycle: SkillLifecyclePort | undefined;
+  readonly #skillDraftSynchronizer: WorkspaceSkillDraftSynchronizer | undefined;
+  readonly #skillInstallationTasks: TaskPersistence | undefined;
   readonly #monitoredRobotTestTaskIds = new Set<string>();
+  readonly #monitoredSkillTestTaskIds = new Set<string>();
+  readonly #pendingAdminSkillTests = new Map<string, Readonly<{
+    operationId: string; correlationId: string; skillId: string; draftRevision: string;
+    packageDigest: string; manifestDigest: string; skillMarkdownDigest: string;
+    testInput: string;
+  }>>();
   readonly #registerLifecycleDraft: ((detail: RobotDraftDetail) => void) | undefined;
   readonly #refreshPublishedAgents: (() => Promise<void>) | undefined;
 
@@ -378,6 +469,9 @@ export class DesktopApplicationFacade {
     personalModelManagement?: PersonalModelManagementReadService;
     personalModelCommands?: PersonalModelManagementCommandService;
     agentLifecycle?: AgentLifecyclePort;
+    skillLifecycle?: SkillLifecyclePort;
+    skillDraftSynchronizer?: WorkspaceSkillDraftSynchronizer;
+    skillInstallationTasks?: TaskPersistence;
     registerLifecycleDraft?: (detail: RobotDraftDetail) => void;
     refreshPublishedAgents?: () => Promise<void>;
   }) {
@@ -410,6 +504,9 @@ export class DesktopApplicationFacade {
     this.#personalModelManagement = input.personalModelManagement;
     this.#personalModelCommands = input.personalModelCommands;
     this.#agentLifecycle = input.agentLifecycle;
+    this.#skillLifecycle = input.skillLifecycle;
+    this.#skillDraftSynchronizer = input.skillDraftSynchronizer;
+    this.#skillInstallationTasks = input.skillInstallationTasks;
     this.#registerLifecycleDraft = input.registerLifecycleDraft;
     this.#refreshPublishedAgents = input.refreshPublishedAgents;
     if (this.#dfi541MaxEnabled
@@ -870,6 +967,575 @@ export class DesktopApplicationFacade {
       return { ok: true, value: await this.#workspaceBrowser.listEntries(parsed.data, signal) };
     } catch (error) {
       return workspaceFailureV1Alpha2(error, parsed.data);
+    }
+  }
+
+  async getSkillLifecycleCompatibilityV1Alpha1(input: GetSkillLifecycleCompatibilityQuery) {
+    const parsed = GetSkillLifecycleCompatibilityQuerySchema.safeParse(input);
+    if (!parsed.success) return skillLifecycleFailure("skilllifecycle.invalid_request", input);
+    const available = this.#skillLifecycle !== undefined;
+    return {
+      ok: true as const,
+      value: {
+        contractVersion: "skill-lifecycle.v1alpha1" as const,
+        serviceAvailable: available,
+        marketplaceAvailable: available,
+        creatorAvailable: available,
+        installationAvailable: available,
+        testIdentityUsed: available,
+        productionIdentityReady: false as const,
+      } satisfies SkillLifecycleCompatibility,
+    };
+  }
+
+  async listSkillsV1Alpha1(input: ListSkillsQuery) {
+    const parsed = ListSkillsQuerySchema.safeParse(input);
+    if (!parsed.success) return skillLifecycleFailure("skilllifecycle.invalid_request", input);
+    if (this.#skillLifecycle === undefined) {
+      return skillLifecycleFailure("skilllifecycle.service_unavailable", input);
+    }
+    try {
+      if (parsed.data.scope === "created") {
+        return { ok: true as const, value: await this.#skillLifecycle.listDrafts() };
+      }
+      if (parsed.data.scope === "marketplace") {
+        const releases = await this.#skillLifecycle.listPublished();
+        const items = releases.map((release) => ({
+          skillId: release.skillId,
+          revision: release.releaseRevision,
+          technicalName: release.technicalName,
+          displayTitle: release.displayTitle,
+          displayDescription: release.displayDescription,
+          sourceKind: release.sourceKind,
+          availability: "available" as const,
+          creatorDisplayName: release.sourceKind === "admin_upload" ? "企业管理员" : "企业用户",
+          semanticVersion: release.semanticVersion,
+          installed: false,
+          updatedAt: release.publishedAt,
+        }));
+        const queryRevision = `sha256:${createHash("sha256")
+          .update(JSON.stringify(items.map((item) => [item.skillId, item.revision])))
+          .digest("hex")}`;
+        return {
+          ok: true as const,
+          value: {
+            contractVersion: "skill-lifecycle.v1alpha1" as const,
+            queryRevision,
+            scope: "marketplace" as const,
+            items,
+          } satisfies SkillPage,
+        };
+      }
+      return {
+        ok: true as const,
+        value: {
+          contractVersion: "skill-lifecycle.v1alpha1" as const,
+          queryRevision: `sha256:${"0".repeat(64)}`,
+          scope: parsed.data.scope,
+          items: [],
+        } satisfies SkillPage,
+      };
+    } catch (error) {
+      return skillLifecycleFailure(skillLifecycleErrorCode(error), input);
+    }
+  }
+
+  async getSkillV1Alpha1(input: GetSkillQuery) {
+    const parsed = GetSkillQuerySchema.safeParse(input);
+    if (!parsed.success) return skillLifecycleFailure("skilllifecycle.invalid_request", input);
+    if (this.#skillLifecycle === undefined) {
+      return skillLifecycleFailure("skilllifecycle.service_unavailable", input);
+    }
+    try {
+      if (parsed.data.sourceKind === "personal_creator" || parsed.data.sourceKind === undefined) {
+        return { ok: true as const, value: await this.#skillLifecycle.getDraft(parsed.data.skillId) };
+      }
+      const release = (await this.#skillLifecycle.listPublished()).find((candidate) =>
+        candidate.skillId === parsed.data.skillId
+        && (parsed.data.revision === undefined || candidate.releaseRevision === parsed.data.revision)
+        && candidate.sourceKind === parsed.data.sourceKind);
+      if (release === undefined) return skillLifecycleFailure("skilllifecycle.not_found", input);
+      const value: SkillDetail = {
+        skillId: release.skillId,
+        revision: release.releaseRevision,
+        technicalName: release.technicalName,
+        displayTitle: release.displayTitle,
+        displayDescription: release.displayDescription,
+        sourceKind: release.sourceKind,
+        availability: "available",
+        creatorDisplayName: release.sourceKind === "admin_upload" ? "企业管理员" : "企业用户",
+        semanticVersion: release.semanticVersion,
+        installed: false,
+        updatedAt: release.publishedAt,
+        packageFacts: release.packageFacts,
+      };
+      return { ok: true as const, value };
+    } catch (error) {
+      return skillLifecycleFailure(skillLifecycleErrorCode(error), input);
+    }
+  }
+
+  async submitSkillDraftV1Alpha1(input: SubmitSkillDraftCommand) {
+    const parsed = SubmitSkillDraftCommandSchema.safeParse(input);
+    if (!parsed.success || this.#skillLifecycle === undefined) {
+      return skillLifecycleFailure(parsed.success
+        ? "skilllifecycle.service_unavailable" : "skilllifecycle.invalid_request", input);
+    }
+    try {
+      return { ok: true as const, value: await this.#skillLifecycle.submit(parsed.data) };
+    } catch (error) {
+      return skillLifecycleFailure(skillLifecycleErrorCode(error), input);
+    }
+  }
+
+  async withdrawSkillSubmissionV1Alpha1(input: WithdrawSkillSubmissionCommand) {
+    const parsed = WithdrawSkillSubmissionCommandSchema.safeParse(input);
+    if (!parsed.success || this.#skillLifecycle === undefined) {
+      return skillLifecycleFailure(parsed.success
+        ? "skilllifecycle.service_unavailable" : "skilllifecycle.invalid_request", input);
+    }
+    try {
+      return { ok: true as const, value: await this.#skillLifecycle.withdraw(parsed.data) };
+    } catch (error) {
+      return skillLifecycleFailure(skillLifecycleErrorCode(error), input);
+    }
+  }
+
+  async startSkillDraftTestV1Alpha1(input: StartSkillDraftTestCommand) {
+    const parsed = StartSkillDraftTestCommandSchema.safeParse(input);
+    if (!parsed.success || this.#skillLifecycle === undefined) {
+      return skillLifecycleFailure(parsed.success
+        ? "skilllifecycle.service_unavailable" : "skilllifecycle.invalid_request", input);
+    }
+    try {
+      const draft = await this.#skillLifecycle.getDraft(parsed.data.skillId);
+      if (draft.revision !== parsed.data.expectedDraftRevision) {
+        throw new Error("skilllifecycle.revision_conflict");
+      }
+      const clientInstanceId = lifecycleDerivedId(parsed.data.commandId, "skill-client");
+      const session = await this.createSession({
+        contractVersion: "v1alpha1",
+        commandId: lifecycleDerivedId(parsed.data.commandId, "skill-session-command"),
+        correlationId: parsed.data.correlationId,
+        clientInstanceId,
+        type: "create_session",
+        title: `测试：${draft.displayTitle}`,
+      });
+      if (!session.ok) throw new Error("skilllifecycle.service_unavailable");
+      const submitted = await this.submitTurnV1Alpha5({
+        contractVersion: "v1alpha5",
+        commandId: lifecycleDerivedId(parsed.data.commandId, "skill-submit-command"),
+        correlationId: parsed.data.correlationId,
+        clientInstanceId,
+        type: "submit_turn",
+        clientTurnId: `skill-test:${parsed.data.commandId}`,
+        sessionId: session.value.sessionId,
+        userInput: parsed.data.testInput,
+        selectionRequest: {
+          agentId: "agent.general",
+          selectedSkillIds: [parsed.data.skillId],
+          selectedKnowledgeIds: [],
+          authorizationPreference: { schemaVersion: "v1alpha1", requestedMode: "manual_review" },
+          reasoningPreference: { requestedMode: "default" },
+        },
+      });
+      if (!submitted.ok) throw new Error("skilllifecycle.service_unavailable");
+      const receipt = await this.#skillLifecycle.beginTest({
+        contractVersion: "skill-lifecycle.v1alpha1",
+        kind: "begin_skill_draft_test",
+        commandId: parsed.data.commandId,
+        correlationId: parsed.data.correlationId,
+        skillId: parsed.data.skillId,
+        expectedDraftRevision: parsed.data.expectedDraftRevision,
+        taskId: submitted.value.taskId,
+      });
+      this.#startSkillDraftTestMonitor({
+        correlationId: parsed.data.correlationId,
+        skillId: parsed.data.skillId,
+        expectedDraftRevision: parsed.data.expectedDraftRevision,
+        taskId: submitted.value.taskId,
+      });
+      return { ok: true as const, value: receipt };
+    } catch (error) {
+      return skillLifecycleFailure(skillLifecycleErrorCode(error), input);
+    }
+  }
+
+  async resumeSkillDraftTestsV1Alpha1(): Promise<void> {
+    if (this.#skillLifecycle === undefined) return;
+    try {
+      const page = await this.#skillLifecycle.listDrafts();
+      for (const summary of page.items) {
+        const detail = await this.#skillLifecycle.getDraft(summary.skillId);
+        if (detail.draftTestFact?.state !== "running"
+          || detail.draftTestFact.taskId === undefined) continue;
+        this.#startSkillDraftTestMonitor({
+          correlationId: randomUUID(),
+          skillId: detail.skillId,
+          expectedDraftRevision: detail.draftTestFact.draftRevision,
+          taskId: detail.draftTestFact.taskId,
+        });
+      }
+    } catch {
+      // Central remains authoritative; a later read retries without fabricating a result.
+    }
+  }
+
+  #startSkillDraftTestMonitor(input: Readonly<{
+    correlationId: string;
+    skillId: string;
+    expectedDraftRevision: string;
+    taskId: string;
+  }>): void {
+    if (this.#monitoredSkillTestTaskIds.has(input.taskId)) return;
+    this.#monitoredSkillTestTaskIds.add(input.taskId);
+    void this.#monitorSkillDraftTest(input).catch(() => {
+      // Central retains the running fact; startup recovery can safely resume it.
+    }).finally(() => {
+      this.#monitoredSkillTestTaskIds.delete(input.taskId);
+    });
+  }
+
+  async #monitorSkillDraftTest(command: Readonly<{
+    correlationId: string;
+    skillId: string;
+    expectedDraftRevision: string;
+    taskId: string;
+  }>): Promise<void> {
+    if (this.#skillLifecycle === undefined) return;
+    for (let attempts = 0; attempts < 1_200; attempts += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      const detail = await this.loadTaskDetail({
+        contractVersion: "v1alpha1",
+        queryId: randomUUID(),
+        correlationId: command.correlationId,
+        clientInstanceId: randomUUID(),
+        type: "task_detail",
+        taskId: command.taskId,
+      });
+      if (!detail.ok) continue;
+      const status = detail.value.summary.displayStatus;
+      if (!["completed", "failed", "cancelled", "timed_out", "manual_attention"]
+        .includes(status)) continue;
+      const passed = status === "completed";
+      const resultDigest = `sha256:${createHash("sha256").update(JSON.stringify({
+        domain: "robothree.skill-draft-test-result.v1",
+        skillId: command.skillId,
+        draftRevision: command.expectedDraftRevision,
+        taskId: command.taskId,
+        status,
+      })).digest("hex")}`;
+      await this.#skillLifecycle.completeTest({
+        contractVersion: "skill-lifecycle.v1alpha1",
+        kind: "complete_skill_draft_test",
+        commandId: randomUUID(),
+        correlationId: command.correlationId,
+        skillId: command.skillId,
+        expectedDraftRevision: command.expectedDraftRevision,
+        taskId: command.taskId,
+        result: passed ? "passed" : "failed",
+        ...(passed ? {} : { safeReason: "技能测试任务未成功完成" }),
+        resultDigest,
+      });
+      return;
+    }
+  }
+
+  async syncSkillDraftV1Alpha1(input: unknown) {
+    if (!isRecord(input) || this.#skillDraftSynchronizer === undefined) {
+      return skillLifecycleFailure("skilllifecycle.service_unavailable", input);
+    }
+    const keys = Object.keys(input);
+    if (keys.some((key) => ![
+      "commandId", "correlationId", "workspaceGrantId", "skillId",
+      "expectedDraftRevision", "material",
+    ].includes(key)) || typeof input.commandId !== "string"
+      || typeof input.correlationId !== "string"
+      || typeof input.workspaceGrantId !== "string"
+      || typeof input.skillId !== "string") {
+      return skillLifecycleFailure("skilllifecycle.invalid_request", input);
+    }
+    const material = SkillDraftMaterialSchema.safeParse(input.material);
+    if (!material.success || material.data.skillId !== input.skillId
+      || (input.expectedDraftRevision !== undefined
+        && typeof input.expectedDraftRevision !== "string")) {
+      return skillLifecycleFailure("skilllifecycle.invalid_request", input);
+    }
+    try {
+      return {
+        ok: true as const,
+        value: await this.#skillDraftSynchronizer.sync({
+          commandId: input.commandId,
+          correlationId: input.correlationId,
+          workspaceGrantId: input.workspaceGrantId,
+          skillId: input.skillId,
+          material: material.data,
+          ...(typeof input.expectedDraftRevision === "string"
+            ? { expectedDraftRevision: input.expectedDraftRevision } : {}),
+        }),
+      };
+    } catch (error) {
+      return skillLifecycleFailure(skillLifecycleErrorCode(error), input);
+    }
+  }
+
+  async stageSkillReleaseV1Alpha1(input: unknown) {
+    if (!isRecord(input) || this.#skillLifecycle === undefined) {
+      return skillLifecycleFailure("skilllifecycle.service_unavailable", input);
+    }
+    if (Object.keys(input).some((key) => ![
+      "workspaceGrantId", "skillId", "releaseRevision", "packageDigest",
+    ].includes(key)) || typeof input.workspaceGrantId !== "string"
+      || typeof input.skillId !== "string" || typeof input.releaseRevision !== "string"
+      || typeof input.packageDigest !== "string") {
+      return skillLifecycleFailure("skilllifecycle.invalid_request", input);
+    }
+    const target = await this.#workspaces.resolveAuthorizedPath({
+      workspaceGrantId: input.workspaceGrantId,
+      relativePath: "package.zip",
+      operation: "write",
+      allowMissingLeaf: true,
+    });
+    if (!target.ok) return skillLifecycleFailure("skilllifecycle.not_found", input);
+    try {
+      const release = (await this.#skillLifecycle.listPublished()).find((candidate) =>
+        candidate.skillId === input.skillId
+        && candidate.releaseRevision === input.releaseRevision
+        && candidate.packageFacts.packageDigest === input.packageDigest);
+      if (release === undefined) {
+        return skillLifecycleFailure("skilllifecycle.release_conflict", input);
+      }
+      const pack = await this.#skillLifecycle.download({
+        skillId: input.skillId,
+        releaseRevision: input.releaseRevision,
+        packageDigest: input.packageDigest,
+      });
+      const digest = `sha256:${createHash("sha256").update(pack.bytes).digest("hex")}`;
+      if (digest !== input.packageDigest || pack.packageDigest !== input.packageDigest
+        || !pack.manifestDigest.startsWith("sha256:")) {
+        return skillLifecycleFailure("skilllifecycle.package_invalid", input);
+      }
+      const handle = await openFile(target.value.absolutePath, "wx", 0o600);
+      try {
+        await handle.writeFile(pack.bytes);
+        await handle.sync();
+      } finally {
+        await handle.close();
+      }
+      return {
+        ok: true as const,
+        value: {
+          packageDigest: digest,
+          manifestDigest: pack.manifestDigest,
+          byteLength: pack.bytes.byteLength,
+          technicalName: release.technicalName,
+          displayTitle: release.displayTitle,
+          displayDescription: release.displayDescription,
+          semanticVersion: release.semanticVersion,
+          sourceKind: release.sourceKind,
+          publishedAt: release.publishedAt,
+        },
+      };
+    } catch (error) {
+      await removeFile(target.value.absolutePath, { force: true }).catch(() => undefined);
+      return skillLifecycleFailure(skillLifecycleErrorCode(error), input);
+    }
+  }
+
+  async pollAdminSkillDraftTestV1Alpha1(input: unknown) {
+    if (!isRecord(input) || Object.keys(input).length !== 0
+      || this.#skillLifecycle === undefined) {
+      return skillLifecycleFailure("skilllifecycle.service_unavailable", input);
+    }
+    try {
+      const request = (await this.#skillLifecycle.listAdminTestRequests())[0];
+      if (request === undefined) return { ok: true as const, value: { pending: false } };
+      this.#pendingAdminSkillTests.set(request.operationId, request);
+      return {
+        ok: true as const,
+        value: {
+          pending: true,
+          operationId: request.operationId,
+          correlationId: request.correlationId,
+          skillId: request.skillId,
+          draftRevision: request.draftRevision,
+          packageDigest: request.packageDigest,
+          manifestDigest: request.manifestDigest,
+          skillMarkdownDigest: request.skillMarkdownDigest,
+        },
+      };
+    } catch (error) {
+      return skillLifecycleFailure(skillLifecycleErrorCode(error), input);
+    }
+  }
+
+  async stageAdminSkillDraftTestV1Alpha1(input: unknown) {
+    if (!isRecord(input) || this.#skillLifecycle === undefined
+      || Object.keys(input).some((key) => ![
+        "workspaceGrantId", "operationId", "packageDigest", "manifestDigest",
+      ].includes(key))
+      || typeof input.workspaceGrantId !== "string"
+      || typeof input.operationId !== "string"
+      || typeof input.packageDigest !== "string"
+      || typeof input.manifestDigest !== "string") {
+      return skillLifecycleFailure("skilllifecycle.invalid_request", input);
+    }
+    const request = this.#pendingAdminSkillTests.get(input.operationId);
+    if (request === undefined || request.packageDigest !== input.packageDigest
+      || request.manifestDigest !== input.manifestDigest) {
+      return skillLifecycleFailure("skilllifecycle.revision_conflict", input);
+    }
+    const target = await this.#workspaces.resolveAuthorizedPath({
+      workspaceGrantId: input.workspaceGrantId,
+      relativePath: "package.zip",
+      operation: "write",
+      allowMissingLeaf: true,
+    });
+    if (!target.ok) return skillLifecycleFailure("skilllifecycle.not_found", input);
+    try {
+      const pack = await this.#skillLifecycle.downloadAdminTestPackage({
+        operationId: input.operationId,
+      });
+      const digest = `sha256:${createHash("sha256").update(pack.bytes).digest("hex")}`;
+      if (digest !== request.packageDigest || pack.packageDigest !== request.packageDigest
+        || pack.manifestDigest !== request.manifestDigest) {
+        return skillLifecycleFailure("skilllifecycle.package_invalid", input);
+      }
+      const handle = await openFile(target.value.absolutePath, "wx", 0o600);
+      try { await handle.writeFile(pack.bytes); await handle.sync(); } finally { await handle.close(); }
+      return { ok: true as const, value: { packageDigest: digest,
+        manifestDigest: pack.manifestDigest, byteLength: pack.bytes.byteLength } };
+    } catch (error) {
+      return skillLifecycleFailure(skillLifecycleErrorCode(error), input);
+    }
+  }
+
+  async startAdminSkillDraftTestV1Alpha1(input: unknown) {
+    if (!isRecord(input) || Object.keys(input).length !== 1
+      || typeof input.operationId !== "string" || this.#skillLifecycle === undefined) {
+      return skillLifecycleFailure("skilllifecycle.invalid_request", input);
+    }
+    const request = this.#pendingAdminSkillTests.get(input.operationId);
+    if (request === undefined) return skillLifecycleFailure("skilllifecycle.not_found", input);
+    try {
+      const clientInstanceId = lifecycleDerivedId(request.operationId, "admin-skill-client");
+      const session = await this.createSession({
+        contractVersion: "v1alpha1", commandId: lifecycleDerivedId(request.operationId,
+          "admin-skill-session"), correlationId: request.correlationId, clientInstanceId,
+        type: "create_session", title: `企业技能测试：${request.skillId}`,
+      });
+      if (!session.ok) throw new Error("skilllifecycle.service_unavailable");
+      const submitted = await this.submitTurnV1Alpha5({
+        contractVersion: "v1alpha5",
+        commandId: lifecycleDerivedId(request.operationId, "admin-skill-submit"),
+        correlationId: request.correlationId, clientInstanceId,
+        type: "submit_turn", clientTurnId: `admin-skill-test:${request.operationId}`,
+        sessionId: session.value.sessionId, userInput: request.testInput,
+        selectionRequest: { agentId: "agent.general", selectedSkillIds: [request.skillId],
+          selectedKnowledgeIds: [], authorizationPreference: {
+            schemaVersion: "v1alpha1", requestedMode: "manual_review" },
+          reasoningPreference: { requestedMode: "default" } },
+      });
+      if (!submitted.ok) throw new Error("skilllifecycle.service_unavailable");
+      await this.#skillLifecycle.claimAdminTestRequest({
+        operationId: request.operationId, taskId: submitted.value.taskId,
+      });
+      this.#pendingAdminSkillTests.delete(request.operationId);
+      this.#startAdminSkillTestMonitor({ ...request, taskId: submitted.value.taskId });
+      return { ok: true as const, value: { taskId: submitted.value.taskId } };
+    } catch (error) {
+      return skillLifecycleFailure(skillLifecycleErrorCode(error), input);
+    }
+  }
+
+  async queryAdminSkillDraftTestV1Alpha1(input: unknown) {
+    if (!isRecord(input) || Object.keys(input).length !== 1
+      || typeof input.operationId !== "string" || this.#skillLifecycle === undefined) {
+      return skillLifecycleFailure("skilllifecycle.invalid_request", input);
+    }
+    try {
+      const operation = await this.#skillLifecycle.queryAdminTestRequest(input.operationId);
+      return { ok: true as const, value: { state: operation.state } };
+    } catch (error) {
+      return skillLifecycleFailure(skillLifecycleErrorCode(error), input);
+    }
+  }
+
+  async resumeAdminSkillDraftTestsV1Alpha1(): Promise<void> {
+    if (this.#skillLifecycle === undefined) return;
+    try {
+      for (const operation of await this.#skillLifecycle.listRunningAdminTestRequests()) {
+        this.#startAdminSkillTestMonitor({
+          operationId: operation.operationId,
+          correlationId: operation.correlationId,
+          skillId: operation.skillId,
+          draftRevision: operation.targetRevision,
+          taskId: operation.taskId,
+        });
+      }
+    } catch {
+      // Central remains authoritative; startup recovery never fabricates a test result.
+    }
+  }
+
+  #startAdminSkillTestMonitor(input: Readonly<{
+    operationId: string; correlationId: string; skillId: string; draftRevision: string;
+    taskId: string;
+  }>): void {
+    if (this.#monitoredSkillTestTaskIds.has(input.taskId)) return;
+    this.#monitoredSkillTestTaskIds.add(input.taskId);
+    void (async () => {
+      if (this.#skillLifecycle === undefined) return;
+      for (let attempts = 0; attempts < 1_200; attempts += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        const detail = await this.loadTaskDetail({ contractVersion: "v1alpha1",
+          queryId: randomUUID(), correlationId: input.correlationId,
+          clientInstanceId: randomUUID(), type: "task_detail", taskId: input.taskId });
+        if (!detail.ok) continue;
+        const status = detail.value.summary.displayStatus;
+        if (!["completed", "failed", "cancelled", "timed_out", "manual_attention"]
+          .includes(status)) continue;
+        const passed = status === "completed";
+        const resultDigest = `sha256:${createHash("sha256").update(JSON.stringify({
+          domain: "robothree.admin-skill-draft-test-result.v1", operationId: input.operationId,
+          skillId: input.skillId, draftRevision: input.draftRevision,
+          taskId: input.taskId, status,
+        })).digest("hex")}`;
+        await this.#skillLifecycle.completeAdminTestRequest({ operationId: input.operationId,
+          taskId: input.taskId, result: passed ? "passed" : "failed",
+          ...(passed ? {} : { safeReason: "技能测试任务未成功完成" }), resultDigest });
+        return;
+      }
+    })().catch(() => {
+      // Central retains the running operation; startup recovery can safely resume it.
+    }).finally(() => this.#monitoredSkillTestTaskIds.delete(input.taskId));
+  }
+
+  async checkSkillInstallationUseV1Alpha1(input: unknown) {
+    if (!isRecord(input) || Object.keys(input).some((key) =>
+      !["skillId", "releaseRevision"].includes(key))
+      || typeof input.skillId !== "string"
+      || typeof input.releaseRevision !== "string"
+      || this.#skillInstallationTasks === undefined) {
+      return skillLifecycleFailure("skilllifecycle.invalid_request", input);
+    }
+    try {
+      for (const task of await this.#skillInstallationTasks.listTasks()) {
+        if (!(["created", "running", "waiting"] as const).includes(
+          task.head.status as "created" | "running" | "waiting",
+        )) continue;
+        const selection = await this.#skillInstallationTasks
+          .loadReadableTaskRuntimeSelection(task.head.taskId);
+        if (selection !== undefined && "activeSkillRevisions" in selection
+          && selection.activeSkillRevisions.some((reference) =>
+            ("skillId" in reference ? reference.skillId : reference.id) === input.skillId
+            && reference.revision === input.releaseRevision)) {
+          return { ok: true as const, value: { inUse: true } };
+        }
+      }
+      return { ok: true as const, value: { inUse: false } };
+    } catch {
+      return skillLifecycleFailure("skilllifecycle.service_unavailable", input);
     }
   }
 
@@ -2676,6 +3342,34 @@ function agentLifecycleFailure(code: string) {
         ? "机器人请求无效"
         : "机器人服务暂时不可用",
       correlationId: "00000000-0000-4000-8000-000000000000",
+    },
+  };
+}
+
+function skillLifecycleErrorCode(error: unknown): string {
+  if (error instanceof Error && /^skilllifecycle\.[a-z_]+$/u.test(error.message)) {
+    return error.message;
+  }
+  return "skilllifecycle.service_unavailable";
+}
+
+function skillLifecycleFailure(code: string, input?: unknown) {
+  const correlationId = typeof input === "object" && input !== null
+    && "correlationId" in input && typeof input.correlationId === "string"
+    ? input.correlationId
+    : "00000000-0000-4000-8000-000000000000";
+  return {
+    ok: false as const,
+    error: {
+      contractVersion: "skill-lifecycle.v1alpha1" as const,
+      errorCode: code,
+      safeSummary: code === "skilllifecycle.invalid_request"
+        ? "技能请求内容无效。"
+        : code === "skilllifecycle.not_found"
+          ? "技能不存在或当前不可见。"
+          : "技能服务暂时不可用，请稍后重试。",
+      correlationId,
+      retryable: code === "skilllifecycle.service_unavailable",
     },
   };
 }

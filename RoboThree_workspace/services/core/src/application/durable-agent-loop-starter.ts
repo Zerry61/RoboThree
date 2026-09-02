@@ -23,6 +23,7 @@ import type { IdGenerator } from "../ports/id-generator.js";
 import type { SubmitTurnPersistence } from "../ports/submit-turn-persistence.js";
 import type { TaskPersistence } from "../ports/task-persistence.js";
 import type { ScheduledTask, Scheduler } from "../ports/scheduler.js";
+import type { TokenEstimator } from "../ports/token-estimator.js";
 import { sha256CanonicalJson } from "../persistence/digest.js";
 import type {
   AgentLoopCoordinator,
@@ -67,7 +68,6 @@ import {
   COMPACTION_SUMMARIZER_PROMPT_REVISION,
   ModelBackedCompactionSummarizer,
 } from "./model-backed-compaction-summarizer.js";
-import { ConservativeTokenEstimator } from "../adapters/fake/conservative-token-estimator.js";
 import {
   createModelInvocationTimeoutMaterial,
   type ModelInvocationTimeoutPolicy,
@@ -91,14 +91,31 @@ import {
   type DynamicRequestFactsRuntime,
   type DynamicRequestFactsV1,
 } from "./dynamic-request-facts.js";
+import { RoundOutputRequirementError } from "./round-output-requirement.js";
+import { ExactModelCapabilityProfileError } from
+  "./exact-model-capability-profile.js";
 import type { ReadableAgentDefinitionRevision } from "./agent-definition-v1alpha2.js";
 import { clampEnterpriseInvocationDeadline } from "./agent-turn-timeout-policy.js";
+import type { TaskContextBudgetResolver } from "./task-context-budget-resolver.js";
+import type { RoundOutputMaterial } from "./round-output-requirement.js";
+import type { ContextBudgetPolicy } from "./context-budget-policy.js";
+import { ContextMaterialIdentityError } from "./context-material-policy.js";
 
 export interface ExecutionAgentRevisionRepository {
   loadAgentRevision(
     agentDefinitionId: string,
     revision: string,
   ): Promise<ReadableAgentDefinitionRevision | undefined>;
+}
+
+export interface RoundOutputMaterialResolver {
+  resolve(input: Readonly<{
+    taskId: string;
+    sessionId: string;
+    round: number;
+    modelLock: TaskCapabilityLock;
+    conversationMessages: ContextPipelineInput["conversationMessages"];
+  }>): Promise<RoundOutputMaterial | undefined>;
 }
 
 type StartInput = Parameters<AgentLoopStarter["start"]>[0];
@@ -137,10 +154,13 @@ export class DurableAgentLoopStarter implements AgentLoopStarter {
   readonly #modelProvenance: ModelContextProvenanceClassifier | undefined;
   readonly #localPersonalTimeoutPolicy: ModelInvocationTimeoutPolicy | undefined;
   readonly #contextPreparation: ContextPreparationCoordinator;
+  readonly #contextBudgets: TaskContextBudgetResolver | undefined;
+  readonly #roundOutputMaterial: RoundOutputMaterialResolver | undefined;
   readonly #instructionRuntime: TaskLockedInstructionRuntimeResolver | undefined;
   readonly #dynamicRequestFacts: DynamicRequestFactsRuntime | undefined;
   readonly #modelInvocationLinks: ModelInvocationLinkPersistence | undefined;
   readonly #scheduler: Scheduler;
+  readonly #tokenEstimator: TokenEstimator;
   readonly #compactionRecoveryFaultInjector:
     | ((point: CompactionRecoveryFaultPoint) => void)
     | undefined;
@@ -156,6 +176,8 @@ export class DurableAgentLoopStarter implements AgentLoopStarter {
     agents: ExecutionAgentRevisionRepository;
     snapshots: TurnSnapshotBuilder;
     context: ContextPipeline;
+    contextBudgetResolver?: TaskContextBudgetResolver;
+    roundOutputMaterialResolver?: RoundOutputMaterialResolver;
     loop: AgentLoopCoordinator;
     taskRuntime: DurableTaskRuntime;
     coordination?: SubmitTurnPersistence;
@@ -169,6 +191,7 @@ export class DurableAgentLoopStarter implements AgentLoopStarter {
     dynamicRequestFactsRuntime?: DynamicRequestFactsRuntime;
     modelInvocationLinks?: ModelInvocationLinkPersistence;
     scheduler: Scheduler;
+    tokenEstimator: TokenEstimator;
     compactionRecoveryFaultInjector?: (point: CompactionRecoveryFaultPoint) => void;
   }) {
     this.#clock = input.clock;
@@ -191,6 +214,9 @@ export class DurableAgentLoopStarter implements AgentLoopStarter {
     this.#dynamicRequestFacts = input.dynamicRequestFactsRuntime;
     this.#modelInvocationLinks = input.modelInvocationLinks;
     this.#scheduler = input.scheduler;
+    this.#tokenEstimator = input.tokenEstimator;
+    this.#contextBudgets = input.contextBudgetResolver;
+    this.#roundOutputMaterial = input.roundOutputMaterialResolver;
     this.#compactionRecoveryFaultInjector = input.compactionRecoveryFaultInjector;
     this.#contextPreparation = new ContextPreparationCoordinator({
       conversation: input.conversation,
@@ -511,7 +537,7 @@ export class DurableAgentLoopStarter implements AgentLoopStarter {
               provider: exactProvider,
               modelLock,
               links: this.#conversation,
-              estimator: new ConservativeTokenEstimator(),
+              estimator: this.#tokenEstimator,
               now: () => this.#clock.now(),
               ...(reasoningSelection === undefined || reasoningMaterializer === undefined
                 ? {}
@@ -693,6 +719,23 @@ export class DurableAgentLoopStarter implements AgentLoopStarter {
                   round,
                 }),
               });
+          const outputMaterial = this.#roundOutputMaterial === undefined
+            ? undefined
+            : await this.#roundOutputMaterial.resolve({
+              taskId: input.taskId,
+              sessionId: input.sessionId,
+              round,
+              modelLock,
+              conversationMessages: await loadMessages(
+                this.#conversation,
+                input.sessionId,
+              ),
+            });
+          const contextBudget = this.#contextBudgets?.resolve({
+            modelLock,
+            ...(outputMaterial === undefined ? {} : { outputMaterial }),
+            allowLegacyTaskLock: true,
+          });
           const prepared = await this.#contextPreparation.prepare({
             sessionId: input.sessionId,
             snapshotId: () => {
@@ -717,7 +760,15 @@ export class DurableAgentLoopStarter implements AgentLoopStarter {
                 capabilityId: bundle.runtimeSelection.resolvedModelLock.capabilityId,
                 capabilityRevision: modelLock.definitionSnapshot.revision,
               },
-              ...instructionContext(instructionRuntime, facts.snapshot.snapshotId, agent),
+              ...instructionContext(
+                instructionRuntime,
+                facts.snapshot.snapshotId,
+                agent,
+                contextBudget?.policy,
+              ),
+              ...(contextBudget === undefined
+                ? {}
+                : { budgetPolicy: contextBudget.policy }),
               ...(dynamicRequestFacts === undefined
                 ? {}
                 : { dynamicRequestFacts }),
@@ -989,6 +1040,42 @@ export class DurableAgentLoopStarter implements AgentLoopStarter {
           category: "validation",
           retryable: false,
         });
+        throw error;
+      }
+      if (error instanceof RoundOutputRequirementError) {
+        await this.#failTaskExecution(
+          input.taskId,
+          "当前模型无法一次完整生成这次文件修改，请缩小修改范围或选择输出容量更大的模型。",
+          {
+            code: error.code,
+            category: "validation",
+            retryable: false,
+          },
+        );
+        throw error;
+      }
+      if (error instanceof ExactModelCapabilityProfileError) {
+        await this.#failTaskExecution(
+          input.taskId,
+          "当前任务锁定的模型上下文能力不可用，请新建任务或联系管理员检查模型配置。",
+          {
+            code: error.code,
+            category: "validation",
+            retryable: false,
+          },
+        );
+        throw error;
+      }
+      if (error instanceof ContextMaterialIdentityError) {
+        await this.#failTaskExecution(
+          input.taskId,
+          "任务中的工具结果无法通过完整性校验，请重新执行当前任务。",
+          {
+            code: error.code,
+            category: "validation",
+            retryable: false,
+          },
+        );
         throw error;
       }
       await this.#failTaskExecution(
@@ -1394,6 +1481,7 @@ function instructionContext(
   runtime: TaskLockedInstructionRuntimeMaterial,
   snapshotId: string,
   agent: ReadableAgentDefinitionRevision,
+  budgetPolicy?: ContextBudgetPolicy,
 ): Pick<
   ContextPipelineInput,
   "instructions" | "lockedInstructionBundle"
@@ -1411,6 +1499,16 @@ function instructionContext(
       }],
     };
   }
+  const decision = budgetPolicy?.decision();
+  if (
+    decision !== undefined
+    && runtime.bundle.estimatedInputTokens > decision.availableInputTokens
+  ) {
+    throw new CpcInstructionFoundationError(
+      "context.locked_instructions_too_large",
+      "Locked instructions exceed the exact Model input budget for this round",
+    );
+  }
   return {
     lockedInstructionBundle: {
       schemaVersion: "v1",
@@ -1419,8 +1517,10 @@ function instructionContext(
       descriptor: runtime.bundle.descriptor,
       message: runtime.bundle.message,
       estimatedInputTokens: runtime.bundle.estimatedInputTokens,
-      availableInputTokens: runtime.bundle.availableInputTokens,
-      budgetPolicyDigest: runtime.bundle.budgetPolicyDigest,
+      availableInputTokens: decision?.availableInputTokens
+        ?? runtime.bundle.availableInputTokens,
+      budgetPolicyDigest: decision?.policyDigest
+        ?? runtime.bundle.budgetPolicyDigest,
     },
   };
 }

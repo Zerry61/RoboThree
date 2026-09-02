@@ -20,7 +20,7 @@ public final class ProvisionalAdminCapabilities {
                 ready("admin.robot.read", "机器人管理查看"),
                 ready("admin.robot.write", "机器人发布审核"),
                 ready("admin.skill.read", "技能管理查看"),
-                gated("admin.skill.write", "技能管理操作"),
+                ready("admin.skill.write", "技能管理操作"),
                 gated("admin.system.audit.export", "审计日志导出"),
                 ready("admin.system.audit.read", "审计日志查看"),
                 ready("admin.system.feedback.read", "反馈管理查看"),

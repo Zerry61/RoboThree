@@ -10,9 +10,24 @@
       </template>
     </R3PageHeader>
 
-    <R3InlineNotice v-if="mode === 'skill'" tone="warning" title="当前仅可预览">
-      技能创建服务尚未接入；这里填写的内容不会被保存或发布。
-    </R3InlineNotice>
+    <div v-if="mode === 'skill'" class="intelligence-create__service-state">
+      <R3InlineNotice
+        :tone="skillLifecycleAvailability === 'available' && !skillLifecycleError ? 'info' : 'warning'"
+        :title="skillLifecycleAvailability === 'checking'
+          ? '正在连接技能服务'
+          : skillLifecycleAvailability === 'available' ? '创建技能草稿' : '技能服务暂不可用'"
+      >{{ skillLifecycleAvailability === "checking"
+        ? "正在检查真实技能创建能力。"
+        : skillLifecycleAvailability === "available"
+          ? "创建后将进入技能创建助手；测试和提交只在“我创建的”详情中进行。"
+          : `${skillLifecycleError || "当前没有连接到技能生命周期服务。"} 不会使用本地假数据代替。` }}</R3InlineNotice>
+      <R3Button
+        v-if="skillLifecycleAvailability === 'unavailable'"
+        variant="secondary"
+        :loading="skillLifecycleBusy"
+        @click="void checkSkillLifecycleService()"
+      >重新连接</R3Button>
+    </div>
     <div v-else class="intelligence-create__service-state">
       <R3InlineNotice
         :tone="lifecycleAvailability === 'unavailable' || lifecycleError ? 'danger' : 'info'"
@@ -239,12 +254,12 @@
       <R3Card>
         <template #header>
           <div class="intelligence-create__section-title">
-            <h3>{{ skillStage === 'form' ? '创建技能' : '技能创建对话' }}</h3>
-            <R3Tag tone="neutral">尚未保存</R3Tag>
+            <h3>创建技能</h3>
+            <R3Tag tone="neutral">第一阶段</R3Tag>
           </div>
         </template>
 
-        <form v-if="skillStage === 'form'" class="intelligence-create__form" @submit.prevent="startSkillConversation()">
+        <form class="intelligence-create__form" @submit.prevent="void startSkillConversation()">
           <R3Input
             v-model="skillForm.name"
             label="技能名称"
@@ -266,37 +281,28 @@
             :error="skillErrors.capabilities"
           />
 
-          <R3InlineNotice v-if="skillForm.attemptStatus === 'failed'" tone="danger" title="创建会话失败">
-            创建技能对话未能启动。点击重试会重新发起本次创建尝试。
+          <R3InlineNotice v-if="skillForm.attemptStatus === 'failed'" tone="danger" title="创建技能失败">
+            {{ skillLifecycleError || "技能草稿未能创建，表单内容已保留。" }}
           </R3InlineNotice>
 
           <div class="intelligence-create__actions">
-            <R3Button variant="primary" @click="startSkillConversation()">进入创建对话</R3Button>
+            <R3Button
+              variant="primary"
+              :loading="skillLifecycleBusy"
+              :disabled="skillLifecycleAvailability !== 'available'"
+              @click="void startSkillConversation()"
+            >进入创建对话</R3Button>
             <R3Button
               v-if="skillForm.attemptStatus === 'failed'"
               variant="secondary"
-              @click="startSkillConversation()"
+              :loading="skillLifecycleBusy"
+              @click="void startSkillConversation()"
             >
               重试
             </R3Button>
           </div>
         </form>
 
-        <section v-else class="intelligence-create__conversation" aria-label="技能创建对话">
-          <header>
-            <span class="intelligence-create__assistant" aria-hidden="true">S</span>
-            <div>
-              <h3>技能创建对话尚未接入</h3>
-              <p>真实对话服务可用后，才会根据你的需求生成技能草稿。</p>
-            </div>
-          </header>
-          <article class="intelligence-create__message">
-            {{ skillConversation?.firstUserMessage }}
-          </article>
-          <R3InlineNotice tone="warning" title="暂不可继续">
-            当前不会生成文件、保存草稿或提交发布。
-          </R3InlineNotice>
-        </section>
       </R3Card>
     </div>
   </section>
@@ -323,6 +329,14 @@ import {
   desktopAgentLifecycleAdapter,
 } from "../../adapters/agent-lifecycle-adapter.js";
 import {
+  skillLifecycleAdapterKey,
+  SkillLifecycleAdapterError,
+  unavailableSkillLifecycleAdapter,
+} from "../../adapters/skill-lifecycle-adapter.js";
+import {
+  presentSkillLifecycleError,
+} from "../../presentation/skill-lifecycle-presentation.js";
+import {
   desktopWorkbenchAdapter,
   workbenchAdapterKey,
 } from "../../adapters/workbench-adapter.js";
@@ -346,14 +360,15 @@ import {
   validateRobotDraft,
   validateSkillCreatorForm,
   type RobotCapabilityKey,
-  type SkillCreatorConversation,
   type SkillCreatorFormState,
   type SkillCreatorValidation,
 } from "./intelligence-creation-model.js";
+import { setSkillCreatorWorkbenchIntent } from "../workbench/skill-creator-intent.js";
 
 const route = useRoute();
 const router = useRouter();
 const lifecycleAdapter = inject(agentLifecycleAdapterKey, desktopAgentLifecycleAdapter);
+const skillLifecycleAdapter = inject(skillLifecycleAdapterKey, unavailableSkillLifecycleAdapter);
 const workbenchAdapter = inject(workbenchAdapterKey, desktopWorkbenchAdapter);
 
 const mode = computed(() => route.name === "intelligenceCreateSkill" ? "skill" : "robot");
@@ -447,7 +462,6 @@ const submitDisabled = computed(() => testDisabled.value || !currentRevisionTest
   || localSkillPublicationBlocked.value
   || semanticVersion.value.trim() === "" || changeSummary.value.trim() === "");
 
-const skillStage = ref<"form" | "conversation">("form");
 const skillForm = ref<SkillCreatorFormState>({
   name: "",
   description: "",
@@ -455,10 +469,15 @@ const skillForm = ref<SkillCreatorFormState>({
   attemptStatus: "idle",
 });
 const skillErrors = ref<SkillCreatorValidation>({});
-const skillConversation = ref<SkillCreatorConversation | undefined>(undefined);
+const skillLifecycleBusy = ref(false);
+const skillLifecycleAvailability = ref<"checking" | "available" | "unavailable">("checking");
+const skillLifecycleError = ref("");
 
 onMounted(async () => {
-  if (mode.value !== "robot") return;
+  if (mode.value === "skill") {
+    await checkSkillLifecycleService();
+    return;
+  }
   void loadModelOptions();
   const connected = await checkLifecycleService();
   if (connected && typeof route.query.robotId === "string") {
@@ -735,29 +754,65 @@ async function runLifecycle<T>(operation: () => Promise<T>): Promise<T | undefin
   }
 }
 
-function startSkillConversation(): void {
+async function checkSkillLifecycleService(): Promise<void> {
+  skillLifecycleBusy.value = true;
+  skillLifecycleAvailability.value = "checking";
+  skillLifecycleError.value = "";
+  try {
+    const compatibility = await skillLifecycleAdapter.getSkillLifecycleCompatibility();
+    skillLifecycleAvailability.value = compatibility.serviceAvailable && compatibility.creatorAvailable
+      ? "available"
+      : "unavailable";
+    if (skillLifecycleAvailability.value === "unavailable") {
+      skillLifecycleError.value = "技能创建能力尚未启用。";
+    }
+  } catch (caught) {
+    skillLifecycleAvailability.value = "unavailable";
+    skillLifecycleError.value = presentSkillLifecycleError(caught instanceof SkillLifecycleAdapterError
+      ? { code: caught.code, safeSummary: caught.safeSummary }
+      : {});
+  } finally {
+    skillLifecycleBusy.value = false;
+  }
+}
+
+async function startSkillConversation(): Promise<void> {
   const errors = validateSkillCreatorForm(skillForm.value);
   skillErrors.value = errors;
-  if (hasValidationErrors(errors)) return;
+  if (hasValidationErrors(errors) || skillLifecycleAvailability.value !== "available"
+    || skillLifecycleBusy.value) return;
   skillForm.value = {
     ...skillForm.value,
     attemptStatus: "idle",
   };
-  skillConversation.value = buildSkillCreatorConversation(skillForm.value);
-  skillStage.value = "conversation";
+  skillLifecycleBusy.value = true;
+  skillLifecycleError.value = "";
+  try {
+    const conversation = buildSkillCreatorConversation(skillForm.value);
+    const receipt = await skillLifecycleAdapter.createSkillDraftWorkspace({
+      displayTitle: skillForm.value.name.trim(),
+      displayDescription: skillForm.value.description.trim(),
+      primaryFunction: skillForm.value.capabilities.trim(),
+    });
+    setSkillCreatorWorkbenchIntent({
+      skillId: receipt.skillId,
+      draftId: receipt.draftId,
+      workspaceGrantId: receipt.workspaceGrantId,
+      workspaceDisplayName: receipt.displayName,
+      agentId: "agent.skill-creator",
+      firstUserMessage: conversation.firstUserMessage,
+    });
+    await router.push({ name: "workbench" });
+  } catch (caught) {
+    skillForm.value = { ...skillForm.value, attemptStatus: "failed" };
+    skillLifecycleError.value = presentSkillLifecycleError(caught instanceof SkillLifecycleAdapterError
+      ? { code: caught.code, safeSummary: caught.safeSummary }
+      : {});
+  } finally {
+    skillLifecycleBusy.value = false;
+  }
 }
 
-function previewSkillCreateFailure(): void {
-  skillForm.value = {
-    ...skillForm.value,
-    attemptStatus: "failed",
-  };
-  skillStage.value = "form";
-}
-
-defineExpose({
-  previewSkillCreateFailure,
-});
 </script>
 
 <style scoped>

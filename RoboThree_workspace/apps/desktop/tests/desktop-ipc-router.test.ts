@@ -544,6 +544,60 @@ describe("DesktopIpcRouter", () => {
     }
   });
 
+  it("previews WTE-1 task-generated markdown from the existing Core source authority", async () => {
+    const root = await mkdtemp(join(tmpdir(), "robothree-wte1-preview-"));
+    try {
+      await writeFile(join(root, "notes.md"), "# RoboThree Notes\n");
+      const artifactId = `artifact:${"6".repeat(64)}`;
+      const previewArtifact = vi.fn(async (query) => ({
+        ok: false as const,
+        error: desktopError("desktop.artifact_not_found", query.correlationId),
+      }));
+      const resolveArtifactFileSource = vi.fn(async () => ({
+        ok: true as const,
+        value: {
+          artifactId,
+          displayName: "notes.md",
+          relativePath: "notes.md",
+          workspaceGrantId: "workspace.grant-wte1",
+          rootRealPath: root,
+          taskId: `task:${"5".repeat(64)}`,
+        },
+      }));
+      const router = new DesktopIpcRouter({
+        core: { client: fakeClient({ previewArtifact, resolveArtifactFileSource }) },
+        chooseWorkspaceDirectory: async () => undefined,
+      });
+
+      const result = await router.dispatch(DESKTOP_IPC_CHANNELS.artifactPreview, {
+        contractVersion: "v1alpha1",
+        type: "artifact_preview",
+        queryId: id("72"),
+        correlationId: id("73"),
+        clientInstanceId: id("4"),
+        artifactId,
+        mode: "markdown",
+        maxBytes: 4096,
+      });
+
+      expect(result).toEqual({
+        ok: true,
+        value: {
+          artifactId,
+          mode: "markdown",
+          content: "# RoboThree Notes\n",
+          byteSize: 18,
+          truncated: false,
+          warnings: [],
+        },
+      });
+      expect(resolveArtifactFileSource).toHaveBeenCalledWith({ artifactId });
+      expect(JSON.stringify(result)).not.toContain(root);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   it("renders MAR-1B workspace HTML artifacts with raw content inside the APV-1C sandbox", async () => {
     const root = await mkdtemp(join(tmpdir(), "robothree-mar1b-html-"));
     try {

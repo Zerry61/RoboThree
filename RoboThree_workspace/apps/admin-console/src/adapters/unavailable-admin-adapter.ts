@@ -27,6 +27,16 @@ export function createUnavailableAdminAdapter(): AdminAdapter {
     updateModel: unavailable,
     testModelConnection: unavailable,
     setModelLifecycle: unavailable,
-    setDefaultModel: unavailable
+    setDefaultModel: unavailable,
+    listSkillSubmissions: unavailable,
+    getSkillSubmission: unavailable,
+    approveSkillSubmission: unavailable,
+    rejectSkillSubmission: unavailable,
+    uploadEnterpriseSkillPackage: unavailable,
+    getEnterpriseSkillDraft: unavailable,
+    updateEnterpriseSkillDraftMetadata: unavailable,
+    startEnterpriseSkillDraftTest: unavailable,
+    queryEnterpriseSkillDraftTest: unavailable,
+    publishEnterpriseSkillDraft: unavailable
   };
 }

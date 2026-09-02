@@ -20,6 +20,7 @@ import type {
 } from '@robothree/contracts/admin-control/v1alpha1';
 import type { AdminManagedModelDetail, AdminManagedModelPage } from '@robothree/contracts/admin-control/v1alpha2';
 import type { RobotReviewDetail } from '@robothree/contracts/agent-lifecycle/v1alpha1';
+import type { SkillSubmissionDetail } from '@robothree/contracts/skill-lifecycle/v1alpha1';
 import type VueType from 'vue';
 import type { VueConstructor } from 'vue';
 
@@ -36,7 +37,7 @@ describe('Admin read-only inventory pages', () => {
     const pages = [
       [ModelsPage, ['企业模型', '通用模型', '连接正常', '已配置']],
       [RobotsPage, ['发布审核', '业务机器人', '内部试用创建者', '待审核']],
-      [SkillsPage, ['技能目录', '文档技能', '校验通过']],
+      [SkillsPage, ['技能审核', '文档技能', '内部试用创建者', '待审核']],
       [KnowledgePage, ['知识目录', '制度知识库', '部分可用', '页面不会猜测缺失信息']],
       [SystemAuditPage, ['审计日志', '读取模型目录', '测试管理员', '已允许']]
     ] as const;
@@ -106,6 +107,8 @@ function installInventoryAdapter(overrides: Partial<AdminAdapter> = {}): void {
     async getRobotReview() { return review; },
     async listSkills() { return page([skill]); },
     async getSkill() { return skill; },
+    async listSkillSubmissions() { return { contractVersion: 'skill-lifecycle.v1alpha1', queryRevision: revision, items: [skillSubmission] }; },
+    async getSkillSubmission() { return skillSubmission; },
     async listKnowledge() { return page([knowledge]); },
     async getKnowledge() { return knowledge; },
     async listAuditEvents() {
@@ -209,6 +212,35 @@ const skill: AdminSkillDetail = {
   lifecycle: 'published',
   packageValidationState: 'valid',
   validationSummary: '校验摘要可用'
+};
+
+const skillSubmission: SkillSubmissionDetail = {
+  submissionId: '00000000-0000-4000-8000-000000000088',
+  submissionRevision: revision,
+  skillId: 'skill.document',
+  draftRevision: revision,
+  displayTitle: '文档技能',
+  technicalName: 'document-skill',
+  creatorDisplayName: '内部试用创建者',
+  semanticVersion: '1.0.0',
+  state: 'pending_review',
+  submittedAt: '2026-08-27T00:00:00.000Z',
+  displayDescription: '文档处理流程',
+  primaryFunction: '整理文档处理步骤',
+  packageFacts: {
+    packageDigest: revision,
+    manifestDigest: revision,
+    skillMarkdownDigest: revision,
+    fileCount: 2,
+    expandedByteCount: 4096
+  },
+  testFact: {
+    draftRevision: revision,
+    state: 'passed',
+    taskId: 'task.skill-test',
+    testedAt: '2026-08-27T00:00:00.000Z'
+  },
+  changeSummary: '首次提交'
 };
 
 const knowledge: AdminKnowledgeDetail = {

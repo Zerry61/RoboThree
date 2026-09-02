@@ -25,7 +25,7 @@ export type ContextPipelineAssessment = Readonly<{
 
 export class ContextPipeline {
   readonly #assembler: ContextAssembler;
-  readonly #budgetPolicy: ContextBudgetPolicy;
+  readonly #defaultBudgetPolicy: ContextBudgetPolicy;
   readonly #reducer: ContextReducer;
   readonly #converter: ModelMessageConverter;
   readonly #estimator: TokenEstimator;
@@ -37,7 +37,7 @@ export class ContextPipeline {
     converter?: ModelMessageConverter;
   }) {
     this.#assembler = input.assembler ?? new ContextAssembler();
-    this.#budgetPolicy = input.budgetPolicy;
+    this.#defaultBudgetPolicy = input.budgetPolicy;
     this.#converter = input.converter ?? new ModelMessageConverter();
     this.#estimator = input.estimator;
     this.#reducer = new ContextReducer({
@@ -75,7 +75,7 @@ export class ContextPipeline {
         ? {}
         : { dynamicRequestFacts: input.dynamicRequestFacts }),
     });
-    const budget = this.#budgetPolicy.decision();
+    const budget = (input.budgetPolicy ?? this.#defaultBudgetPolicy).decision();
     if (
       input.lockedInstructionBundle !== undefined
       && (
@@ -139,6 +139,8 @@ export class ContextPipeline {
         reducedSegmentIds: reduced.reducedSegmentIds,
         initialEstimatedInputTokens: reduced.initialEstimatedInputTokens,
         finalEstimatedInputTokens: finalGuard,
+        modelContextWindow: budget.modelContextWindow,
+        reservedOutputTokens: budget.reservedOutputTokens,
         availableInputTokens: budget.availableInputTokens,
         compactionThresholdTokens: budget.compactionThresholdTokens,
         reductionApplied: reduced.reducedSegmentIds.length > 0

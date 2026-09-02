@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Profile;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -40,6 +41,12 @@ public final class InternalTrialAdminModelDiscoveryController {
     private final EnterpriseBearerAuthorizer authorizer;
     private final Clock clock;
 
+    @Value("${robothree.admin-api.internal-trial-model-context-window-tokens:128000}")
+    private int contextWindowTokens;
+
+    @Value("${robothree.admin-api.internal-trial-model-max-output-tokens:8192}")
+    private int maxOutputTokens;
+
     @GetMapping(path = "/default", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<ObjectNode> defaultModel(
             @RequestAttribute(EnterpriseBearerTokenFilter.ACCESS_TOKEN_ATTRIBUTE)
@@ -64,6 +71,16 @@ public final class InternalTrialAdminModelDiscoveryController {
         result.put("modelCreatedAt", model.createdAt().toString());
         result.put("displayName", model.displayName());
         result.put("supportsToolCalling", true);
+        int effectiveContextWindowTokens = contextWindowTokens == 0 ? 128_000 : contextWindowTokens;
+        int effectiveMaxOutputTokens = maxOutputTokens == 0 ? 8_192 : maxOutputTokens;
+        if (effectiveContextWindowTokens < 8_192
+                || effectiveContextWindowTokens > 1_048_576
+                || effectiveMaxOutputTokens < 256 || effectiveMaxOutputTokens > 262_144
+                || effectiveMaxOutputTokens > effectiveContextWindowTokens) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE);
+        }
+        result.put("contextWindowTokens", effectiveContextWindowTokens);
+        result.put("maxOutputTokens", effectiveMaxOutputTokens);
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
                 .body(result);

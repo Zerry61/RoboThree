@@ -43,19 +43,62 @@ Windows 客户端回归窗口执行，不以模拟文件系统冒充通过。用
 
 ## 当前阶段
 
+Desktop `0.0.0-mvp.wte.1-repair.1` 已补齐 CTX/WTE 的 Workbench 终态错误与恢复动作：Core 提供的
+`failureSummary` 在当前对话附近以 `role="alert"` 显示；输出能力不足时只能显式选择其他模型创建新 Task，或在缩小文件
+后提交新 Attempt，原 Task 的 exact Model lock 不变。失败 Task 的部分 Artifact 不进入成果面板；上下文阶段只显示
+“正在整理对话内容 / 正在恢复任务上下文”等业务文案，不展示 Token、Prompt、Compaction identity 或内部摘要。
+当前为 `IMPLEMENTED / FOCUSED GATES PASS / PRODUCT ACCEPTANCE PENDING / INDEPENDENT QA PENDING`。
+
+[WTE-1 Workspace Text Read / Continuous Edit](./docs/development/WTE-1-WORKSPACE-TEXT-READ-CONTINUOUS-EDIT-DEVELOPMENT-PLAN.md)
+已完成实现与开发者验证：`tool.workspace.file.read_text`、CTX-MVP-1 exact context/output admission、WFW replace/`.prev`、
+首次冲突自动 rebase、第二次冲突停止、Workbench 四动作、单一 Artifact head 与 Markdown/Text preview 已组成真实 macOS
+Electron 产品链；Core `SIGKILL`/SQLite reopen 后仍可恢复并预览。当前为 `IMPLEMENTED / DEVELOPER VERIFICATION PASS /
+INDEPENDENT CODE QA PASS / USER ACCEPTANCE PENDING`，不代表 `PASS/CLOSED`。Windows 11 本地 NTFS WTE 回归已并入
+现有 WFW/WTE 共用定向回归待办，是当前唯一关闭阻塞项；真实公网 400K Provider calibration 属 CTX/Provider 独立 P3，
+不阻塞 WTE-1。Agent 未经用户点名自行发现的路径仍 fail-closed，不使用不可靠的 confirmation resume 冒充授权。
+
+[CTX-MVP-1 Model-Aware Long Context / Continuation Compaction](./docs/development/CTX-MVP-1-MODEL-AWARE-LONG-CONTEXT-COMPACTION-DEVELOPMENT-PLAN.md)
+已按用户 P0/P1 修订进入实现：每个新 Task 的 exact Model lock 同时绑定 context window、max output 与 capability
+profile revision，Context Pipeline 按每轮材料生成输入/输出预算。普通任务不会因为模型只支持 4K output 而整体不可用；
+未来 WTE full replacement 若无法在 locked max output 内完整生成，会在 Provider 前安全失败，不允许截断 Tool Call。
+当前 WTE read result 采用 durable Tool identity 驱动的全文保护，历史结果仍为 bounded reference。既有 50-round
+Tool-heavy、first/rolling compaction 与 restart recovery 回归已通过，因此本轮不启用 Continuation Capsule v2。
+当前状态为 `PASS/CLOSED / INDEPENDENT CODE QA PASS / USER ACCEPTED`，最高 outcome 为
+`CTX_MVP1_MODEL_AWARE_LONG_CONTEXT_CONFORMANT`。真实公网 Provider 校准与 WTE 长上下文真实 Electron E2E 分别保持
+`REAL_PROVIDER_CALIBRATION_PENDING / WTE1_LONG_CONTEXT_JOINT_E2E_PENDING`；这只完成 WTE 的上下文和输出容量前置，
+不等于 WTE-1 读取与连续编辑产品链已经实现。用户已授权下一步只恢复 WTE-1。
+
 下一项 MVP 产品任务已收敛为
 [MVP-RSL-2 Skill Lifecycle End-to-End](./docs/development/MVP-RSL-2-SKILL-LIFECYCLE-END-TO-END-DEVELOPMENT-PLAN.md)：
 直接关闭两条真实技能业务链——Desktop 用户通过既有 Task + WFW 创建、测试并提交技能，Admin 审核后发布、安装并供
 新 Task exact 使用；Admin 也可上传 ZIP/RAR/TAR.GZ/TGZ，经安全解析、测试后发布到同一 Skill release。方案复用
 现有 Agent Loop、Runtime Selection、Entitlement、Workbench、WFW 和 RSL-1 生命周期模式，不建设第二套 Runtime、
-通用包管理器或文件平台。当前为 `REVISION 1 / DOCUMENT REVIEW PENDING / CODING GATED`，尚未修改生产代码、Contract、
-migration、依赖、版本或 lockfile；必须先完成独立文档复核并获得用户单独编码授权。
+通用包管理器或文件平台。Revision 1.1 已由用户接受并正式关闭计划评审；Step 1 已完成
+[Contract / Dependency Freeze](./docs/development/MVP-RSL-2-STEP-1-CONTRACT-AND-DEPENDENCY-FREEZE-REPORT.md)：新增
+strict `@robothree/contracts/skill-lifecycle/v1alpha1`、冻结 Desktop 11 / Admin 10 个 consumer 方法与 typed safe errors，
+并完成 Central pure-JVM `junrar:8.1.0` checksum/license/API/hostile-fixture/offline admission。lockfile 与 Core migration 26
+不漂移，historical five + additional no-diff six Contract 11/11 digest 一致。当前状态为
+`PLAN REVIEW PASS/CLOSED / STEP 1 FREEZE PASS / FRONTEND PARALLEL START AUTHORIZED`；Desktop 与 Admin 可以按 frozen
+interface 开始真实 Adapter/UI/focused tests。Desktop 首次消费发现的 draft Workspace、submission 和 installation 三项
+durable identity 缺口已完成同一 v1alpha1 内聚焦 re-freeze，并以 14 项 Contract tests 固定。完整 lifecycle 现已按
+frozen interface 落地：Central PostgreSQL v13 authority、Core/Main/Preload 私有接线、Desktop 与 Admin 真实消费者，
+以及 Desktop 自助创建链和 Admin archive upload 链两条真实 Central + Electron E2E 均已通过开发者验证。实施详情见
+[RSL-2 实施报告](./docs/development/MVP-RSL-2-SKILL-LIFECYCLE-END-TO-END-IMPLEMENTATION-REPORT.md)。当前状态为
+`PASS/CLOSED / INDEPENDENT QA PASS_WITH_RISKS / USER ACCEPTED`，最高 outcomes 为
+`MVP_RSL2_SKILL_LIFECYCLE_E2E_CONFORMANT` 与 `MVP_RSL2_ADMIN_UPLOAD_SKILL_E2E_CONFORMANT`。独立 QA 的四项
+P3 均为环境或预存工程噪声，不归因本批、不建立 repair；这仍不代表通用包管理、production identity/SSO/RBAC、
+Knowledge 或 TGM ready。
 
 Root/Core/Desktop `0.0.0-mvp.safe-progress.1` 已把既有 Desktop `progress_delta` 接到真实 Agent Loop：客户端现在可见
 “整理上下文 / 等待模型 / 模型开始处理 / 生成回复 / 准备调用工具”等安全阶段，并在终态自动清理。该投影只包含
 content-free `progressKey + safeSummary`，不展示或持久化模型隐藏 reasoning、Prompt、Token 或 Tool 参数；公共 Contract、
 IPC、migration、依赖和 lockfile 均未扩张。当前状态为
 `IMPLEMENTED / FOCUSED GATES PASS / USER ACCEPTANCE PENDING / INDEPENDENT QA PENDING`。
+
+Desktop `0.0.0-dfe.9-repair.12` 进一步把这些安全阶段呈现为轻量“思考中…”动画与可展开的灰色进度列表；当前阶段持续
+更新，用户可随时收起。Tool observation 不再作为对话消息展示，原始 JSON、路径和 digest 不进入产品会话。页面仍不
+展示模型隐藏 reasoning，只展示 Core 已审核的业务化进度摘要。当前状态为
+`IMPLEMENTED / FOCUSED GATES PASS / PRODUCT ACCEPTANCE PENDING / INDEPENDENT QA PENDING`。
 
 同一版本下的 Desktop Workbench 已同步收敛输入体验：用户消息先进入当前会话，再等待 Core 返回；输入框在任务执行中
 仍可继续编辑下一条内容。未选择工作区时仅显示可操作的“选择工作空间”，授权模式使用真实任务偏好；重复标题、快捷

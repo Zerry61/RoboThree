@@ -257,6 +257,19 @@ select {
   background: var(--r3-admin-action-danger);
 }
 
+.admin-link-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  border: 1px solid var(--r3-admin-action-primary);
+  border-radius: var(--r3-admin-radius-6);
+  background: var(--r3-admin-action-primary);
+  color: var(--r3-admin-text-inverse);
+  padding: var(--r3-admin-space-2) var(--r3-admin-space-3);
+  text-decoration: none;
+}
+
 .admin-button:disabled {
   border-color: var(--r3-admin-action-disabled);
   background: var(--r3-admin-action-disabled);
@@ -598,6 +611,82 @@ select {
   margin: 0;
   color: var(--r3-admin-text-primary);
   font-size: var(--r3-admin-font-size-16);
+}
+
+.skill-page-actions,
+.review-actions,
+.review-status-line {
+  display: flex;
+  align-items: center;
+  gap: var(--r3-admin-space-3);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.skill-page-actions {
+  align-items: end;
+}
+
+.skill-page-actions .field-shell {
+  min-width: min(220px, 100%);
+}
+
+.review-status-line {
+  color: var(--r3-admin-text-secondary);
+}
+
+.review-reject-panel,
+.admin-form-section {
+  display: grid;
+  gap: var(--r3-admin-space-3);
+  min-width: 0;
+  border: 1px solid var(--r3-admin-border-default);
+  border-radius: var(--r3-admin-radius-8);
+  background: var(--r3-admin-surface-raised);
+  padding: var(--r3-admin-space-4);
+}
+
+.upload-progress {
+  display: grid;
+  gap: var(--r3-admin-space-2);
+  color: var(--r3-admin-text-secondary);
+}
+
+.upload-progress progress {
+  width: min(320px, 100%);
+}
+
+.review-reject-panel label,
+.admin-form-section label {
+  color: var(--r3-admin-text-secondary);
+  font-weight: var(--r3-admin-font-weight-semibold);
+}
+
+.review-reject-panel textarea,
+.admin-form-section textarea,
+.admin-form-section input[type='file'] {
+  max-width: 100%;
+}
+
+.review-reject-panel textarea,
+.admin-form-section textarea {
+  min-width: 0;
+  border: 1px solid var(--r3-admin-border-default);
+  border-radius: var(--r3-admin-radius-6);
+  color: var(--r3-admin-text-primary);
+  padding: var(--r3-admin-space-2);
+  resize: vertical;
+}
+
+.admin-form-section h3,
+.admin-form-section p {
+  margin: 0;
+}
+
+.field-error {
+  margin: 0;
+  color: var(--r3-admin-semantic-danger);
+  overflow-wrap: anywhere;
 }
 
 .model-toolbar,

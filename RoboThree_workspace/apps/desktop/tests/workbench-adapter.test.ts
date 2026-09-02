@@ -118,6 +118,39 @@ describe("DFE-2A Desktop workbench adapter", () => {
     expect(JSON.stringify(submitted)).not.toContain("rootRealPath");
   });
 
+  it("accepts a selected workspace text file and binds only its safe relative path", async () => {
+    const api = installDesktopApi();
+    const attachment: ArtifactCatalogItemProjection = {
+      ...artifactFixture(),
+      artifactId: `artifact:${"2".repeat(64)}`,
+      sourceId: `sha256:${"b".repeat(64)}`,
+      sourceDigest: `sha256:${"b".repeat(64)}`,
+      displayName: "notes.md",
+      kind: "markdown",
+      mediaType: "text/markdown",
+      relativePath: "资料/notes.md",
+      byteSize: 128,
+    };
+
+    await desktopWorkbenchAdapter.submitTask({
+      sessionId: "session:new",
+      sessionTitle: "Edit notes",
+      userInput: "增加风险章节",
+      agentId: "agent:normal",
+      requestedModelId: "model:gpt",
+      selectedSkillIds: [],
+      selectedKnowledgeIds: [],
+      workspaceGrantId: "workspace:one",
+      authorizationMode: "manual_review",
+      attachments: [attachment],
+    });
+
+    const submitted = api.submitTurn.mock.calls[0]?.[0];
+    expect(submitted.userInput).toContain('"资料/notes.md"');
+    expect(JSON.stringify(submitted)).not.toContain("rootRealPath");
+    expect(JSON.stringify(submitted)).not.toContain(`sha256:${"b".repeat(64)}`);
+  });
+
   it("does not create a session when attachment identity validation fails", async () => {
     const api = installDesktopApi();
     api.validateWorkbenchAttachment.mockResolvedValueOnce({

@@ -57,12 +57,6 @@
           <button type="button" :aria-current="robotViewMode === 'catalog' ? 'page' : undefined" @click="robotViewMode = 'catalog'">全部</button>
           <button type="button" :aria-current="robotViewMode === 'mine' ? 'page' : undefined" @click="void showMyRobotDrafts()">我创建的</button>
         </nav>
-        <nav v-else-if="activeSection === 'skills'" class="intelligence-page__subnav" aria-label="技能分类">
-          <button type="button" aria-current="page">技能广场</button>
-          <button type="button" disabled>已安装</button>
-          <button type="button" disabled>本地目录</button>
-          <button type="button" disabled>我创建的</button>
-        </nav>
 
         <R3InlineNotice
           v-if="activeSection === 'robots' && robotListState.messageTitle"
@@ -115,16 +109,7 @@
           </ul>
         </section>
 
-        <section v-else-if="activeSection === 'skills'" class="intelligence-page__gate" aria-label="技能目录">
-          <R3EmptyState
-            icon="S"
-            :title="skillGate.title"
-            :description="skillGate.description"
-          />
-          <R3InlineNotice tone="warning" title="能力状态">
-            技能数据服务尚未接入，当前不会展示示例条目。
-          </R3InlineNotice>
-        </section>
+        <SkillCatalogPanel v-else-if="activeSection === 'skills'" />
 
         <div v-else-if="activeListState.status === 'loading'" class="intelligence-page__loading">
           <R3Skeleton />
@@ -205,15 +190,7 @@
           </div>
         </template>
 
-        <section v-if="activeSection === 'skills'" class="intelligence-page__gate" aria-label="技能详情">
-          <R3EmptyState
-            icon="S"
-            title="技能详情待接入"
-            description="当前版本尚未提供技能详情。"
-          />
-        </section>
-
-        <div v-else-if="detailState.status === 'loading'" class="intelligence-page__loading">
+        <div v-if="detailState.status === 'loading'" class="intelligence-page__loading">
           <R3Skeleton />
           <R3Skeleton />
         </div>
@@ -355,7 +332,6 @@ import {
   filterCards,
   intelligenceSectionTabs,
   presentCatalogError,
-  skillGateView,
   type CatalogMessageState,
   type IntelligenceCard,
   type IntelligenceSection,
@@ -363,6 +339,7 @@ import {
   type RobotDetailView,
   type ToolDetailView,
 } from "./intelligence-model.js";
+import SkillCatalogPanel from "./SkillCatalogPanel.vue";
 import {
   presentAgentLifecycleError,
   presentRobotSubmissionState,
@@ -410,8 +387,6 @@ let catalogRequestEpoch = 0;
 let detailRequestEpoch = 0;
 
 const sectionTabs = intelligenceSectionTabs.map((tab) => ({ ...tab }));
-const skillGate = skillGateView;
-
 const selectedSection = computed<IntelligenceSection | undefined>(() => {
   switch (route.name) {
     case "intelligenceRobotDetail":

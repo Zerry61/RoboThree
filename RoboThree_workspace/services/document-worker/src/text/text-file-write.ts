@@ -38,6 +38,7 @@ export type TextFileWritePrivateOptions = Readonly<{
   mode: TextFileWriteMode;
   expectedPreviousSha256?: string;
   ownedArtifactProofDigest?: string;
+  editReadProofDigest?: string;
   workspaceGrantId: string;
   limitsRevision: string;
 }>;
@@ -105,6 +106,7 @@ export type TextFileWriteDigestInput = Readonly<{
   contentSha256: string;
   expectedPreviousSha256?: string;
   ownedArtifactProofDigest?: string;
+  editReadProofDigest?: string;
   limitsRevision: string;
 }>;
 
@@ -468,6 +470,9 @@ export function computeTextFileWriteRequestDigest(
     ...(input.ownedArtifactProofDigest === undefined
       ? {}
       : { ownedArtifactProofDigest: input.ownedArtifactProofDigest }),
+    ...(input.editReadProofDigest === undefined
+      ? {}
+      : { editReadProofDigest: input.editReadProofDigest }),
     relativePath: input.relativePath,
     workspaceGrantId: input.workspaceGrantId,
   }, stableStringifyReplacer));
@@ -507,6 +512,9 @@ function verifyRequestDigest(
     ...(normalized.options.ownedArtifactProofDigest === undefined
       ? {}
       : { ownedArtifactProofDigest: normalized.options.ownedArtifactProofDigest }),
+    ...(normalized.options.editReadProofDigest === undefined
+      ? {}
+      : { editReadProofDigest: normalized.options.editReadProofDigest }),
     limitsRevision: normalized.options.limitsRevision,
   });
   if (request.requestDigest !== expected) {
@@ -522,6 +530,7 @@ function parsePrivateOptions(options: Record<string, unknown>): TextFileWritePri
   requireOnlyKeys(options, [
     "content",
     "expectedPreviousSha256",
+    "editReadProofDigest",
     "limitsRevision",
     "mode",
     "ownedArtifactProofDigest",
@@ -550,19 +559,30 @@ function parsePrivateOptions(options: Record<string, unknown>): TextFileWritePri
     options.ownedArtifactProofDigest,
     "ownedArtifactProofDigest",
   );
+  const editReadProofDigest = optionalPrefixedSha256(
+    options.editReadProofDigest,
+    "editReadProofDigest",
+  );
 
   if (mode === "create_new") {
-    if (expectedPreviousSha256 !== undefined || ownedArtifactProofDigest !== undefined) {
+    if (
+      expectedPreviousSha256 !== undefined
+      || ownedArtifactProofDigest !== undefined
+      || editReadProofDigest !== undefined
+    ) {
       throw textWriteError(
         "invalid_format",
         "Create mode forbids replacement authority",
         "invalid_arguments",
       );
     }
-  } else if (expectedPreviousSha256 === undefined || ownedArtifactProofDigest === undefined) {
+  } else if (
+    expectedPreviousSha256 === undefined
+    || (ownedArtifactProofDigest === undefined) === (editReadProofDigest === undefined)
+  ) {
     throw textWriteError(
       "invalid_format",
-      "Replace mode requires exact prior digest and owned Artifact proof",
+      "Replace mode requires exact prior digest and exactly one trusted replacement proof",
       "invalid_arguments",
     );
   }
@@ -574,6 +594,7 @@ function parsePrivateOptions(options: Record<string, unknown>): TextFileWritePri
     limitsRevision,
     ...(expectedPreviousSha256 === undefined ? {} : { expectedPreviousSha256 }),
     ...(ownedArtifactProofDigest === undefined ? {} : { ownedArtifactProofDigest }),
+    ...(editReadProofDigest === undefined ? {} : { editReadProofDigest }),
   };
 }
 

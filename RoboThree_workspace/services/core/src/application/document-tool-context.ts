@@ -10,6 +10,7 @@ import type { ReadableTaskRuntimeSelectionV1Alpha4 } from
   "@robothree/contracts/runtime-selection/v1alpha4";
 
 import { sha256CanonicalJson } from "../persistence/digest.js";
+import { WORKSPACE_TEXT_READ_CAPABILITY_ID } from "./context-material-policy.js";
 import {
   DOCUMENT_TOOL_CAPABILITY_IDS,
   DOCUMENT_TOOL_REGISTRY_RECORDS,
@@ -92,8 +93,8 @@ export function toolObservationMessage(
   observation: Observation,
 ): Extract<ProviderNeutralMessage, { role: "tool" }> {
   const content = observation.outcome === "succeeded"
-    ? observationSuccessContent(call.capabilityId, observation)
-    : observation.error.message;
+    ? observationSuccessParts(call.capabilityId, observation)
+    : textParts(observation.error.message);
   return {
     schemaVersion: MODEL_PROTOCOL_VERSION,
     role: "tool",
@@ -103,8 +104,37 @@ export function toolObservationMessage(
     observationId: observation.observationId,
     outcome: observation.outcome,
     resultDigest: sha256CanonicalJson(JsonValueSchema.parse(observation)),
-    content: content.length === 0 ? [] : [{ type: "text", text: content }],
+    content,
   };
+}
+
+function observationSuccessParts(
+  capabilityId: string,
+  observation: Extract<Observation, { outcome: "succeeded" }>,
+): Array<{ type: "text"; text: string }> {
+  const content = observationSuccessContent(capabilityId, observation);
+  return capabilityId === WORKSPACE_TEXT_READ_CAPABILITY_ID
+    ? textParts(content, 64 * 1024)
+    : textParts(content);
+}
+
+function textParts(
+  content: string,
+  maximumPartCharacters = 262_144,
+): Array<{ type: "text"; text: string }> {
+  if (content.length === 0) return [];
+  const parts: Array<{ type: "text"; text: string }> = [];
+  for (let start = 0; start < content.length;) {
+    let end = Math.min(start + maximumPartCharacters, content.length);
+    if (
+      end < content.length
+      && end > start
+      && /[\uD800-\uDBFF]/u.test(content[end - 1]!)
+    ) end -= 1;
+    parts.push({ type: "text", text: content.slice(start, end) });
+    start = end;
+  }
+  return parts;
 }
 
 function observationSuccessContent(

@@ -40,6 +40,10 @@ import {
   type BuiltInPresentationAgentSource,
 } from "./built-in-presentation-agent-source.js";
 import {
+  BUILT_IN_SKILL_CREATOR_AGENT_ID,
+  type BuiltInSkillCreatorAgentSource,
+} from "./built-in-skill-creator-agent-source.js";
+import {
   LocalDesktopR2DSubjectBindingAuthority,
   LocalDesktopR2DSubjectProofRegistry,
   type LocalDesktopR2DSessionBindingVerifier,
@@ -71,7 +75,7 @@ type Lease = Readonly<{
   registry: AgentResourceRegistrySnapshotV1;
   permissions: ExactResourcePermissionsV1;
   model: PortableAgentModelRestrictionRef;
-  skill?: PortableAgentSkillRestrictionRef;
+  skills: readonly PortableAgentSkillRestrictionRef[];
   tools: readonly PortableAgentToolRestrictionRef[];
 }>;
 
@@ -103,12 +107,13 @@ class InternalTrialEnterpriseEntitlementSource {
     leases: InternalTrialEnterpriseLeaseRegistry;
     builtInAgent: BuiltInGeneralAgentSource;
     presentationAgent?: BuiltInPresentationAgentSource;
+    skillCreatorAgent?: BuiltInSkillCreatorAgentSource;
     additionalAgents?: AdditionalEnterpriseAgentSource;
     authorityRevision: string;
     registry: AgentResourceRegistrySnapshotV1;
     permissions: ExactResourcePermissionsV1;
     model: PortableAgentModelRestrictionRef;
-    skill?: PortableAgentSkillRestrictionRef;
+    skills: readonly PortableAgentSkillRestrictionRef[];
     tools: readonly PortableAgentToolRestrictionRef[];
   }>) {}
 
@@ -121,6 +126,8 @@ class InternalTrialEnterpriseEntitlementSource {
       ? this.dependencies.builtInAgent.loadDefault()
       : input.requestedAgentRef.agentDefinitionId === BUILT_IN_PRESENTATION_AGENT_ID
         ? this.dependencies.presentationAgent?.loadDefault()
+        : input.requestedAgentRef.agentDefinitionId === BUILT_IN_SKILL_CREATOR_AGENT_ID
+          ? this.dependencies.skillCreatorAgent?.loadDefault()
         : await this.dependencies.additionalAgents?.loadExactAgent(
           input.requestedAgentRef.agentDefinitionId,
           input.requestedAgentRef.revision,
@@ -134,9 +141,7 @@ class InternalTrialEnterpriseEntitlementSource {
       registry: this.dependencies.registry,
       permissions: this.dependencies.permissions,
       model: this.dependencies.model,
-      ...(this.dependencies.skill === undefined
-        ? {}
-        : { skill: this.dependencies.skill }),
+      skills: this.dependencies.skills,
       tools: this.dependencies.tools,
     }));
     return createInternalTrialEntitlementSnapshot({
@@ -146,9 +151,10 @@ class InternalTrialEnterpriseEntitlementSource {
       authorityRevision: this.dependencies.authorityRevision,
       observedAt: this.dependencies.clock.now(),
       models: [{ ...this.dependencies.model, stableOrdinal: 0 }],
-      skills: this.dependencies.skill === undefined
-        ? []
-        : [{ ...this.dependencies.skill, stableOrdinal: 0 }],
+      skills: this.dependencies.skills.map((skill, stableOrdinal) => ({
+        ...skill,
+        stableOrdinal,
+      })),
       tools: this.dependencies.tools.map((tool, stableOrdinal) => ({
         ...tool,
         stableOrdinal,
@@ -169,15 +175,20 @@ implements R2D3AcceptanceAuthority {
     leases: InternalTrialEnterpriseLeaseRegistry;
     modelLocks: TaskCapabilityLockService;
     presentationAgent?: BuiltInPresentationAgentSource;
+    skillCreatorAgent?: BuiltInSkillCreatorAgentSource;
     additionalAgents?: AdditionalEnterpriseAgentSource;
   }>) {}
 
   async loadExactAgent(
     agentId: string,
   ): Promise<ReadableAgentDefinitionRevision | undefined> {
-    return agentId === BUILT_IN_PRESENTATION_AGENT_ID
-      ? this.dependencies.presentationAgent?.loadDefault()
-      : this.dependencies.additionalAgents?.loadActiveAgent(agentId);
+    if (agentId === BUILT_IN_PRESENTATION_AGENT_ID) {
+      return this.dependencies.presentationAgent?.loadDefault();
+    }
+    if (agentId === BUILT_IN_SKILL_CREATOR_AGENT_ID) {
+      return this.dependencies.skillCreatorAgent?.loadDefault();
+    }
+    return this.dependencies.additionalAgents?.loadActiveAgent(agentId);
   }
 
   captureSubjectBindings(input: Readonly<{
@@ -263,8 +274,10 @@ export function createInternalTrialEnterpriseR2DProductionComposition(
     registry: AgentResourceRegistrySnapshotV1;
     model: PortableAgentModelRestrictionRef;
     skill?: PortableAgentSkillRestrictionRef;
+    skills?: readonly PortableAgentSkillRestrictionRef[];
     tools?: readonly PortableAgentToolRestrictionRef[];
     presentationAgent?: BuiltInPresentationAgentSource;
+    skillCreatorAgent?: BuiltInSkillCreatorAgentSource;
     additionalAgents?: AdditionalEnterpriseAgentSource;
     modelLocks: TaskCapabilityLockService;
     toolPolicy: TaskToolCandidatePolicy;
@@ -281,7 +294,7 @@ export function createInternalTrialEnterpriseR2DProductionComposition(
   const permissionsMaterial = {
     schemaVersion: "v1" as const,
     models: [input.model],
-    skills: input.skill === undefined ? [] : [input.skill],
+    skills: [...(input.skill === undefined ? [] : [input.skill]), ...(input.skills ?? [])],
     tools: [...(input.tools ?? [])],
     knowledge: [],
   };
@@ -315,10 +328,13 @@ export function createInternalTrialEnterpriseR2DProductionComposition(
     permissions,
     model: input.model,
     tools: input.tools ?? [],
-    ...(input.skill === undefined ? {} : { skill: input.skill }),
+    skills: permissions.skills,
     ...(input.presentationAgent === undefined
       ? {}
       : { presentationAgent: input.presentationAgent }),
+    ...(input.skillCreatorAgent === undefined
+      ? {}
+      : { skillCreatorAgent: input.skillCreatorAgent }),
     ...(input.additionalAgents === undefined
       ? {}
       : { additionalAgents: input.additionalAgents }),
@@ -330,6 +346,9 @@ export function createInternalTrialEnterpriseR2DProductionComposition(
     ...(input.presentationAgent === undefined
       ? {}
       : { presentationAgent: input.presentationAgent }),
+    ...(input.skillCreatorAgent === undefined
+      ? {}
+      : { skillCreatorAgent: input.skillCreatorAgent }),
     ...(input.additionalAgents === undefined
       ? {}
       : { additionalAgents: input.additionalAgents }),

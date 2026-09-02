@@ -134,6 +134,37 @@ describe("DCF-1.2B Renderer boundary", () => {
     expect(source).toContain("unconfigured_gated");
   });
 
+  it("keeps RSL-2 Skill lifecycle production paths free of fake state and browser persistence", async () => {
+    const files = [
+      "adapters/skill-lifecycle-adapter.ts",
+      "presentation/skill-lifecycle-presentation.ts",
+      "pages/intelligence/SkillCatalogPanel.vue",
+      "pages/intelligence/IntelligenceCreationPage.vue",
+      "pages/intelligence/IntelligenceDetailPage.vue",
+      "pages/workbench/skill-creator-intent.ts",
+    ];
+    const sources = await Promise.all(files.map(async (file) => ({
+      file,
+      source: await readFile(resolve(rendererRoot, file), "utf8"),
+    })));
+
+    for (const { file, source } of sources) {
+      for (const forbidden of [
+        "localStorage",
+        "sessionStorage",
+        "fixtureSkills",
+        "mockSkills",
+        "fakeSkill",
+        "window.robothreeDesktop",
+        "ipcRenderer",
+      ]) {
+        expect(source, `${file} contains ${forbidden}`).not.toContain(forbidden);
+      }
+    }
+    expect(sources.map(({ source }) => source).join("\n"))
+      .toContain("@robothree/contracts/skill-lifecycle/v1alpha1");
+  });
+
   it("keeps DFE-5B.2 gated settings pages static and transport-free", async () => {
     const settingsDirectory = resolve(rendererRoot, "pages/settings");
     const files = [

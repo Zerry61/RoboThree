@@ -50,4 +50,5 @@ export * from "./runtime/json.js";
 export * from "./runtime/task-command.js";
 export * from "./runtime/task-state.js";
 export * from "./runtime-selection/index.js";
+export * from "./skill-lifecycle/v1alpha1/index.js";
 export * from "./submit-turn-coordination/index.js";

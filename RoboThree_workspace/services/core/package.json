@@ -1,6 +1,6 @@
 {
   "name": "@robothree/core",
-  "version": "0.0.0-mvp.safe-progress.1",
+  "version": "0.0.0-mvp.wte.1",
   "private": true,
   "type": "module",
   "exports": {

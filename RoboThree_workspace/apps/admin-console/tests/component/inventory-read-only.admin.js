@@ -20,8 +20,8 @@ describe('Admin read-only inventory pages', () => {
         installInventoryAdapter();
         const pages = [
             [ModelsPage, ['企业模型', '通用模型', '连接正常', '已配置']],
-            [RobotsPage, ['机器人目录', '业务机器人', '企业发布', '限制为空']],
-            [SkillsPage, ['技能目录', '文档技能', '校验通过']],
+            [RobotsPage, ['发布审核', '业务机器人', '内部试用创建者', '待审核']],
+            [SkillsPage, ['技能审核', '文档技能', '内部试用创建者', '待审核']],
             [KnowledgePage, ['知识目录', '制度知识库', '部分可用', '页面不会猜测缺失信息']],
             [SystemAuditPage, ['审计日志', '读取模型目录', '测试管理员', '已允许']]
         ];
@@ -41,7 +41,7 @@ describe('Admin read-only inventory pages', () => {
         installInventoryAdapter();
         const pages = [
             [ModelDetailPage, 'model.general', ['通用模型', '模型配置', '供应方', '连接正常']],
-            [RobotDetailPage, 'robot.business', ['业务机器人详情', '资源限制', '限制为空']],
+            [RobotDetailPage, review.submissionId, ['业务机器人', '提交信息', '行为规则', '通过并发布']],
             [SkillDetailPage, 'skill.document', ['文档技能详情', '包校验', '校验摘要可用']],
             [KnowledgeDetailPage, 'knowledge.policy', ['制度知识库详情', '能力状态', '知识库真实检索']]
         ];
@@ -82,8 +82,12 @@ function installInventoryAdapter(overrides = {}) {
         async getManagedModel() { return model; },
         async listRobots() { return page([robot]); },
         async getRobot() { return robot; },
+        async listRobotReviews() { return { contractVersion: 'agent-lifecycle.v1alpha1', queryRevision: revision, items: [review] }; },
+        async getRobotReview() { return review; },
         async listSkills() { return page([skill]); },
         async getSkill() { return skill; },
+        async listSkillSubmissions() { return { contractVersion: 'skill-lifecycle.v1alpha1', queryRevision: revision, items: [skillSubmission] }; },
+        async getSkillSubmission() { return skillSubmission; },
         async listKnowledge() { return page([knowledge]); },
         async getKnowledge() { return knowledge; },
         async listAuditEvents() {
@@ -153,6 +157,25 @@ const robot = {
     reviewState: 'approved',
     policyState: 'configured'
 };
+const review = {
+    submissionId: '00000000-0000-4000-8000-000000000009', submissionRevision: revision,
+    robotId: 'agent.business', name: '业务机器人', creatorDisplayName: '内部试用创建者',
+    state: 'pending_review', semanticVersion: '1.0.0', submittedAt: '2026-08-30T00:00:00.000Z',
+    agentPackage: {
+        robotId: 'agent.business', draftRevision: revision, packageRevision: revision, packageDigest: revision,
+        origin: 'personal_draft', name: '业务机器人', description: '处理日常业务问题', behaviorRules: '只处理明确的业务请求。',
+        avatar: { source: 'system', assetId: 'robot-avatar.default' }, tags: ['业务'], publicationScope: 'enterprise',
+        semanticVersion: '1.0.0', changeSummary: '首次发布', createdAt: '2026-08-30T00:00:00.000Z', submittedAt: '2026-08-30T00:00:00.000Z',
+        agentDefinition: {
+            schemaVersion: 'v1alpha2', agentDefinitionId: 'agent.business', managementClass: 'managed', name: '业务机器人',
+            identity: '处理日常业务问题', goal: '完成业务任务', instructions: '只处理明确的业务请求。',
+            modelRestriction: { mode: 'unrestricted' }, skillRestriction: { mode: 'unrestricted' },
+            toolRestriction: { mode: 'unrestricted' }, knowledgeRestriction: { mode: 'unrestricted' },
+            requiredModelCapabilities: { inputModalities: ['text'], outputModalities: ['text'], supportsToolCalling: true, supportsStreaming: true },
+            createdAt: '2026-08-30T00:00:00.000Z', revision, digest: revision,
+        },
+    },
+};
 const skill = {
     skillId: 'skill.document',
     skillRevision: revision,
@@ -161,6 +184,34 @@ const skill = {
     lifecycle: 'published',
     packageValidationState: 'valid',
     validationSummary: '校验摘要可用'
+};
+const skillSubmission = {
+    submissionId: '00000000-0000-4000-8000-000000000088',
+    submissionRevision: revision,
+    skillId: 'skill.document',
+    draftRevision: revision,
+    displayTitle: '文档技能',
+    technicalName: 'document-skill',
+    creatorDisplayName: '内部试用创建者',
+    semanticVersion: '1.0.0',
+    state: 'pending_review',
+    submittedAt: '2026-08-27T00:00:00.000Z',
+    displayDescription: '文档处理流程',
+    primaryFunction: '整理文档处理步骤',
+    packageFacts: {
+        packageDigest: revision,
+        manifestDigest: revision,
+        skillMarkdownDigest: revision,
+        fileCount: 2,
+        expandedByteCount: 4096
+    },
+    testFact: {
+        draftRevision: revision,
+        state: 'passed',
+        taskId: 'task.skill-test',
+        testedAt: '2026-08-27T00:00:00.000Z'
+    },
+    changeSummary: '首次提交'
 };
 const knowledge = {
     knowledgeId: 'knowledge.policy',

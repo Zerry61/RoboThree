@@ -91,6 +91,8 @@ export * from "./application/desktop-task-projection-service.js";
 export * from "./application/desktop-task-control-service.js";
 export * from "./application/artifact-preview-projection.js";
 export * from "./application/workspace-text-artifact-authority.js";
+export * from "./application/workspace-text-edit-read-authority.js";
+export * from "./application/workspace-text-round-output-material.js";
 export * from "./application/workspace-text-effect-recovery.js";
 export * from "./application/graceful-work-controller.js";
 export * from "./application/headless-desktop-runtime.js";

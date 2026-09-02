@@ -309,6 +309,7 @@ async function runDurableStarterSeed(reasoning = false) {
         }),
         estimator: new ConservativeTokenEstimator(),
       }),
+      tokenEstimator: new ConservativeTokenEstimator(),
       loop,
       taskRuntime: runtime,
       scheduler: new FakeScheduler(),

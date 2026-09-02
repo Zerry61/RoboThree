@@ -16,6 +16,7 @@ import type {
   ModelConversionInput,
   ModelMessageConverter,
 } from "./model-message-converter.js";
+import { ContextMaterialPolicy } from "./context-material-policy.js";
 
 export type ContextReductionResult = Readonly<{
   context: ReducedContext;
@@ -29,13 +30,16 @@ export type ContextReductionResult = Readonly<{
 export class ContextReducer {
   readonly #estimator: TokenEstimator;
   readonly #converter: ModelMessageConverter;
+  readonly #materials: ContextMaterialPolicy;
 
   constructor(input: {
     estimator: TokenEstimator;
     converter: ModelMessageConverter;
+    materialPolicy?: ContextMaterialPolicy;
   }) {
     this.#estimator = input.estimator;
     this.#converter = input.converter;
+    this.#materials = input.materialPolicy ?? new ContextMaterialPolicy();
   }
 
   reduce(
@@ -49,7 +53,11 @@ export class ContextReducer {
     const estimatedBeforeBoundedPreviewTokens = this.#estimator.estimate(
       this.#converter.measurementValue(unbounded, conversion),
     );
-    const bounded = boundToolResults(assembled, budget.maxPreviewBytes);
+    const bounded = boundToolResults(
+      assembled,
+      budget.maxPreviewBytes,
+      this.#materials,
+    );
     const initialEstimatedInputTokens = this.#estimator.estimate(
       this.#converter.measurementValue(bounded, conversion),
     );
@@ -126,13 +134,23 @@ export class ContextBudgetExceededError extends Error {
 function boundToolResults(
   assembled: AssembledContext,
   maxPreviewBytes: number,
+  materialPolicy: ContextMaterialPolicy,
 ): ReducedContext {
   const artifacts: ModelContextArtifact[] = [];
+  const materialDecisions = materialPolicy.classifyToolResults(assembled.messages);
   const conversationMessages = assembled.messages.map(({ message }) => {
     if (message.role !== "tool") return message;
-    const original = message.content.map((part) => part.text).join("\n");
+    const material = materialDecisions.get(message.toolCallId);
+    // WTE read results are one exact JSON envelope split only to satisfy the
+    // per-part transport bound. Rejoining those fragments with a newline would
+    // corrupt JSON whenever the split lands inside an escaped string.
+    const original = message.content.map((part) => part.text).join(
+      material?.materialClass === "protected_exact" ? "" : "\n",
+    );
     const originalBytes = byteLength(original);
-    const preview = truncateUtf8(original, maxPreviewBytes);
+    const preview = material?.materialClass === "protected_exact"
+      ? original
+      : truncateUtf8(original, maxPreviewBytes);
     const previewBytes = byteLength(preview);
     artifacts.push({
       type: "tool_result",

@@ -132,6 +132,10 @@ import type {
   UpdateRobotDraftCommand,
   WithdrawRobotSubmissionCommand,
 } from "@robothree/contracts/agent-lifecycle/v1alpha1";
+import type {
+  DesktopSkillLifecycleApiV1Alpha1,
+  SkillLifecycleSafeError,
+} from "@robothree/contracts/skill-lifecycle/v1alpha1";
 import {
   ArtifactCatalogItemProjectionSchema,
   RegisterWorkspaceArtifactCommandSchema,
@@ -260,6 +264,24 @@ export const AGENT_LIFECYCLE_V1ALPHA1_IPC_CHANNELS = Object.freeze({
   withdrawRobotSubmission: "robothree:agent-lifecycle:v1alpha1:withdraw-submission",
 } as const);
 
+export const SKILL_LIFECYCLE_V1ALPHA1_IPC_CHANNELS = Object.freeze({
+  getSkillLifecycleCompatibility: "robothree:skill-lifecycle:v1alpha1:compatibility",
+  listSkills: "robothree:skill-lifecycle:v1alpha1:list",
+  getSkill: "robothree:skill-lifecycle:v1alpha1:detail",
+  createSkillDraftWorkspace: "robothree:skill-lifecycle:v1alpha1:create-draft-workspace",
+  refreshSkillDraft: "robothree:skill-lifecycle:v1alpha1:refresh-draft",
+  startSkillDraftTest: "robothree:skill-lifecycle:v1alpha1:start-test",
+  submitSkillDraft: "robothree:skill-lifecycle:v1alpha1:submit-draft",
+  withdrawSkillSubmission: "robothree:skill-lifecycle:v1alpha1:withdraw-submission",
+  installSkillRelease: "robothree:skill-lifecycle:v1alpha1:install-release",
+  uninstallSkillRelease: "robothree:skill-lifecycle:v1alpha1:uninstall-release",
+  querySkillOperation: "robothree:skill-lifecycle:v1alpha1:operation",
+} as const);
+
+export type SkillLifecycleV1Alpha1InvokeChannel =
+  (typeof SKILL_LIFECYCLE_V1ALPHA1_IPC_CHANNELS)[keyof
+    typeof SKILL_LIFECYCLE_V1ALPHA1_IPC_CHANNELS];
+
 export type AgentLifecycleV1Alpha1InvokeChannel =
   (typeof AGENT_LIFECYCLE_V1ALPHA1_IPC_CHANNELS)[keyof
     typeof AGENT_LIFECYCLE_V1ALPHA1_IPC_CHANNELS];
@@ -332,6 +354,12 @@ export type RendererPersonalModelManagementSafeResult<T> =
 export type RendererAgentLifecycleSafeResult<T> =
   | Readonly<{ ok: true; value: T }>
   | Readonly<{ ok: false; error: AgentLifecycleSafeError }>;
+
+export type RendererSkillLifecycleSafeResult<T> =
+  | Readonly<{ ok: true; value: T }>
+  | Readonly<{ ok: false; error: SkillLifecycleSafeError }>;
+
+export type RoboThreeSkillLifecycleApiV1Alpha1 = DesktopSkillLifecycleApiV1Alpha1;
 
 export interface RoboThreeAgentLifecycleApiV1Alpha1 {
   readonly contractVersion: "agent-lifecycle.v1alpha1";

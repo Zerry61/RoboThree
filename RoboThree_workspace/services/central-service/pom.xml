@@ -13,7 +13,7 @@
 
   <groupId>com.robothree</groupId>
   <artifactId>central-service</artifactId>
-  <version>0.0.0-mvp.task-timeout.1-SNAPSHOT</version>
+  <version>0.0.0-mvp.ctx.1-SNAPSHOT</version>
   <name>RoboThree Central Service</name>
   <description>RoboThree Central Gateway foundation and canonical Contract conformance</description>
 
@@ -21,6 +21,7 @@
     <java.version>21</java.version>
     <maven.version>3.9.16</maven.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <junrar.version>8.1.0</junrar.version>
   </properties>
 
   <dependencies>
@@ -65,6 +66,12 @@
       <groupId>org.postgresql</groupId>
       <artifactId>postgresql</artifactId>
       <scope>runtime</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>com.github.junrar</groupId>
+      <artifactId>junrar</artifactId>
+      <version>${junrar.version}</version>
     </dependency>
 
     <dependency>

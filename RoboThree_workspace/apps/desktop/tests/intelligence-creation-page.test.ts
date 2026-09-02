@@ -11,10 +11,17 @@ import {
   AgentLifecycleAdapterError,
   type AgentLifecycleAdapter,
 } from "../src/renderer/adapters/agent-lifecycle-adapter.js";
+import {
+  skillLifecycleAdapterKey,
+  SkillLifecycleAdapterError,
+} from "../src/renderer/adapters/skill-lifecycle-adapter.js";
 import { workbenchAdapterKey } from
   "../src/renderer/adapters/workbench-adapter.js";
 
 import IntelligenceCreationPage from "../src/renderer/pages/intelligence/IntelligenceCreationPage.vue";
+import { consumeSkillCreatorWorkbenchIntent } from
+  "../src/renderer/pages/workbench/skill-creator-intent.js";
+import { createSkillLifecycleTestAdapter } from "./skill-lifecycle-test-fixtures.js";
 
 describe("DFE-4B intelligence creation page", () => {
   it("renders the robot draft form with real save and correctly gated test/publish actions", async () => {
@@ -71,14 +78,18 @@ describe("DFE-4B intelligence creation page", () => {
     expect(wrapper.find("[aria-label='移除上传头像']").exists()).toBe(false);
   });
 
-  it("moves skill creation from validated form to local conversation without test or publish actions", async () => {
+  it("creates a real draft workspace and hands the exact creator intent to Workbench", async () => {
     const router = createTestRouter();
     await router.push("/intelligence/create-skill");
     await router.isReady();
+    const skills = createSkillLifecycleTestAdapter();
 
     const wrapper = mount(IntelligenceCreationPage, {
       global: {
         plugins: [router],
+        provide: {
+          [skillLifecycleAdapterKey as symbol]: skills,
+        },
       },
     });
     await flushPromises();
@@ -94,32 +105,56 @@ describe("DFE-4B intelligence creation page", () => {
     await wrapper.findAll("button").find((button) => button.text() === "进入创建对话")?.trigger("click");
     await flushPromises();
 
-    expect(wrapper.text()).toContain("请创建技能「周报整理技能」");
-    expect(wrapper.text()).toContain("技能创建对话尚未接入");
-    expect(wrapper.text()).toContain("当前不会生成文件、保存草稿或提交发布");
-    expect(wrapper.text()).not.toMatch(/SKILL\.md|参考资料|脚本文件/u);
-    expect(wrapper.text()).not.toContain("运行测试");
-    expect(wrapper.findAll("button").some((button) => button.text() === "提交发布")).toBe(false);
-    expect(JSON.stringify(wrapper.html())).not.toMatch(/workspaceRoot|rootRealPath|selectionHandle|selectedPath|submitTurn/u);
+    expect(skills.createSkillDraftWorkspace).toHaveBeenCalledWith({
+      displayTitle: "周报整理技能",
+      displayDescription: "整理项目周报",
+      primaryFunction: "提取进展、风险和下周计划",
+    });
+    expect(router.currentRoute.value.name).toBe("workbench");
+    expect(consumeSkillCreatorWorkbenchIntent()).toMatchObject({
+      skillId: "skill.weekly-report",
+      draftId: "draft.skill-weekly-report",
+      workspaceGrantId: "workspace.skill-weekly-report",
+      agentId: "agent.skill-creator",
+      firstUserMessage: expect.stringContaining("请创建技能「周报整理技能」"),
+    });
   });
 
-  it("renders skill creation failure with a real retry action in the same form state", async () => {
+  it("keeps the skill form after a real create failure", async () => {
     const router = createTestRouter();
     await router.push("/intelligence/create-skill");
     await router.isReady();
+    const skills = createSkillLifecycleTestAdapter();
+    skills.createSkillDraftWorkspace.mockRejectedValueOnce(new SkillLifecycleAdapterError({
+      contractVersion: "skill-lifecycle.v1alpha1",
+      errorCode: "skilllifecycle.operation_failed",
+      safeSummary: "Create failed.",
+      correlationId: "correlation.skill-create-failed",
+      retryable: true,
+    }));
 
     const wrapper = mount(IntelligenceCreationPage, {
       global: {
         plugins: [router],
+        provide: {
+          [skillLifecycleAdapterKey as symbol]: skills,
+        },
       },
     });
     await flushPromises();
 
-    (wrapper.vm as unknown as { previewSkillCreateFailure(): void }).previewSkillCreateFailure();
+    await wrapper.find("input").setValue("失败后保留技能");
+    const textareas = wrapper.findAll("textarea");
+    await textareas[0]?.setValue("保留描述");
+    await textareas[1]?.setValue("保留主要功能");
+    await clickButton(wrapper, "进入创建对话");
     await flushPromises();
 
-    expect(wrapper.text()).toContain("创建会话失败");
+    expect(wrapper.text()).toContain("创建技能失败");
+    expect((wrapper.find("input").element as HTMLInputElement).value).toBe("失败后保留技能");
+    expect((textareas[0]!.element as HTMLTextAreaElement).value).toBe("保留描述");
     expect(wrapper.findAll("button").find((button) => button.text() === "重试")).toBeDefined();
+    expect(router.currentRoute.value.name).toBe("intelligenceCreateSkill");
   });
 
   it("runs the real create, test and submit sequence against one saved revision", async () => {
@@ -381,6 +416,7 @@ function createTestRouter() {
       { path: "/intelligence/create-robot", name: "intelligenceCreateRobot", component: IntelligenceCreationPage },
       { path: "/intelligence/create-skill", name: "intelligenceCreateSkill", component: IntelligenceCreationPage },
       { path: "/intelligence", name: "intelligence", component: { template: "<div>智能中心</div>" } },
+      { path: "/workbench", name: "workbench", component: { template: "<div>Workbench</div>" } },
     ],
   });
 }
